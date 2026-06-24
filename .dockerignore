@@ -1,0 +1,14 @@
+# keep the Docker build context lean & secret-free
+**/node_modules
+**/dist
+**/.vite
+**/*.tsbuildinfo
+.git
+.gitignore
+.env
+.env.*
+!.env.production.example
+*.log
+.prisma-engines
+deploy/certbot
+**/.DS_Store
