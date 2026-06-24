@@ -1,0 +1,37 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env.*.local
+
+# prisma local db
+*.db
+*.db-journal
+
+# locally downloaded prisma engine binaries (fetched at setup time)
+.prisma-engines/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
+
+# test/coverage
+coverage/
+
+# uploads (KYC docs etc. — local dev)
+apps/api/uploads/

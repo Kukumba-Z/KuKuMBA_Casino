@@ -1,0 +1,29 @@
+{
+  "name": "kukumba",
+  "version": "0.1.0",
+  "private": true,
+  "description": "KuKuMBA — modular casino platform (single game: roulette, RTP 99%)",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "comment": "Prisma engines are supplied via PRISMA_*_ENGINE env vars (proxy blocks the CDN downloader), so we do NOT run its postinstall. esbuild's postinstall is required for tsx/vitest.",
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:api": "pnpm --filter @kukumba/api dev",
+    "dev:web": "pnpm --filter @kukumba/web dev",
+    "build": "pnpm -r build",
+    "prisma:generate": "pnpm --filter @kukumba/api prisma:generate",
+    "db:push": "pnpm --filter @kukumba/api db:push",
+    "db:seed": "pnpm --filter @kukumba/api db:seed",
+    "db:migrate": "pnpm --filter @kukumba/api db:migrate",
+    "db:reset": "pnpm --filter @kukumba/api db:reset",
+    "test": "pnpm --filter @kukumba/api test",
+    "setup": "pnpm install && pnpm prisma:generate && pnpm db:push && pnpm db:seed"
+  }
+}

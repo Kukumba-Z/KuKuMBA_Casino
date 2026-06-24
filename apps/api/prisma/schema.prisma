@@ -1,0 +1,780 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// KuKuMBA — database schema (the single source of truth for the whole platform).
+// Modular by design: each feature maps to one or more models below.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  USER
+  PARTNER
+  SUPPORT
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+  SELF_EXCLUDED
+}
+
+enum KycStatus {
+  NONE
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum CurrencyType {
+  DEMO
+  FIAT
+  CRYPTO
+}
+
+enum WalletMode {
+  DEMO
+  REAL
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  BET
+  WIN
+  REFUND
+  BONUS
+  CASHBACK
+  REFERRAL
+  PROMO
+  RAFFLE_ENTRY
+  RAFFLE_PRIZE
+  TIP
+  ADMIN_ADJUST
+  ROLLBACK
+}
+
+enum LedgerDirection {
+  CREDIT
+  DEBIT
+}
+
+enum TxStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum DepositStatus {
+  PENDING
+  CONFIRMING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum BetStatus {
+  PENDING
+  WON
+  LOST
+  PUSH
+  VOID
+}
+
+enum BonusType {
+  WELCOME
+  DEPOSIT
+  RELOAD
+  FREEBET
+  NO_DEPOSIT
+  CASHBACK
+}
+
+enum BonusStatus {
+  ACTIVE
+  WAGERING
+  COMPLETED
+  EXPIRED
+  CANCELLED
+  FORFEITED
+}
+
+enum PromoType {
+  BALANCE
+  BONUS
+  FREEBET
+  VIP_XP
+}
+
+enum RaffleStatus {
+  DRAFT
+  OPEN
+  DRAWING
+  COMPLETED
+  CANCELLED
+}
+
+enum RaffleCreatorType {
+  ADMIN
+  PARTNER
+  SYSTEM
+}
+
+enum TicketStatus {
+  OPEN
+  PENDING
+  ANSWERED
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum NotificationType {
+  SYSTEM
+  DEPOSIT
+  WITHDRAWAL
+  WIN
+  BONUS
+  PROMO
+  REFERRAL
+  KYC
+  RAFFLE
+  VIP
+  SUPPORT
+  SECURITY
+}
+
+enum RgLimitType {
+  DEPOSIT
+  LOSS
+  WAGER
+  SESSION_TIME
+}
+
+// ── Core identity ──────────────────────────────────────────────────────────────
+
+model User {
+  id              String     @id @default(cuid())
+  accountId       Int        @unique // public, human-friendly Account ID (e.g. 100001)
+  email           String     @unique
+  emailVerified   Boolean    @default(false)
+  username        String     @unique
+  passwordHash    String
+  role            UserRole   @default(USER)
+  status          UserStatus @default(ACTIVE)
+  avatarUrl       String?
+  countryCode     String?
+  locale          String     @default("ru")
+  kycStatus       KycStatus  @default(NONE)
+  twoFactorSecret String?
+  twoFactorEnabled Boolean   @default(false)
+
+  // referral
+  referralCode String  @unique
+  referredById String?
+  referredBy   User?   @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals    User[]  @relation("UserReferrals")
+
+  // VIP
+  vipLevel Int   @default(0)
+  vipXp    Float @default(0)
+
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  // relations
+  balances        Balance[]
+  transactions    Transaction[]
+  sessions        Session[]
+  linkedAccounts  LinkedAccount[]
+  seeds           ProvablyFairSeed[]
+  rounds          GameRound[]
+  bets            Bet[]
+  deposits        Deposit[]
+  withdrawals     Withdrawal[]
+  userBonuses     UserBonus[]
+  promoRedemptions PromoRedemption[]
+  referralEarningsReceived ReferralEarning[] @relation("ReferralEarner")
+  referralEarningsGenerated ReferralEarning[] @relation("ReferralSource")
+  cashbackClaims  CashbackClaim[]
+  raffleEntries   RaffleEntry[]
+  raffleWins      RaffleWinner[]
+  chatMessages    ChatMessage[]
+  notifications   Notification[]
+  kycCase         KycCase?
+  tickets         SupportTicket[]
+  rgLimits        RgLimit[]
+  selfExclusions  SelfExclusion[]
+
+  @@index([referredById])
+  @@index([role])
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String
+  userAgent        String?
+  ip               String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  lastUsedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model LinkedAccount {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       String // "google" | "telegram" | "steam" | ...
+  providerUserId String
+  displayName    String?
+  createdAt      DateTime @default(now())
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+// ── Wallet & ledger ────────────────────────────────────────────────────────────
+
+model Currency {
+  code          String       @id // "DEMO" | "USD" | "BTC" | "USDT" | ...
+  name          String
+  type          CurrencyType
+  symbol        String?
+  decimals      Int          @default(2)
+  networks      String[] // crypto networks, e.g. ["ERC20","TRC20","TON","SOL","BSC"]
+  minDeposit    Decimal      @default(0) @db.Decimal(38, 18)
+  minWithdrawal Decimal      @default(0) @db.Decimal(38, 18)
+  usdRate       Decimal      @default(1) @db.Decimal(38, 18) // 1 unit = X USD (display/aggregation)
+  enabled       Boolean      @default(true)
+  isDefault     Boolean      @default(false)
+  sortOrder     Int          @default(0)
+}
+
+model Balance {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency  String
+  mode      WalletMode
+  amount    Decimal    @default(0) @db.Decimal(38, 18)
+  locked    Decimal    @default(0) @db.Decimal(38, 18)
+  updatedAt DateTime   @updatedAt
+
+  @@unique([userId, currency, mode])
+  @@index([userId])
+}
+
+/// Immutable, append-only ledger. balanceAfter lets us audit & reconcile.
+model Transaction {
+  id            String          @id @default(cuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          TransactionType
+  direction     LedgerDirection
+  currency      String
+  mode          WalletMode
+  amount        Decimal         @db.Decimal(38, 18) // positive magnitude
+  balanceBefore Decimal         @db.Decimal(38, 18)
+  balanceAfter  Decimal         @db.Decimal(38, 18)
+  status        TxStatus        @default(COMPLETED)
+  refType       String?
+  refId         String?
+  description   String?
+  meta          Json?
+  createdAt     DateTime        @default(now())
+
+  @@index([userId, createdAt])
+  @@index([type])
+  @@index([refType, refId])
+}
+
+model Deposit {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency  String
+  network   String?
+  mode      WalletMode    @default(REAL)
+  amount    Decimal       @db.Decimal(38, 18)
+  address   String?
+  txHash    String?
+  provider  String        @default("mock")
+  status    DepositStatus @default(PENDING)
+  meta      Json?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model Withdrawal {
+  id           String           @id @default(cuid())
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency     String
+  network      String?
+  amount       Decimal          @db.Decimal(38, 18)
+  fee          Decimal          @default(0) @db.Decimal(38, 18)
+  address      String
+  provider     String           @default("mock")
+  status       WithdrawalStatus @default(PENDING)
+  reviewedById String?
+  reviewedAt   DateTime?
+  txHash       String?
+  meta         Json?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+// ── Games: provably-fair roulette ──────────────────────────────────────────────
+
+model Game {
+  id            String   @id @default(cuid())
+  key           String   @unique // "roulette"
+  name          String
+  type          String // "roulette"
+  rtp           Float    @default(0.99)
+  enabled       Boolean  @default(true)
+  minBet        Decimal  @default(0.1) @db.Decimal(38, 18)
+  maxBet        Decimal  @default(100000) @db.Decimal(38, 18)
+  descriptionRu String?
+  descriptionEn String?
+  thumbnail     String?
+  createdAt     DateTime @default(now())
+
+  rounds GameRound[]
+  bets   Bet[]
+}
+
+model ProvablyFairSeed {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serverSeed     String // secret until revealed (rotation)
+  serverSeedHash String
+  clientSeed     String
+  nonce          Int       @default(0)
+  active         Boolean   @default(true)
+  revealedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  rounds GameRound[]
+
+  @@index([userId, active])
+}
+
+model GameRound {
+  id             String     @id @default(cuid())
+  gameId         String
+  game           Game       @relation(fields: [gameId], references: [id])
+  userId         String
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seedId         String
+  seed           ProvablyFairSeed @relation(fields: [seedId], references: [id])
+  serverSeedHash String
+  clientSeed     String
+  nonce          Int
+  outcome        Int // pocket 0..36
+  outcomeColor   String // "red" | "black" | "green"
+  currency       String
+  mode           WalletMode
+  totalStake     Decimal    @db.Decimal(38, 18)
+  totalPayout    Decimal    @default(0) @db.Decimal(38, 18)
+  createdAt      DateTime   @default(now())
+
+  bets Bet[]
+
+  @@index([gameId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model Bet {
+  id         String     @id @default(cuid())
+  roundId    String
+  round      GameRound  @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  gameId     String
+  game       Game       @relation(fields: [gameId], references: [id])
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  betType    String // STRAIGHT | RED | BLACK | EVEN | ODD | LOW | HIGH | DOZEN_1..3 | COLUMN_1..3
+  selection  Json // e.g. { "number": 7 } for STRAIGHT, {} otherwise
+  stake      Decimal    @db.Decimal(38, 18)
+  currency   String
+  mode       WalletMode
+  multiplier Decimal    @db.Decimal(38, 18) // gross multiplier on win (stake * multiplier returned)
+  payout     Decimal    @default(0) @db.Decimal(38, 18)
+  status     BetStatus  @default(PENDING)
+  createdAt  DateTime   @default(now())
+
+  @@index([userId, createdAt])
+  @@index([roundId])
+}
+
+// ── Bonuses / promo / referral / VIP / cashback ────────────────────────────────
+
+model Bonus {
+  id              String    @id @default(cuid())
+  key             String    @unique
+  name            String
+  type            BonusType
+  currency        String?
+  amount          Decimal   @default(0) @db.Decimal(38, 18)
+  percent         Float? // deposit match %
+  maxAmount       Decimal?  @db.Decimal(38, 18)
+  wagerMultiplier Float     @default(0)
+  minDeposit      Decimal?  @db.Decimal(38, 18)
+  enabled         Boolean   @default(true)
+  descriptionRu   String?
+  descriptionEn   String?
+  createdAt       DateTime  @default(now())
+
+  userBonuses UserBonus[]
+}
+
+model UserBonus {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bonusId       String?
+  bonus         Bonus?      @relation(fields: [bonusId], references: [id])
+  name          String
+  amount        Decimal     @db.Decimal(38, 18)
+  currency      String
+  mode          WalletMode  @default(REAL)
+  wagerRequired Decimal     @default(0) @db.Decimal(38, 18)
+  wagerProgress Decimal     @default(0) @db.Decimal(38, 18)
+  status        BonusStatus @default(ACTIVE)
+  expiresAt     DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([userId, status])
+}
+
+model PromoCode {
+  id             String    @id @default(cuid())
+  code           String    @unique
+  type           PromoType
+  currency       String?
+  amount         Decimal   @default(0) @db.Decimal(38, 18)
+  bonusKey       String?
+  vipXp          Float?
+  mode           WalletMode @default(REAL)
+  maxRedemptions Int? // null = unlimited
+  perUserLimit   Int       @default(1)
+  redeemedCount  Int       @default(0)
+  enabled        Boolean   @default(true)
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  redemptions PromoRedemption[]
+}
+
+model PromoRedemption {
+  id          String    @id @default(cuid())
+  promoCodeId String
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@index([promoCodeId])
+  @@index([userId])
+}
+
+model ReferralEarning {
+  id         String     @id @default(cuid())
+  referrerId String
+  referrer   User       @relation("ReferralEarner", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredId String
+  referred   User       @relation("ReferralSource", fields: [referredId], references: [id], onDelete: Cascade)
+  currency   String
+  mode       WalletMode @default(REAL)
+  amount     Decimal    @db.Decimal(38, 18)
+  type       String // "wager_commission" | "deposit_commission" | "signup"
+  createdAt  DateTime   @default(now())
+
+  @@index([referrerId, createdAt])
+}
+
+model VipLevel {
+  level           Int     @id
+  name            String
+  xpRequired      Float
+  cashbackPercent Float   @default(0)
+  rakebackPercent Float   @default(0)
+  weeklyBonus     Decimal @default(0) @db.Decimal(38, 18)
+  color           String?
+  perksRu         String?
+  perksEn         String?
+}
+
+model CashbackClaim {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  periodStart DateTime
+  periodEnd   DateTime
+  currency    String
+  mode        WalletMode @default(REAL)
+  netLoss     Decimal    @db.Decimal(38, 18)
+  percent     Float
+  amount      Decimal    @db.Decimal(38, 18)
+  status      String     @default("PENDING") // PENDING | CLAIMED | EXPIRED
+  claimedAt   DateTime?
+  createdAt   DateTime   @default(now())
+
+  @@index([userId, status])
+}
+
+// ── Raffles / giveaways ────────────────────────────────────────────────────────
+
+model Raffle {
+  id             String            @id @default(cuid())
+  title          String
+  descriptionRu  String?
+  descriptionEn  String?
+  creatorType    RaffleCreatorType @default(ADMIN)
+  creatorName    String?
+  createdById    String?
+  currency       String
+  mode           WalletMode        @default(REAL)
+  prizePool      Decimal           @db.Decimal(38, 18)
+  winnersCount   Int               @default(1)
+  entryCost      Decimal           @default(0) @db.Decimal(38, 18)
+  maxEntriesPerUser Int            @default(1)
+  status         RaffleStatus      @default(OPEN)
+  serverSeed     String?
+  serverSeedHash String?
+  clientSeed     String?
+  opensAt        DateTime?
+  closesAt       DateTime?
+  drawAt         DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  entries RaffleEntry[]
+  winners RaffleWinner[]
+
+  @@index([status])
+}
+
+model RaffleEntry {
+  id        String   @id @default(cuid())
+  raffleId  String
+  raffle    Raffle   @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tickets   Int      @default(1)
+  createdAt DateTime @default(now())
+
+  @@index([raffleId])
+  @@index([userId])
+}
+
+model RaffleWinner {
+  id        String   @id @default(cuid())
+  raffleId  String
+  raffle    Raffle   @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prize     Decimal  @db.Decimal(38, 18)
+  rank      Int
+  createdAt DateTime @default(now())
+
+  @@index([raffleId])
+}
+
+// ── Social: chat & notifications ───────────────────────────────────────────────
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  room      String   @default("global")
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  username  String
+  body      String
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([room, createdAt])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType @default(SYSTEM)
+  titleRu   String
+  titleEn   String
+  bodyRu    String
+  bodyEn    String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// ── Compliance: KYC, support, responsible gaming ───────────────────────────────
+
+model KycCase {
+  id          String        @id @default(cuid())
+  userId      String        @unique
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      KycStatus     @default(PENDING)
+  level       Int           @default(1)
+  fullName    String?
+  dateOfBirth DateTime?
+  country     String?
+  reviewerId  String?
+  reviewNote  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  documents KycDocument[]
+}
+
+model KycDocument {
+  id        String    @id @default(cuid())
+  caseId    String
+  case      KycCase   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  kind      String // passport | id_card | selfie | proof_of_address
+  fileUrl   String
+  status    KycStatus @default(PENDING)
+  createdAt DateTime  @default(now())
+
+  @@index([caseId])
+}
+
+model SupportTicket {
+  id           String         @id @default(cuid())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject      String
+  category     String         @default("general")
+  status       TicketStatus   @default(OPEN)
+  priority     TicketPriority @default(NORMAL)
+  assignedToId String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  messages SupportMessage[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model SupportMessage {
+  id            String        @id @default(cuid())
+  ticketId      String
+  ticket        SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId      String
+  authorRole    UserRole
+  body          String
+  attachmentUrl String?
+  createdAt     DateTime      @default(now())
+
+  @@index([ticketId])
+}
+
+model RgLimit {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      RgLimitType
+  period    String // DAILY | WEEKLY | MONTHLY
+  amount    Decimal?    @db.Decimal(38, 18)
+  minutes   Int?
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([userId, type, period])
+}
+
+model SelfExclusion {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  until     DateTime? // null = permanent
+  reason    String?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ── Platform: settings, content, audit, counters ───────────────────────────────
+
+model AppSetting {
+  key         String   @id
+  value       Json
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+model ContentPage {
+  id        String   @id @default(cuid())
+  key       String // responsible-gaming | contacts | privacy | private-game | terms | about
+  locale    String // ru | en
+  title     String
+  body      String
+  updatedAt DateTime @updatedAt
+
+  @@unique([key, locale])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorName  String?
+  action     String
+  targetType String?
+  targetId   String?
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/// Atomic counters (e.g. sequential public Account IDs).
+model Counter {
+  key   String @id
+  value Int    @default(0)
+}
