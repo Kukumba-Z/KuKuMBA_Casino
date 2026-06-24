@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-night text-white/90 font-sans antialiased;
+    background-image:
+      radial-gradient(1100px 580px at 82% -12%, rgba(124, 196, 255, 0.1), transparent 60%),
+      radial-gradient(820px 480px at -5% 8%, rgba(255, 143, 208, 0.1), transparent 55%),
+      radial-gradient(760px 760px at 50% 122%, rgba(183, 156, 237, 0.13), transparent 60%);
+    background-attachment: fixed;
+  }
+  ::selection {
+    @apply bg-lav/40 text-white;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-white/10;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    @apply bg-white/20;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply border border-white/10 bg-white/[0.04] backdrop-blur-xl;
+  }
+  .card {
+    @apply glass rounded-3xl shadow-card;
+  }
+  .holo-text {
+    @apply animate-sheen bg-holo bg-clip-text text-transparent;
+    background-size: 200% 200%;
+  }
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-2xl px-4 py-2.5 font-semibold transition-[background,color,filter,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-holo text-night shadow-glow hover:brightness-105;
+    background-size: 200% 200%;
+  }
+  .btn-ghost {
+    @apply btn border border-white/10 bg-white/5 hover:bg-white/10;
+  }
+  .btn-soft {
+    @apply btn border border-lav/20 bg-lav/15 text-lav hover:bg-lav/25;
+  }
+  .input {
+    @apply w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition placeholder:text-white/30 focus:border-lav/60 focus:ring-2 focus:ring-lav/20;
+  }
+  .label {
+    @apply mb-1.5 block text-sm text-white/60;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium;
+  }
+  .nav-link {
+    @apply flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-white/70 transition hover:bg-white/5 hover:text-white;
+  }
+  .nav-link-active {
+    @apply bg-white/10 text-white;
+  }
+  .stat {
+    @apply card flex flex-col gap-1 p-4;
+  }
+}
