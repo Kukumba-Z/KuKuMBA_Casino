@@ -15,6 +15,12 @@ RUN pnpm --filter @kukumba/web build
 
 # ── nginx ────────────────────────────────────────────────────
 FROM nginx:1.27-alpine
+# openssl: used by ensure-cert.sh to bootstrap TLS material so nginx always boots.
+RUN apk add --no-cache openssl
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 COPY deploy/nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY deploy/web/ensure-cert.sh /usr/local/bin/ensure-cert.sh
+COPY deploy/web/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/ensure-cert.sh /usr/local/bin/entrypoint.sh
 EXPOSE 80 443
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

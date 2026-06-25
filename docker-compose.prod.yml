@@ -57,9 +57,8 @@ services:
     volumes:
       - ./deploy/certbot/conf:/etc/letsencrypt
       - ./deploy/certbot/www:/var/www/certbot
-    # reload nginx every 6h so renewed certs get picked up
-    command: >
-      /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g 'daemon off;'"
+    # nginx start (with self-signed bootstrap) + periodic reload is handled by
+    # the image entrypoint (deploy/web/entrypoint.sh).
 
   certbot:
     image: certbot/certbot
