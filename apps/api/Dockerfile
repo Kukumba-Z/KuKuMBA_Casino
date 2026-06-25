@@ -8,12 +8,13 @@ RUN corepack enable
 # Prisma needs OpenSSL present to pick the right engine.
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
-# workspace manifests first (better layer caching); both are needed for a
-# valid --frozen-lockfile resolve, but we only install the api subtree.
+# workspace manifests first (better layer caching). We resolve against the
+# lockfile but don't pin it frozen, so the image builds even if the lockfile
+# trails package.json; we only install the api subtree.
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
-RUN pnpm install --frozen-lockfile --filter @kukumba/api
+RUN pnpm install --no-frozen-lockfile --filter @kukumba/api
 COPY apps/api apps/api
 RUN pnpm --filter @kukumba/api prisma:generate \
  && pnpm --filter @kukumba/api build

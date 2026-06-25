@@ -65,8 +65,8 @@ export class BonusesService {
 
     await this.notifications.notify(userId, {
       type: 'BONUS',
-      titleRu: 'Бонус начислен 🎉',
-      titleEn: 'Bonus credited 🎉',
+      titleRu: 'Бонус начислен',
+      titleEn: 'Bonus credited',
       bodyRu: `Вы получили бонус «${bonus.name}».`,
       bodyEn: `You claimed the "${bonus.name}" bonus.`,
     });

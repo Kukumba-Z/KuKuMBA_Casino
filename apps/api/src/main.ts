@@ -18,6 +18,6 @@ async function bootstrap() {
   const port = process.env.API_PORT ? +process.env.API_PORT : 3000;
   await app.listen(port);
   // eslint-disable-next-line no-console
-  console.log(`🦄  KuKuMBA API running at http://localhost:${port}/api`);
+  console.log(`KuKuMBA API running at http://localhost:${port}/api`);
 }
 bootstrap();

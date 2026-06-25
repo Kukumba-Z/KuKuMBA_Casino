@@ -119,8 +119,8 @@ export class CashbackService {
 
     await this.notifications.notify(userId, {
       type: 'BONUS',
-      titleRu: 'Кешбэк получен 💸',
-      titleEn: 'Cashback claimed 💸',
+      titleRu: 'Кешбэк получен',
+      titleEn: 'Cashback claimed',
       bodyRu: 'Ваш кешбэк зачислен на баланс.',
       bodyEn: 'Your cashback has been credited.',
     });

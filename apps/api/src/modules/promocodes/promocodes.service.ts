@@ -77,8 +77,8 @@ export class PromocodesService {
 
     await this.notifications.notify(userId, {
       type: 'PROMO',
-      titleRu: 'Промокод активирован 🎁',
-      titleEn: 'Promo code redeemed 🎁',
+      titleRu: 'Промокод активирован',
+      titleEn: 'Promo code redeemed',
       bodyRu: `Промокод ${promo.code} успешно применён.`,
       bodyEn: `Promo code ${promo.code} applied successfully.`,
     });

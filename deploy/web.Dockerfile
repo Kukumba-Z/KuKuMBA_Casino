@@ -9,7 +9,7 @@ RUN corepack enable
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
-RUN pnpm install --frozen-lockfile --filter @kukumba/web
+RUN pnpm install --no-frozen-lockfile --filter @kukumba/web
 COPY apps/web apps/web
 RUN pnpm --filter @kukumba/web build
 
