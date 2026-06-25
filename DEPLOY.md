@@ -7,134 +7,147 @@
 > платёжный провайдер. По умолчанию платежи в режиме **sandbox** (реальные средства не двигаются),
 > сайт работает на демо/виртуальной валюте. 18+.
 
-Все команды — по SSH под `root` или через `sudo`.
+Все команды — по SSH под `root` или через `sudo`. После шага 6 (симлинк `.env`) флаг
+`--env-file` нигде не нужен.
 
 ---
 
-## 0. DNS
-В панели домена создайте A-записи на IP вашего VPS:
+## Установка с нуля
+
+### 0. DNS
+A-записи на IP вашего VPS:
 ```
 kukumba.space      A   <IP_сервера>
 www.kukumba.space  A   <IP_сервера>
 ```
-Проверьте: `dig +short kukumba.space` → ваш IP. (Дайте записям распространиться, 5–30 мин.)
+Проверка: `dig +short kukumba.space` → ваш IP. (Подождите 5–30 мин.)
 
-## 1. Docker (если ещё нет)
+### 1. Docker
 ```bash
 curl -fsSL https://get.docker.com | sh
-docker compose version   # должно показать v2.x
+docker compose version   # v2.x
 ```
 
-## 2. Убрать старый сайт и освободить порты 80/443
+### 2. Убрать старый сайт и освободить порты 80/443
 ```bash
-# бэкап старого nginx и контента
 sudo tar czf ~/nginx-backup-$(date +%F).tgz /etc/nginx /var/www 2>/dev/null || true
-
-# остановить и отключить хостовый nginx (его заменит nginx из Docker)
 sudo systemctl disable --now nginx 2>/dev/null || true
-# если стоит apache — тоже:
 sudo systemctl disable --now apache2 2>/dev/null || true
-
-# убедиться, что порты свободны (пусто = ок)
-sudo ss -ltnp '( sport = :80 or sport = :443 )'
+sudo ss -ltnp '( sport = :80 or sport = :443 )'   # пусто = ок
 ```
-> Старый сайт после этого офлайн. Его файлы сохранены в `~/nginx-backup-*.tgz` и `/var/www`.
+> Старый сайт уйдёт офлайн; его файлы — в `~/nginx-backup-*.tgz` и `/var/www`.
 
-## 3. Firewall
+### 3. Firewall
 ```bash
 sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp
 sudo ufw --force enable
 ```
 
-## 4. (Только для VPS с 2 ГБ RAM) swap — чтобы сборка не падала
+### 4. (VPS с 2 ГБ RAM) swap — чтобы сборка не падала
 ```bash
-# если /swapfile уже есть и активен (swapon --show не пуст) — пропустите этот шаг
+swapon --show   # если уже есть строка с /swapfile — пропустите шаг
 sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
 sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-## 5. Забрать код
+### 5. Забрать код
 ```bash
 cd /opt
 sudo git clone https://github.com/kukumba-hehe/KuKuMBA_Casino.git
 cd KuKuMBA_Casino
 ```
 
-## 6. Настроить секреты
+### 6. Секреты (важно)
 ```bash
 cp .env.production.example .env.production
-
-# ВАЖНО: симлинк, чтобы docker compose сам подхватывал переменные
-# (иначе ошибка "required variable POSTGRES_PASSWORD is missing").
-ln -sf .env.production .env
-
-# сгенерировать секреты:
-echo "JWT_ACCESS_SECRET=$(openssl rand -hex 32)"
-echo "JWT_REFRESH_SECRET=$(openssl rand -hex 32)"
+ln -sf .env.production .env          # чтобы compose сам подхватывал переменные
 nano .env.production
 ```
-Обязательно поменяйте: `POSTGRES_PASSWORD` (**и тот же пароль** в `DATABASE_URL`),
-`JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `ADMIN_PASSWORD`, `CERTBOT_EMAIL`.
-На первый запуск оставьте `SEED_ON_START=true`.
+Заполните:
+- **`POSTGRES_PASSWORD`** — пароль БД. **Только hex/буквы-цифры, без `@ : / ? # %`** (иначе ломается URL).
+  Сгенерируйте: `openssl rand -hex 24`. **DATABASE_URL задавать не нужно** — он строится автоматически из этого пароля.
+- **`JWT_ACCESS_SECRET`**, **`JWT_REFRESH_SECRET`** — каждый `openssl rand -hex 32`.
+- **`ADMIN_PASSWORD`**, **`CERTBOT_EMAIL`**.
+- На первый запуск оставьте **`SEED_ON_START=true`**.
 
-> После шага с симлинком все команды `docker compose -f docker-compose.prod.yml …`
-> работают без флага `--env-file`.
-
-## 7. Получить TLS-сертификат
+### 7. TLS-сертификат
 ```bash
 chmod +x deploy/*.sh
 sudo ./deploy/init-letsencrypt.sh
 ```
-Скрипт поднимет временный nginx, пройдёт ACME-проверку и выпустит сертификат Let's Encrypt
-для `kukumba.space` и `www.kukumba.space`.
-(Если что-то отлаживаете — поставьте `CERTBOT_STAGING=1` в `.env.production`, чтобы не упереться в лимиты LE.)
+(Отлаживаете? Поставьте `CERTBOT_STAGING=1` в `.env.production`, чтобы не упереться в лимиты LE.)
 
-## 8. Запустить весь стек
+### 8. Запуск
 ```bash
 sudo docker compose -f docker-compose.prod.yml up -d --build
-sudo docker compose -f docker-compose.prod.yml ps
+sudo docker compose -f docker-compose.prod.yml logs -f api   # дождитесь "🦄 Starting KuKuMBA API"
 ```
 Открывайте **https://kukumba.space** 🦄
 
-## 9. После первого запуска
-1. Зайдите в админку под `ADMIN_EMAIL` / `ADMIN_PASSWORD`, **смените пароль**.
-2. В `.env.production` поставьте `SEED_ON_START=false` и переразверните:
-   ```bash
-   sudo docker compose -f docker-compose.prod.yml up -d
-   ```
+### 9. После первого запуска
+1. Войдите в админку (`ADMIN_EMAIL` / `ADMIN_PASSWORD`) и **смените пароль**.
+2. В `.env.production` поставьте `SEED_ON_START=false` и: `sudo docker compose -f docker-compose.prod.yml up -d`.
 
 ---
 
-## Обновление сайта в будущем
+## Обновление сайта
 ```bash
-cd /opt/KuKuMBA_Casino && sudo ./deploy/deploy.sh
+cd /opt/KuKuMBA_Casino
+git pull
+sudo docker compose -f docker-compose.prod.yml up -d --build
+# или быстро, если менялся только фронт:
+# sudo docker compose -f docker-compose.prod.yml up -d --build web
 ```
-(схема БД синхронизируется автоматически при старте API-контейнера).
+Схема БД синхронизируется автоматически при старте API-контейнера. Можно и одной командой:
+`sudo ./deploy/deploy.sh`.
 
 ## Логи и обслуживание
 ```bash
-# логи
+sudo docker compose -f docker-compose.prod.yml ps
 sudo docker compose -f docker-compose.prod.yml logs -f api
-sudo docker compose -f docker-compose.prod.yml logs -f web
-
-# бэкап БД
+sudo docker compose -f docker-compose.prod.yml restart
+# бэкап БД:
 sudo docker compose -f docker-compose.prod.yml exec db \
   pg_dump -U kukumba kukumba | gzip > ~/kukumba-db-$(date +%F).sql.gz
-
-# рестарт / стоп
-sudo docker compose -f docker-compose.prod.yml restart
-sudo docker compose -f docker-compose.prod.yml down
 ```
 Сертификат продлевается автоматически (сервис `certbot` + nginx перечитывает каждые 6 ч).
 
-> Если симлинк `.env` не делали — добавляйте `--env-file .env.production` к каждой команде
-> compose, например: `sudo docker compose --env-file .env.production -f docker-compose.prod.yml ps`.
+---
+
+## Полная переустановка / снос
+Снести контейнеры, тома (БД) и образы только нашего проекта:
+```bash
+cd /opt/KuKuMBA_Casino
+sudo docker compose -f docker-compose.prod.yml down -v --rmi all --remove-orphans
+```
+(не сработало — по имени: `sudo docker ps -a --filter name=kukumba -q | xargs -r sudo docker rm -f`)
+
+Сохранить уже выпущенный TLS-сертификат, чтобы не упираться в лимит Let's Encrypt:
+```bash
+sudo cp -r /opt/KuKuMBA_Casino/deploy/certbot ~/kukumba-certbot-backup
+```
+Удалить папку и поставить заново:
+```bash
+cd / && sudo rm -rf /opt/KuKuMBA_Casino
+# затем повторить «Установку с нуля» (шаги 5–8).
+# (если сохраняли сертификат: после clone верните его и пропустите init-letsencrypt:
+#   sudo cp -r ~/kukumba-certbot-backup/* /opt/KuKuMBA_Casino/deploy/certbot/ )
+```
+
+---
 
 ## Если что-то не так
-- **`required variable POSTGRES_PASSWORD is missing`** — compose не видит переменные. Сделайте
-  симлинк `ln -sf .env.production .env` (шаг 6) или добавьте `--env-file .env.production` к команде.
-- **502 Bad Gateway** — API ещё стартует или упал: `... logs -f api`. Часто ждёт БД (до 60 с на первом запуске).
-- **Сертификат не выпускается** — проверьте, что DNS уже указывает на сервер и порт 80 открыт/свободен.
-- **Порты заняты** — `sudo ss -ltnp '( sport = :80 or sport = :443 )'`, остановите занявший процесс.
+- **`P1000: Authentication failed ... credentials for kukumba are not valid`** — том БД был создан
+  с другим паролем. Теперь `DATABASE_URL` строится из `POSTGRES_PASSWORD` автоматически, так что
+  достаточно пересоздать том под текущий пароль (на первом деплое данных не жалко):
+  ```bash
+  sudo docker compose -f docker-compose.prod.yml down -v
+  sudo docker compose -f docker-compose.prod.yml up -d --build
+  ```
+- **`required variable POSTGRES_PASSWORD is missing`** — нет симлинка `.env`: `ln -sf .env.production .env`
+  (или добавляйте `--env-file .env.production` к команде).
+- **502 Bad Gateway** — API ещё стартует/упал: `... logs -f api` (на первом запуске ждёт БД до ~60 с).
+- **Сертификат не выпускается** — DNS ещё не указывает на сервер, или порт 80 занят/закрыт.
+- **Порты заняты** — `sudo ss -ltnp '( sport = :80 or sport = :443 )'`, остановите процесс.
 - **Мало памяти при сборке** — добавьте swap (шаг 4).
