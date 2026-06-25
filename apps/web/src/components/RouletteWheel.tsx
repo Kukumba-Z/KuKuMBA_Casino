@@ -54,14 +54,14 @@ export function RouletteWheel({
   }, [spinId, result]);
 
   return (
-    <div className="relative" style={{ width: size, height: size }}>
+    <div className="relative mx-auto aspect-square w-full" style={{ maxWidth: size }}>
       {/* pointer */}
       <div className="absolute left-1/2 top-[-2px] z-20 -translate-x-1/2">
         <div className="h-0 w-0 border-x-8 border-t-[14px] border-x-transparent border-t-sun drop-shadow" />
       </div>
       <svg
-        width={size}
-        height={size}
+        width="100%"
+        height="100%"
         viewBox={`0 0 ${size} ${size}`}
         style={{
           transform: `rotate(${rot}deg)`,
