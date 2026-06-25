@@ -158,7 +158,7 @@ const ru = {
     periodMonthly: 'Месяц',
   },
   vip: { title: 'VIP-программа', level: 'Уровень', progress: 'Прогресс', perks: 'Привилегии', cashback: 'Кешбэк', rakeback: 'Рейкбэк' },
-  raffles: { title: 'Розыгрыши', join: 'Участвовать', participants: 'Участ901'.length && 'Участников', prize: 'Призовой фонд', winners: 'Победителей', entry: 'Вход', free: 'Бесплатно', drawn: 'Завершён', open: 'Идёт', myTickets: 'Ваши билеты', live: 'Активный розыгрыш', joined: 'Вы участвуете!', drawAdmin: 'Провести розыгрыш', winnersTitle: 'Победители', provablyFair: 'Честность розыгрыша' },
+  raffles: { title: 'Розыгрыши', join: 'Участвовать', participants: 'Участников', prize: 'Призовой фонд', winners: 'Победителей', entry: 'Вход', free: 'Бесплатно', drawn: 'Завершён', open: 'Идёт', myTickets: 'Ваши билеты', live: 'Активный розыгрыш', joined: 'Вы участвуете!', drawAdmin: 'Провести розыгрыш', winnersTitle: 'Победители', provablyFair: 'Честность розыгрыша' },
   support: { title: 'Поддержка', faq: 'Частые вопросы', tickets: 'Мои тикеты', newTicket: 'Новый тикет', subject: 'Тема', message: 'Сообщение', reply: 'Ответить', ticketCreated: 'Тикет создан' },
   errors: {
     GENERIC: 'Что-то пошло не так. Попробуйте ещё раз.',
