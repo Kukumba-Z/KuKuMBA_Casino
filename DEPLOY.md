@@ -48,8 +48,9 @@ sudo ufw --force enable
 
 ## 4. (Только для VPS с 2 ГБ RAM) swap — чтобы сборка не падала
 ```bash
-sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
-sudo mkswap /swapfile && sudo swapon /swapfile
+# если /swapfile уже есть и активен (swapon --show не пуст) — пропустите этот шаг
+sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
@@ -63,14 +64,22 @@ cd KuKuMBA_Casino
 ## 6. Настроить секреты
 ```bash
 cp .env.production.example .env.production
+
+# ВАЖНО: симлинк, чтобы docker compose сам подхватывал переменные
+# (иначе ошибка "required variable POSTGRES_PASSWORD is missing").
+ln -sf .env.production .env
+
 # сгенерировать секреты:
 echo "JWT_ACCESS_SECRET=$(openssl rand -hex 32)"
 echo "JWT_REFRESH_SECRET=$(openssl rand -hex 32)"
 nano .env.production
 ```
-Обязательно поменяйте: `POSTGRES_PASSWORD` (и тот же пароль в `DATABASE_URL`),
+Обязательно поменяйте: `POSTGRES_PASSWORD` (**и тот же пароль** в `DATABASE_URL`),
 `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `ADMIN_PASSWORD`, `CERTBOT_EMAIL`.
 На первый запуск оставьте `SEED_ON_START=true`.
+
+> После шага с симлинком все команды `docker compose -f docker-compose.prod.yml …`
+> работают без флага `--env-file`.
 
 ## 7. Получить TLS-сертификат
 ```bash
@@ -83,7 +92,7 @@ sudo ./deploy/init-letsencrypt.sh
 
 ## 8. Запустить весь стек
 ```bash
-sudo docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+sudo docker compose -f docker-compose.prod.yml up -d --build
 sudo docker compose -f docker-compose.prod.yml ps
 ```
 Открывайте **https://kukumba.space** 🦄
@@ -92,7 +101,7 @@ sudo docker compose -f docker-compose.prod.yml ps
 1. Зайдите в админку под `ADMIN_EMAIL` / `ADMIN_PASSWORD`, **смените пароль**.
 2. В `.env.production` поставьте `SEED_ON_START=false` и переразверните:
    ```bash
-   sudo docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+   sudo docker compose -f docker-compose.prod.yml up -d
    ```
 
 ---
@@ -119,7 +128,12 @@ sudo docker compose -f docker-compose.prod.yml down
 ```
 Сертификат продлевается автоматически (сервис `certbot` + nginx перечитывает каждые 6 ч).
 
+> Если симлинк `.env` не делали — добавляйте `--env-file .env.production` к каждой команде
+> compose, например: `sudo docker compose --env-file .env.production -f docker-compose.prod.yml ps`.
+
 ## Если что-то не так
+- **`required variable POSTGRES_PASSWORD is missing`** — compose не видит переменные. Сделайте
+  симлинк `ln -sf .env.production .env` (шаг 6) или добавьте `--env-file .env.production` к команде.
 - **502 Bad Gateway** — API ещё стартует или упал: `... logs -f api`. Часто ждёт БД (до 60 с на первом запуске).
 - **Сертификат не выпускается** — проверьте, что DNS уже указывает на сервер и порт 80 открыт/свободен.
 - **Порты заняты** — `sudo ss -ltnp '( sport = :80 or sport = :443 )'`, остановите занявший процесс.
