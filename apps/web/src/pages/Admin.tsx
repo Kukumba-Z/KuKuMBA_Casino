@@ -5,6 +5,7 @@ import {
   Check,
   Coins,
   FileText,
+  Gamepad2,
   Gift,
   LayoutDashboard,
   LifeBuoy,
@@ -35,6 +36,7 @@ const TABS: { key: string; label: string; icon: LucideIcon; perm: string }[] = [
   { key: 'deposits', label: 'Deposits', icon: ArrowDownToLine, perm: 'deposits.manage' },
   { key: 'withdrawals', label: 'Withdrawals', icon: ArrowUpFromLine, perm: 'withdrawals.manage' },
   { key: 'promo', label: 'Promo', icon: Tag, perm: 'promo.manage' },
+  { key: 'games', label: 'Games', icon: Gamepad2, perm: 'games.manage' },
   { key: 'bonuses', label: 'Bonuses', icon: Gift, perm: 'bonuses.manage' },
   { key: 'raffles', label: 'Raffles', icon: PartyPopper, perm: 'raffles.manage' },
   { key: 'currencies', label: 'Currencies', icon: Coins, perm: 'currencies.manage' },
@@ -77,6 +79,7 @@ export default function AdminPage() {
       {active === 'dashboard' && <Dashboard />}
       {active === 'users' && <Users me={me} />}
       {active === 'roles' && <Roles />}
+      {active === 'games' && <GamesAdmin />}
       {active === 'deposits' && <Deposits />}
       {active === 'withdrawals' && <Withdrawals />}
       {active === 'promo' && <Promo />}
@@ -554,6 +557,88 @@ function Settings() {
 function Audit() {
   const { data } = useQuery({ queryKey: ['adm-audit'], queryFn: async () => (await api.get('/admin/audit?take=80')).data });
   return <Table rows={data ?? []} cols={['action', 'target', 'when']} render={(a: any) => [a.action, `${a.targetType ?? ''} ${a.targetId ?? ''}`, new Date(a.createdAt).toLocaleString()]} />;
+}
+
+const GAME_CATEGORIES = ['ROULETTE', 'SLOTS', 'LIVE', 'MINIGAME'];
+const EMPTY_GAME = {
+  key: '', name: '', type: 'slots', category: 'SLOTS', provider: '', status: 'COMING_SOON',
+  route: '', rtp: '0.96', sortOrder: '10', enabled: true, descriptionRu: '', descriptionEn: '',
+};
+
+function GamesAdmin() {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ['adm-games'], queryFn: async () => (await api.get('/admin/games')).data });
+  const [form, setForm] = useState<any>(EMPTY_GAME);
+  const set = (patch: any) => setForm((f: any) => ({ ...f, ...patch }));
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['adm-games'] });
+    qc.invalidateQueries({ queryKey: ['games'] });
+    qc.invalidateQueries({ queryKey: ['game-filters'] });
+  };
+  const save = async () => {
+    try {
+      await api.post('/admin/games', { ...form, rtp: Number(form.rtp), sortOrder: Number(form.sortOrder) });
+      refresh();
+      toast.success('Game saved');
+      setForm(EMPTY_GAME);
+    } catch (e) { toast.error(apiError(e)); }
+  };
+  const toggle = async (g: any) => {
+    try { await api.post('/admin/games', { ...g, enabled: !g.enabled }); refresh(); } catch (e) { toast.error(apiError(e)); }
+  };
+  const del = async (key: string) => {
+    if (!confirm(`Delete game "${key}"?`)) return;
+    try { await api.delete(`/admin/games/${key}`); refresh(); toast.success('Deleted'); } catch (e) { toast.error(apiError(e)); }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="card space-y-2 p-4">
+        <div className="text-sm font-semibold text-white/70">{form.key ? `Edit / create` : 'Create'} game</div>
+        <div className="flex flex-wrap gap-2">
+          <input className="input w-36" placeholder="key (unique)" value={form.key} onChange={(e) => set({ key: e.target.value })} />
+          <input className="input w-44" placeholder="name" value={form.name} onChange={(e) => set({ name: e.target.value })} />
+          <input className="input w-40" placeholder="provider" value={form.provider} onChange={(e) => set({ provider: e.target.value })} />
+          <select className="input w-32" value={form.category} onChange={(e) => set({ category: e.target.value })}>
+            {GAME_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+          </select>
+          <select className="input w-36" value={form.status} onChange={(e) => set({ status: e.target.value })}>
+            <option value="LIVE">LIVE</option>
+            <option value="COMING_SOON">COMING_SOON</option>
+          </select>
+          <input className="input w-28" placeholder="rtp (0–1)" value={form.rtp} onChange={(e) => set({ rtp: e.target.value })} />
+          <input className="input w-24" placeholder="sort" value={form.sortOrder} onChange={(e) => set({ sortOrder: e.target.value })} />
+          <input className="input w-40" placeholder="route (/roulette)" value={form.route} onChange={(e) => set({ route: e.target.value })} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <input className="input flex-1" placeholder="Описание (RU)" value={form.descriptionRu} onChange={(e) => set({ descriptionRu: e.target.value })} />
+          <input className="input flex-1" placeholder="Description (EN)" value={form.descriptionEn} onChange={(e) => set({ descriptionEn: e.target.value })} />
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1.5 text-sm text-white/60">
+            <input type="checkbox" checked={form.enabled} onChange={(e) => set({ enabled: e.target.checked })} /> enabled
+          </label>
+          <button onClick={save} className="btn-primary" disabled={!form.key}>Save</button>
+          {form.key && <button onClick={() => setForm(EMPTY_GAME)} className="btn-ghost text-sm">Clear</button>}
+        </div>
+      </div>
+
+      <Table
+        rows={data ?? []}
+        cols={['name', 'category', 'provider', 'rtp', 'status', 'enabled', '']}
+        render={(g: any) => [
+          <button key="e" onClick={() => setForm({ ...EMPTY_GAME, ...g, rtp: String(g.rtp), sortOrder: String(g.sortOrder ?? 0), route: g.route ?? '', descriptionRu: g.descriptionRu ?? '', descriptionEn: g.descriptionEn ?? '' })} className="text-lav hover:underline">{g.name}</button>,
+          g.category,
+          g.provider,
+          `${(g.rtp * 100).toFixed(2)}%`,
+          g.status,
+          <button key="t" onClick={() => toggle(g)} className={`chip ${g.enabled ? 'text-mint' : 'text-white/40'}`}>{g.enabled ? 'on' : 'off'}</button>,
+          <button key="d" onClick={() => del(g.key)} className="btn-ghost !px-2 !py-1 text-xs text-roul-red"><X size={13} /></button>,
+        ]}
+      />
+    </div>
+  );
 }
 
 function Roles() {

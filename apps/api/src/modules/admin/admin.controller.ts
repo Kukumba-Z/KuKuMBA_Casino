@@ -140,6 +140,25 @@ export class AdminController {
     return this.admin.upsertBonus(adminId, body);
   }
 
+  // Games (catalog CRUD)
+  @Get('games')
+  @RequirePermission('games.manage')
+  games() {
+    return this.admin.listGames();
+  }
+
+  @Post('games')
+  @RequirePermission('games.manage')
+  upsertGame(@CurrentUser('id') adminId: string, @Body() body: any) {
+    return this.admin.upsertGame(adminId, body);
+  }
+
+  @Delete('games/:key')
+  @RequirePermission('games.manage')
+  deleteGame(@CurrentUser('id') adminId: string, @Param('key') key: string) {
+    return this.admin.deleteGame(adminId, key);
+  }
+
   // Currencies / settings / content
   @Get('currencies')
   @RequirePermission('currencies.manage')

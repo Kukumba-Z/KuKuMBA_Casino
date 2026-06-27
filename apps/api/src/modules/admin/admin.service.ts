@@ -278,6 +278,48 @@ export class AdminService {
     return bonus;
   }
 
+  // ── Games (catalog CRUD) ──────────────────────────────────────────────
+  listGames() {
+    return this.prisma.game.findMany({ orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] });
+  }
+
+  async upsertGame(adminId: string, dto: any) {
+    if (!dto.key) throw new BadRequestException('KEY_REQUIRED');
+    const data = {
+      name: dto.name ?? dto.key,
+      type: dto.type ?? 'slots',
+      category: dto.category ?? 'SLOTS',
+      provider: dto.provider ?? 'KuKuMBA Originals',
+      status: dto.status === 'COMING_SOON' ? 'COMING_SOON' : 'LIVE',
+      route: dto.route || null,
+      rtp: dto.rtp !== undefined && dto.rtp !== '' ? Number(dto.rtp) : 0.97,
+      minBet: D(dto.minBet ?? 0.1),
+      maxBet: D(dto.maxBet ?? 100000),
+      descriptionRu: dto.descriptionRu ?? null,
+      descriptionEn: dto.descriptionEn ?? null,
+      thumbnail: dto.thumbnail || null,
+      sortOrder: dto.sortOrder !== undefined ? Number(dto.sortOrder) : 0,
+      enabled: dto.enabled ?? true,
+    };
+    const game = await this.prisma.game.upsert({
+      where: { key: dto.key },
+      create: { key: dto.key, ...data },
+      update: data,
+    });
+    await this.audit(adminId, 'game.upsert', 'game', game.id, { key: dto.key });
+    return game;
+  }
+
+  async deleteGame(adminId: string, key: string) {
+    const game = await this.prisma.game.findUnique({ where: { key } });
+    if (!game) throw new NotFoundException('GAME_NOT_FOUND');
+    const rounds = await this.prisma.gameRound.count({ where: { gameId: game.id } });
+    if (rounds > 0) throw new BadRequestException('GAME_HAS_HISTORY_DISABLE_INSTEAD');
+    await this.prisma.game.delete({ where: { key } });
+    await this.audit(adminId, 'game.delete', 'game', game.id, { key });
+    return { ok: true };
+  }
+
   // ── Currencies ────────────────────────────────────────────────
   listCurrencies() {
     return this.prisma.currency.findMany({ orderBy: { sortOrder: 'asc' } });
