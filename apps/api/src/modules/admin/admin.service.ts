@@ -386,7 +386,44 @@ export class AdminService {
   async deleteChatMessage(adminId: string, id: string) {
     await this.prisma.chatMessage.update({ where: { id }, data: { deleted: true } });
     await this.audit(adminId, 'chat.delete', 'chat', id);
+    this.realtime.emit('chat:deleted', { id });
     return { ok: true };
+  }
+
+  /** Recent chat messages (incl. deleted) with the author's id/accountId for moderation. */
+  async listChat(room = 'global', take = 80) {
+    const msgs = await this.prisma.chatMessage.findMany({
+      where: { room },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(take, 200),
+      include: { user: { select: { accountId: true, chatMutedUntil: true } } },
+    });
+    return msgs.map((m) => ({
+      id: m.id,
+      room: m.room,
+      userId: m.userId,
+      accountId: m.user?.accountId,
+      username: m.username,
+      body: m.body,
+      deleted: m.deleted,
+      createdAt: m.createdAt,
+      mutedUntil: m.user?.chatMutedUntil,
+    }));
+  }
+
+  /** Mute a user in chat for N minutes (0 ⇒ unmute). */
+  async muteUser(adminId: string, userId: string, minutes: number) {
+    const until = minutes > 0 ? new Date(Date.now() + minutes * 60_000) : null;
+    await this.prisma.user.update({ where: { id: userId }, data: { chatMutedUntil: until } });
+    await this.audit(adminId, until ? 'chat.mute' : 'chat.unmute', 'user', userId, { minutes });
+    await this.notifications.notify(userId, {
+      type: 'SYSTEM',
+      titleRu: until ? 'Чат ограничен' : 'Чат снова доступен',
+      titleEn: until ? 'Chat restricted' : 'Chat restored',
+      bodyRu: until ? `Вы не можете писать в чат до ${until.toLocaleString('ru')}.` : 'Ограничение чата снято.',
+      bodyEn: until ? `You cannot post in chat until ${until.toISOString()}.` : 'Your chat restriction was lifted.',
+    });
+    return { ok: true, mutedUntil: until };
   }
 
   /**

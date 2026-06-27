@@ -194,6 +194,7 @@ model User {
   kycStatus       KycStatus  @default(NONE)
   twoFactorSecret String?
   twoFactorEnabled Boolean   @default(false)
+  chatMutedUntil  DateTime? // set by moderators; blocks chat sending while in the future
 
   // referral
   referralCode String  @unique

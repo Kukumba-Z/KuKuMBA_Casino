@@ -203,10 +203,22 @@ export class AdminController {
     return this.admin.listTickets(status);
   }
 
+  @Get('chat')
+  @RequirePermission('chat.moderate')
+  chat(@Query('room') room?: string, @Query('take') take?: string) {
+    return this.admin.listChat(room || 'global', take ? +take : 80);
+  }
+
   @Delete('chat/:id')
   @RequirePermission('chat.moderate')
   deleteChat(@CurrentUser('id') adminId: string, @Param('id') id: string) {
     return this.admin.deleteChatMessage(adminId, id);
+  }
+
+  @Post('users/:id/mute')
+  @RequirePermission('chat.moderate')
+  mute(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: any) {
+    return this.admin.muteUser(adminId, id, body?.minutes ? +body.minutes : 0);
   }
 
   @Post('broadcast')

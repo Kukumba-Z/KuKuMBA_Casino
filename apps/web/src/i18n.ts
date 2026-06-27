@@ -233,6 +233,7 @@ const ru = {
     USER_NOT_FOUND: 'Пользователь не найден.',
     EMPTY_MESSAGE: 'Сообщение не может быть пустым.',
     TICKET_NOT_FOUND: 'Тикет не найден.',
+    CHAT_MUTED: 'Вы временно не можете писать в чат.',
   },
 };
 
@@ -365,6 +366,7 @@ const en: typeof ru = {
     USER_NOT_FOUND: 'User not found.',
     EMPTY_MESSAGE: 'Message cannot be empty.',
     TICKET_NOT_FOUND: 'Ticket not found.',
+    CHAT_MUTED: 'You are temporarily muted in chat.',
   },
 };
 

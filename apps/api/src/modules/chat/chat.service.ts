@@ -25,6 +25,8 @@ export class ChatService {
   async send(user: { id: string; username: string }, room: string, rawBody: string) {
     const body = rawBody.trim().slice(0, 500);
     if (!body) throw new BadRequestException('EMPTY_MESSAGE');
+    const row = await this.prisma.user.findUnique({ where: { id: user.id }, select: { chatMutedUntil: true } });
+    if (row?.chatMutedUntil && row.chatMutedUntil > new Date()) throw new BadRequestException('CHAT_MUTED');
     const msg = await this.prisma.chatMessage.create({
       data: { room: room || 'global', userId: user.id, username: user.username, body },
     });
