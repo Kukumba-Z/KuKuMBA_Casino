@@ -1,11 +1,21 @@
-# 🚀 Деплой KuKuMBA на VPS (Docker, Ubuntu/Debian, домен kukumba.space)
+# Деплой KuKuMBA на VPS (Docker, Ubuntu/Debian)
 
-Полностью контейнеризованный продакшн: **Postgres + Redis + API + nginx + certbot (TLS)**.
-Старый сайт на хостовом nginx аккуратно отключаем (с бэкапом), порты 80/443 займёт nginx из Docker.
+Полностью контейнеризованный продакшн. Сервисы из `docker-compose.prod.yml`:
+
+| Сервис    | Образ / роль                                                        |
+|-----------|---------------------------------------------------------------------|
+| `db`      | `postgres:16-alpine` — БД (том `pgdata`)                            |
+| `redis`   | `redis:7-alpine` — адаптер Socket.IO / кэш                          |
+| `api`     | NestJS API (`/api`), при старте синхронизирует схему и опц. сидит   |
+| `web`     | nginx: статика фронтенда + reverse-proxy на `api` + TLS             |
+| `certbot` | выпуск и автопродление Let's Encrypt                               |
+
+Пример домена в конфиге — `kukumba.space`. Старый сайт на хостовом nginx отключаем (с бэкапом),
+порты 80/443 займёт контейнер `web`.
 
 > ⚠️ Перед запуском с реальными деньгами нужна лицензия на азартные игры, реальный KYC/AML и
-> платёжный провайдер. По умолчанию платежи в режиме **sandbox** (реальные средства не двигаются),
-> сайт работает на демо/виртуальной валюте. 18+.
+> платёжный провайдер. По умолчанию платежи в режиме **sandbox** (`PAYMENT_PROVIDER=mock`,
+> реальные средства не двигаются). 18+.
 
 Все команды — по SSH под `root` или через `sudo`. После шага 6 (симлинк `.env`) флаг
 `--env-file` нигде не нужен.
@@ -66,9 +76,9 @@ nano .env.production
 ```
 Заполните:
 - **`POSTGRES_PASSWORD`** — пароль БД. **Только hex/буквы-цифры, без `@ : / ? # %`** (иначе ломается URL).
-  Сгенерируйте: `openssl rand -hex 24`. **DATABASE_URL задавать не нужно** — он строится автоматически из этого пароля.
+  Сгенерируйте: `openssl rand -hex 24`. **`DATABASE_URL` задавать не нужно** — он строится автоматически из этого пароля.
 - **`JWT_ACCESS_SECRET`**, **`JWT_REFRESH_SECRET`** — каждый `openssl rand -hex 32`.
-- **`ADMIN_PASSWORD`**, **`CERTBOT_EMAIL`**.
+- **`ADMIN_EMAIL`**, **`ADMIN_PASSWORD`**, **`CERTBOT_EMAIL`**.
 - На первый запуск оставьте **`SEED_ON_START=true`**.
 
 ### 7. TLS-сертификат
@@ -81,12 +91,16 @@ sudo ./deploy/init-letsencrypt.sh
 ### 8. Запуск
 ```bash
 sudo docker compose -f docker-compose.prod.yml up -d --build
-sudo docker compose -f docker-compose.prod.yml logs -f api   # дождитесь "🦄 Starting KuKuMBA API"
+sudo docker compose -f docker-compose.prod.yml logs -f api   # дождитесь "Starting KuKuMBA API"
 ```
-Открывайте **https://kukumba.space** 🦄
+Открывайте **https://kukumba.space**
+
+При старте контейнер `api` делает `prisma db push` (синхронизация схемы), а при
+`SEED_ON_START=true` — сид: валюты, игры (рулетка + тайтлы «скоро»), VIP, **аккаунт админа**,
+дефолтные права ролей (SUPPORT/MODERATOR), контент-страницы, промокоды, демо-розыгрыш.
 
 ### 9. После первого запуска
-1. Войдите в админку (`ADMIN_EMAIL` / `ADMIN_PASSWORD`) и **смените пароль**.
+1. Войдите в админку (`ADMIN_EMAIL` / `ADMIN_PASSWORD`) и **смените пароль** (Профиль → Безопасность).
 2. В `.env.production` поставьте `SEED_ON_START=false` и: `sudo docker compose -f docker-compose.prod.yml up -d`.
 
 ---
@@ -139,8 +153,8 @@ cd / && sudo rm -rf /opt/KuKuMBA_Casino
 
 ## Если что-то не так
 - **`P1000: Authentication failed ... credentials for kukumba are not valid`** — том БД был создан
-  с другим паролем. Теперь `DATABASE_URL` строится из `POSTGRES_PASSWORD` автоматически, так что
-  достаточно пересоздать том под текущий пароль (на первом деплое данных не жалко):
+  с другим паролем. `DATABASE_URL` строится из `POSTGRES_PASSWORD` автоматически, поэтому достаточно
+  пересоздать том под текущий пароль (на первом деплое данных не жалко):
   ```bash
   sudo docker compose -f docker-compose.prod.yml down -v
   sudo docker compose -f docker-compose.prod.yml up -d --build
