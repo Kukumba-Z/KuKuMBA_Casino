@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { genReferralCode } from '../src/common/utils/ids';
 import { genServerSeed, hashServerSeed } from '../src/modules/provably-fair/provably-fair.crypto';
@@ -31,23 +31,144 @@ async function main() {
     });
   }
 
-  // ── The game ──────────────────────────────────────────────────────────
-  await prisma.game.upsert({
-    where: { key: 'roulette' },
-    create: {
+  // ── Games catalog ─────────────────────────────────────────────────────
+  // The lobby/games grid is fully data-driven: built-in games (route set) and
+  // "coming soon" provider titles live here, so new games need no code changes.
+  const ROULETTE_RTP = 0.973; // European single-zero: house edge 2.7% (1/37)
+  const games: Array<Prisma.GameCreateInput & { key: string }> = [
+    {
       key: 'roulette',
       name: 'KuKuMBA Roulette',
       type: 'roulette',
-      rtp: 0.99,
+      category: 'ROULETTE',
+      provider: 'KuKuMBA Originals',
+      status: 'LIVE',
+      route: '/roulette',
+      rtp: ROULETTE_RTP,
       minBet: 0.1,
       maxBet: 100000,
+      sortOrder: 0,
       descriptionRu:
-        'Европейская рулетка KuKuMBA: 37 ячеек, честный результат (provably-fair) и RTP 99% — преимущество казино всего 1%.',
+        'Классическая европейская рулетка: 37 ячеек (0–36), честный результат (provably-fair). RTP 97.3% — преимущество казино 2.7%.',
       descriptionEn:
-        'KuKuMBA European roulette: 37 pockets, provably-fair outcomes and a 99% RTP — a tiny 1% house edge.',
+        'Classic European roulette: 37 pockets (0–36), provably-fair outcomes. RTP 97.3% — a 2.7% house edge.',
     },
-    update: { rtp: 0.99 },
-  });
+    // ── Coming soon — provider slots ──────────────────────────────────────
+    {
+      key: 'sweet-bonanza',
+      name: 'Sweet Bonanza',
+      type: 'slots',
+      category: 'SLOTS',
+      provider: 'Pragmatic Play',
+      status: 'COMING_SOON',
+      rtp: 0.9648,
+      sortOrder: 10,
+      descriptionRu: 'Слот Pragmatic Play с механикой tumble и множителями. RTP 96.48%. Скоро у нас.',
+      descriptionEn: 'Pragmatic Play slot with tumble mechanics and multipliers. RTP 96.48%. Coming soon.',
+    },
+    {
+      key: 'gates-of-olympus',
+      name: 'Gates of Olympus',
+      type: 'slots',
+      category: 'SLOTS',
+      provider: 'Pragmatic Play',
+      status: 'COMING_SOON',
+      rtp: 0.965,
+      sortOrder: 11,
+      descriptionRu: 'Множители до x500 от Зевса. RTP 96.5%. Скоро у нас.',
+      descriptionEn: 'Zeus multipliers up to x500. RTP 96.5%. Coming soon.',
+    },
+    {
+      key: 'book-of-dead',
+      name: 'Book of Dead',
+      type: 'slots',
+      category: 'SLOTS',
+      provider: "Play'n GO",
+      status: 'COMING_SOON',
+      rtp: 0.9421,
+      sortOrder: 12,
+      descriptionRu: 'Приключенческий слот про Древний Египет. RTP 94.21%. Скоро у нас.',
+      descriptionEn: 'Ancient-Egypt adventure slot. RTP 94.21%. Coming soon.',
+    },
+    {
+      key: 'starburst',
+      name: 'Starburst',
+      type: 'slots',
+      category: 'SLOTS',
+      provider: 'NetEnt',
+      status: 'COMING_SOON',
+      rtp: 0.9609,
+      sortOrder: 13,
+      descriptionRu: 'Культовый слот NetEnt с расширяющимися вайлдами. RTP 96.09%. Скоро у нас.',
+      descriptionEn: 'Iconic NetEnt slot with expanding wilds. RTP 96.09%. Coming soon.',
+    },
+    // ── Coming soon — live games ──────────────────────────────────────────
+    {
+      key: 'lightning-roulette',
+      name: 'Lightning Roulette',
+      type: 'roulette',
+      category: 'LIVE',
+      provider: 'Evolution',
+      status: 'COMING_SOON',
+      rtp: 0.9719,
+      sortOrder: 20,
+      descriptionRu: 'Live-рулетка с живым дилером и множителями. RTP 97.19%. Скоро у нас.',
+      descriptionEn: 'Live roulette with a real dealer and multipliers. RTP 97.19%. Coming soon.',
+    },
+    {
+      key: 'crazy-time',
+      name: 'Crazy Time',
+      type: 'live',
+      category: 'LIVE',
+      provider: 'Evolution',
+      status: 'COMING_SOON',
+      rtp: 0.9508,
+      sortOrder: 21,
+      descriptionRu: 'Live game-show с бонус-раундами. RTP 95.08%. Скоро у нас.',
+      descriptionEn: 'Live game-show with bonus rounds. RTP 95.08%. Coming soon.',
+    },
+    // ── Coming soon — KuKuMBA mini-games ─────────────────────────────────
+    {
+      key: 'crash',
+      name: 'KuKuMBA Crash',
+      type: 'crash',
+      category: 'MINIGAME',
+      provider: 'KuKuMBA Originals',
+      status: 'COMING_SOON',
+      rtp: 0.99,
+      sortOrder: 30,
+      descriptionRu: 'Забери выигрыш до краша ракеты. Provably-fair, RTP 99%. Скоро у нас.',
+      descriptionEn: 'Cash out before the rocket crashes. Provably-fair, RTP 99%. Coming soon.',
+    },
+    {
+      key: 'dice',
+      name: 'KuKuMBA Dice',
+      type: 'dice',
+      category: 'MINIGAME',
+      provider: 'KuKuMBA Originals',
+      status: 'COMING_SOON',
+      rtp: 0.99,
+      sortOrder: 31,
+      descriptionRu: 'Классический dice с настраиваемым шансом. Provably-fair, RTP 99%. Скоро у нас.',
+      descriptionEn: 'Classic dice with adjustable win chance. Provably-fair, RTP 99%. Coming soon.',
+    },
+    {
+      key: 'plinko',
+      name: 'KuKuMBA Plinko',
+      type: 'plinko',
+      category: 'MINIGAME',
+      provider: 'KuKuMBA Originals',
+      status: 'COMING_SOON',
+      rtp: 0.99,
+      sortOrder: 32,
+      descriptionRu: 'Роняй шар и лови множители. Provably-fair, RTP 99%. Скоро у нас.',
+      descriptionEn: 'Drop the ball and catch multipliers. Provably-fair, RTP 99%. Coming soon.',
+    },
+  ];
+  for (const g of games) {
+    const { key, ...rest } = g;
+    await prisma.game.upsert({ where: { key }, create: { key, ...rest }, update: rest });
+  }
 
   // ── VIP ladder ────────────────────────────────────────────────────────
   const vip = [
@@ -135,7 +256,7 @@ async function main() {
   // ── App settings ───────────────────────────────────────────────
   const settings: Record<string, any> = {
     'platform.name': 'KuKuMBA',
-    'game.rtp': 0.99,
+    'game.rtp': 0.973,
     'referral.wagerCommission': 0.005,
     'payments.requireKycForWithdrawal': false,
     'payments.autoApproveWithdrawals': false,
@@ -148,8 +269,8 @@ async function main() {
   const pages: Array<{ key: string; ru: { t: string; b: string }; en: { t: string; b: string } }> = [
     {
       key: 'about',
-      ru: { t: 'О KuKuMBA', b: 'KuKuMBA — няшное, но серьёзное казино с одной честной игрой: рулеткой с RTP 99%. Мы верим в прозрачность (provably-fair), заботу об игроках и магию единорогов.' },
-      en: { t: 'About KuKuMBA', b: 'KuKuMBA is a cute-yet-serious casino with one fair game: 99% RTP roulette. We believe in transparency (provably-fair), player care, and unicorn magic.' },
+      ru: { t: 'О KuKuMBA', b: 'KuKuMBA — няшное, но серьёзное казино: честная provably-fair рулетка (RTP 97.3%), а скоро — слоты и live-игры от ведущих провайдеров. Мы верим в прозрачность, заботу об игроках и магию единорогов.' },
+      en: { t: 'About KuKuMBA', b: 'KuKuMBA is a cute-yet-serious casino: a fair provably-fair roulette (97.3% RTP), with slots and live games from leading providers coming soon. We believe in transparency, player care, and unicorn magic.' },
     },
     {
       key: 'responsible-gaming',

@@ -364,21 +364,32 @@ model Withdrawal {
 // ── Games: provably-fair roulette ──────────────────────────────────────────────
 
 model Game {
-  id            String   @id @default(cuid())
-  key           String   @unique // "roulette"
-  name          String
-  type          String // "roulette"
-  rtp           Float    @default(0.99)
+  id       String  @id @default(cuid())
+  key      String  @unique // "roulette"
+  name     String
+  type     String // "roulette" | "slots" | "crash" | ...
+  // Catalog taxonomy — drives the lobby/games grid. Kept as free-form strings so
+  // new providers/categories can be added (seed or admin) without code changes.
+  category String  @default("ROULETTE") // ROULETTE | SLOTS | LIVE | MINIGAME | ...
+  provider String  @default("KuKuMBA Originals")
+  status   String  @default("LIVE") // LIVE | COMING_SOON
+  /// internal SPA route for built-in games (e.g. "/roulette"); null for external/provider games
+  route    String?
+
+  rtp           Float    @default(0.973)
   enabled       Boolean  @default(true)
   minBet        Decimal  @default(0.1) @db.Decimal(38, 18)
   maxBet        Decimal  @default(100000) @db.Decimal(38, 18)
   descriptionRu String?
   descriptionEn String?
   thumbnail     String?
+  sortOrder     Int      @default(0)
   createdAt     DateTime @default(now())
 
   rounds GameRound[]
   bets   Bet[]
+
+  @@index([enabled, sortOrder])
 }
 
 model ProvablyFairSeed {

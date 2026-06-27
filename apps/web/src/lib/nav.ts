@@ -26,6 +26,7 @@ export interface NavItem {
 
 // Primary tabs shared by the mobile bottom bar and the desktop top bar.
 export const HOME: NavItem = { to: '/', key: 'lobby', icon: Home, end: true };
+export const GAMES: NavItem = { to: '/games', key: 'games', icon: LayoutGrid };
 export const BONUSES: NavItem = { to: '/bonuses', key: 'bonuses', icon: Gift };
 export const PROFILE: NavItem = { to: '/profile', key: 'profile', icon: User };
 export const RAFFLES: NavItem = { to: '/raffles', key: 'raffles', icon: PartyPopper, accent: true };
@@ -49,14 +50,14 @@ export const BONUS_TABS: BonusTab[] = [
 
 /** Build the ordered list of bottom-bar tabs for the current state. */
 export function bottomTabs(opts: { raffleActive: boolean }): NavItem[] {
-  const tabs: NavItem[] = [HOME, PROFILE, BONUSES];
+  const tabs: NavItem[] = [HOME, GAMES, BONUSES];
   if (opts.raffleActive) tabs.push(RAFFLES);
   return tabs;
 }
 
 /** Desktop top-bar primary links. */
 export function desktopTabs(opts: { raffleActive: boolean }): NavItem[] {
-  const tabs: NavItem[] = [HOME, BONUSES];
+  const tabs: NavItem[] = [HOME, GAMES, BONUSES];
   if (opts.raffleActive) tabs.push(RAFFLES);
   return tabs;
 }

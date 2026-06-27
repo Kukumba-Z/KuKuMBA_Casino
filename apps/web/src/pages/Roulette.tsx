@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, PartyPopper, RotateCw, ShieldCheck, Target } from 'lucide-react';
+import { Loader2, RotateCw, ShieldCheck, Target } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { ChatBox } from '../components/ChatBox';
 import { RouletteWheel, SPIN_MS } from '../components/RouletteWheel';
+import i18n from '../i18n';
 import api, { apiError } from '../lib/api';
 import { fmt, useBalances } from '../lib/hooks';
 import { useAuth } from '../store/auth';
@@ -34,7 +35,6 @@ export default function Roulette() {
   const [bets, setBets] = useState<Record<string, number>>({});
   const [spinId, setSpinId] = useState(0);
   const [result, setResult] = useState<number | null>(null);
-  const [last, setLast] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const revealRef = useRef<number | null>(null);
 
@@ -61,21 +61,23 @@ export default function Roulette() {
     const apiBets = toApi();
     if (!apiBets.length) return;
     setBusy(true);
-    setLast(null); // hide the previous outcome while the wheel turns
     try {
       const { data } = await api.post('/games/roulette/play', { currency, mode, bets: apiBets });
       // Start the wheel spinning toward the outcome…
       setResult(data.outcome);
       setSpinId((x) => x + 1);
       clear();
-      // …and only reveal the win/lose panel + refresh balances once it lands.
+      // …and only reveal the outcome (toast only) + refresh balances once it lands.
       revealRef.current = window.setTimeout(() => {
-        setLast(data);
         setBusy(false);
         qc.invalidateQueries({ queryKey: ['balances'] });
         qc.invalidateQueries({ queryKey: ['roul-history'] });
         qc.invalidateQueries({ queryKey: ['pf-seed'] });
-        if (Number(data.net) > 0) toast.success(`${t('roulette.won')} +${fmt(data.net, 4)} ${data.currency}`);
+        if (Number(data.net) > 0) {
+          toast.success(`${t('roulette.won')} +${fmt(data.net, 4)} ${data.currency} · ${t('roulette.result')}: ${data.outcome}`);
+        } else {
+          toast.info(`${t('roulette.lost')} · ${t('roulette.result')}: ${data.outcome}`);
+        }
       }, SPIN_MS);
     } catch (e) {
       toast.error(apiError(e));
@@ -95,6 +97,7 @@ export default function Roulette() {
 
   const Cell = ({ k, label, cls = '', wide = false }: { k: string; label: any; cls?: string; wide?: boolean }) => (
     <button
+      type="button"
       onClick={() => add(k)}
       disabled={busy}
       className={`relative grid place-items-center rounded-lg border border-white/10 text-sm font-bold transition hover:brightness-125 disabled:opacity-60 ${cls} ${wide ? 'py-2' : 'aspect-square'}`}
@@ -121,25 +124,13 @@ export default function Roulette() {
               <span className="holo-text">{t('roulette.title')}</span>
             </h1>
             <p className="mt-1 flex items-center justify-center gap-1.5 text-sm text-white/50 md:justify-start">
-              <ShieldCheck size={14} className="text-mint" /> RTP {((info?.rtp ?? 0.99) * 100).toFixed(0)}% · provably-fair
+              <ShieldCheck size={14} className="text-mint" /> RTP {((info?.rtp ?? 0.973) * 100).toFixed(1)}% · provably-fair
             </p>
-
-            {busy ? (
-              <div className="mt-4 flex items-center justify-center gap-2 rounded-2xl bg-white/[0.04] px-4 py-3 text-white/60 md:justify-start">
-                <Loader2 size={18} className="animate-spin" /> {t('roulette.spinning')}
-              </div>
-            ) : last ? (
-              <div className={`mt-4 rounded-2xl px-4 py-3 ${Number(last.net) > 0 ? 'bg-mint/15 text-mint' : 'bg-roul-red/15 text-roul-red'}`}>
-                <div className="flex items-center gap-2 text-lg font-bold">
-                  {Number(last.net) > 0 ? <PartyPopper size={20} /> : <Target size={20} />}
-                  {Number(last.net) > 0 ? t('roulette.won') : t('roulette.lost')}
-                </div>
-                <div className="text-sm">
-                  {t('roulette.result')}: <b>{last.outcome}</b> · {Number(last.net) >= 0 ? '+' : ''}
-                  {fmt(last.net, 4)} {last.currency}
-                </div>
-              </div>
-            ) : null}
+            {(info?.descriptionRu || info?.descriptionEn) && (
+              <p className="mt-2 max-w-sm text-xs text-white/40">
+                {i18n.language?.startsWith('en') ? info?.descriptionEn : info?.descriptionRu}
+              </p>
+            )}
 
             {/* recent outcomes */}
             {history && history.length > 0 && (
@@ -178,9 +169,10 @@ export default function Roulette() {
             </div>
           </div>
 
-          {/* numbers — horizontally scrollable on small screens so nothing overflows the page */}
-          <div className="-mx-1 overflow-x-auto px-1 pb-1">
-            <div className="flex min-w-[480px] gap-1.5">
+          {/* numbers — horizontally scrollable on small screens; overscroll-x-contain
+              keeps the swipe inside the board instead of shifting the whole page */}
+          <div className="-mx-1 overflow-x-auto overscroll-x-contain px-1 pb-2">
+            <div className="flex min-w-[460px] gap-1.5">
               <Cell k="N:0" label="0" cls="bg-roul-green !aspect-auto w-11 self-stretch" />
               <div className="grid flex-1 grid-cols-12 gap-1.5">
                 {[TOP, MID, BOT].map((row, ri) => (

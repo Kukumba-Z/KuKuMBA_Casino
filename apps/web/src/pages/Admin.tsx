@@ -484,7 +484,7 @@ function Settings() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['adm-set'], queryFn: async () => (await api.get('/admin/settings')).data });
   const [key, setKey] = useState('game.rtp');
-  const [value, setValue] = useState('0.99');
+  const [value, setValue] = useState('0.973');
   const save = async (k = key, raw = value) => {
     let v: any = raw;
     try { v = JSON.parse(raw); } catch { /* keep string */ }
@@ -502,7 +502,7 @@ function Settings() {
       <div className="card flex flex-wrap items-end gap-3 p-4">
         <div>
           <label className="label">Roulette RTP (0–1)</label>
-          <input className="input w-40" type="number" step="0.001" min="0.5" max="1" defaultValue={rtp?.value ?? 0.99} onBlur={(e) => save('game.rtp', e.target.value)} />
+          <input className="input w-40" type="number" step="0.001" min="0.5" max="1" defaultValue={rtp?.value ?? 0.973} onBlur={(e) => save('game.rtp', e.target.value)} />
         </div>
         <p className="text-xs text-white/40">Edit any setting below; values are parsed as JSON when possible.</p>
       </div>

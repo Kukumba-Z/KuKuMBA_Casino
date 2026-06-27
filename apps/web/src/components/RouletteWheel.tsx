@@ -70,40 +70,45 @@ export function RouletteWheel({
       <div className="absolute left-1/2 top-[-2px] z-20 -translate-x-1/2">
         <div className="h-0 w-0 border-x-8 border-t-[14px] border-x-transparent border-t-sun drop-shadow" />
       </div>
-      <svg
-        width="100%"
-        height="100%"
-        viewBox={`0 0 ${size} ${size}`}
-        onTransitionEnd={(e) => {
-          if ((e as any).propertyName === 'transform') setLanded(true);
-        }}
-        style={{ transform: `rotate(${rot}deg)`, transition: `transform ${SPIN_MS}ms cubic-bezier(0.16, 1, 0.3, 1)` }}
-      >
-        <circle cx={cx} cy={cy} r={rO + 3} fill="#0B0817" stroke="rgba(255,255,255,0.12)" strokeWidth="2" />
-        {EURO.map((n, i) => {
-          const a0 = i * SEG - SEG / 2;
-          const a1 = i * SEG + SEG / 2;
-          const [tx, ty] = polar(cx, cy, rText, i * SEG);
-          return (
-            <g key={n}>
-              <path d={segPath(cx, cy, rO, rI, a0, a1)} fill={colorOf(n)} stroke="rgba(0,0,0,0.35)" strokeWidth="0.5" />
-              <text
-                x={tx}
-                y={ty}
-                fill="white"
-                fontSize="11"
-                fontWeight="700"
-                textAnchor="middle"
-                dominantBaseline="central"
-                transform={`rotate(${i * SEG}, ${tx}, ${ty})`}
-              >
-                {n}
-              </text>
-            </g>
-          );
-        })}
-        <circle cx={cx} cy={cy} r={rI} fill="#14102A" stroke="rgba(255,255,255,0.1)" strokeWidth="2" />
-      </svg>
+      {/* clip the rotating square SVG: its corners sweep outside the box while it
+          spins (and rest there when it settles at an angle), which otherwise
+          overflows the page horizontally and shifts the whole layout sideways. */}
+      <div className="absolute inset-0 overflow-hidden rounded-full">
+        <svg
+          width="100%"
+          height="100%"
+          viewBox={`0 0 ${size} ${size}`}
+          onTransitionEnd={(e) => {
+            if ((e as any).propertyName === 'transform') setLanded(true);
+          }}
+          style={{ transform: `rotate(${rot}deg)`, transition: `transform ${SPIN_MS}ms cubic-bezier(0.16, 1, 0.3, 1)` }}
+        >
+          <circle cx={cx} cy={cy} r={rO + 3} fill="#0B0817" stroke="rgba(255,255,255,0.12)" strokeWidth="2" />
+          {EURO.map((n, i) => {
+            const a0 = i * SEG - SEG / 2;
+            const a1 = i * SEG + SEG / 2;
+            const [tx, ty] = polar(cx, cy, rText, i * SEG);
+            return (
+              <g key={n}>
+                <path d={segPath(cx, cy, rO, rI, a0, a1)} fill={colorOf(n)} stroke="rgba(0,0,0,0.35)" strokeWidth="0.5" />
+                <text
+                  x={tx}
+                  y={ty}
+                  fill="white"
+                  fontSize="11"
+                  fontWeight="700"
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  transform={`rotate(${i * SEG}, ${tx}, ${ty})`}
+                >
+                  {n}
+                </text>
+              </g>
+            );
+          })}
+          <circle cx={cx} cy={cy} r={rI} fill="#14102A" stroke="rgba(255,255,255,0.1)" strokeWidth="2" />
+        </svg>
+      </div>
       <div className="absolute inset-0 z-10 grid place-items-center">
         <div className="grid h-24 w-24 place-items-center rounded-full bg-holo-soft text-center shadow-glow">
           {showNumber ? (
