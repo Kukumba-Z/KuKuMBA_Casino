@@ -8,6 +8,7 @@ import { isStaff } from '../lib/roles';
 import api from '../lib/api';
 import { useOnline } from '../lib/hooks';
 import { getSocket } from '../lib/socket';
+import { usePageTitle } from '../lib/usePageTitle';
 import { ADMIN, bottomTabs, desktopTabs, MORE_ITEMS, NavItem } from '../lib/nav';
 import { useAuth } from '../store/auth';
 import { CurrencyMenu } from './CurrencyMenu';
@@ -378,6 +379,7 @@ export default function Layout() {
   const raffleActive = useRaffleActive();
   const [moreOpen, setMoreOpen] = useState(false);
   const location = useLocation();
+  usePageTitle();
 
   useEffect(() => {
     setMoreOpen(false);
