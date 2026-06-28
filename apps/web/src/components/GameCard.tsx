@@ -1,7 +1,8 @@
-import { CircleDot, Dices, Gamepad2, Gem, Radio, ShieldCheck, type LucideIcon } from 'lucide-react';
+import { CircleDot, Dices, Gamepad2, Gem, Radio, ShieldCheck, Sparkles, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import type { Game } from '../lib/hooks';
+import { RouletteWheel } from './RouletteWheel';
 
 /** Per-category visual identity (icon + gradient accent for the thumbnail). */
 const CATEGORY: Record<string, { icon: LucideIcon; grad: string; labelKey: string }> = {
@@ -16,31 +17,60 @@ export function categoryMeta(category: string) {
   return CATEGORY[category] ?? FALLBACK;
 }
 
+/** Our own titles (vs. third-party provider games). Brand-name match keeps it
+ *  data-driven — no per-game hardcoding. */
+export function isOriginal(game: Pick<Game, 'provider'>) {
+  return /kukumba/i.test(game.provider ?? '');
+}
+
+/** Thumbnail art when a game has no uploaded image. Originals get bespoke art
+ *  (a real mini roulette wheel) so they look like games, not a stray icon. */
+function GameArt({ game }: { game: Game }) {
+  const meta = categoryMeta(game.category);
+  if (game.thumbnail) {
+    return <img src={game.thumbnail} alt={game.name} className="absolute inset-0 h-full w-full object-cover" loading="lazy" />;
+  }
+  if (game.category === 'ROULETTE') {
+    return (
+      <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-roul-red/25 via-lav/20 to-night">
+        <div className="w-[78%] max-w-[150px]">
+          <RouletteWheel result={null} spinId={0} size={200} />
+        </div>
+      </div>
+    );
+  }
+  const Icon = meta.icon;
+  return (
+    <div className={`absolute inset-0 grid place-items-center bg-gradient-to-br ${meta.grad}`}>
+      <Icon size={44} className="text-white/75 drop-shadow" />
+    </div>
+  );
+}
+
 export function GameCard({ game }: { game: Game }) {
   const { t } = useTranslation();
-  const meta = categoryMeta(game.category);
-  const Icon = meta.icon;
   const live = game.status === 'LIVE' && !!game.route;
+  const original = isOriginal(game);
 
   const inner = (
     <div
-      className={`group relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition ${
-        live ? 'hover:border-white/25 hover:shadow-glow' : ''
-      }`}
+      className={`group relative flex h-full flex-col overflow-hidden rounded-2xl border bg-white/[0.03] transition ${
+        original ? 'border-lav/30' : 'border-white/10'
+      } ${live ? 'hover:border-white/30 hover:shadow-glow' : ''}`}
     >
       {/* thumbnail */}
-      <div className={`relative aspect-[4/3] w-full bg-gradient-to-br ${meta.grad}`}>
-        {game.thumbnail ? (
-          <img src={game.thumbnail} alt={game.name} className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
-        ) : (
-          <div className="absolute inset-0 grid place-items-center">
-            <Icon size={40} className="text-white/70" />
-          </div>
-        )}
+      <div className="relative aspect-[4/3] w-full overflow-hidden">
+        <GameArt game={game} />
         {/* RTP badge */}
         <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white/90 backdrop-blur">
           <ShieldCheck size={11} className="text-mint" /> {t('games.rtp')} {game.rtpPercent}%
         </span>
+        {/* Originals badge */}
+        {original && (
+          <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-holo px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-night shadow">
+            <Sparkles size={10} /> {t('games.original')}
+          </span>
+        )}
         {/* coming-soon veil */}
         {!live && (
           <div className="absolute inset-0 grid place-items-center bg-night/55 backdrop-blur-[1px]">

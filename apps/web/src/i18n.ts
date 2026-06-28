@@ -106,6 +106,9 @@ const ru = {
     catLive: 'Live-игры',
     catMinigame: 'Мини-игры',
     catOther: 'Другое',
+    originals: 'KuKuMBA Originals',
+    providers: 'Провайдеры',
+    original: 'Original',
   },
   roulette: {
     title: 'Рулетка',
@@ -303,6 +306,7 @@ const en: typeof ru = {
     comingSoon: 'Soon', play: 'Play', rtp: 'RTP', provider: 'Provider',
     empty: 'Nothing found', nothingHere: 'Nothing in this category yet',
     catRoulette: 'Roulette', catSlots: 'Slots', catLive: 'Live games', catMinigame: 'Mini-games', catOther: 'Other',
+    originals: 'KuKuMBA Originals', providers: 'Providers', original: 'Original',
   },
   roulette: {
     title: 'Roulette', place: 'Place your bet', clear: 'Clear', undo: 'Undo', totalBet: 'Total bet',
