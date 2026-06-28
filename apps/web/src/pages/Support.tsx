@@ -3,6 +3,7 @@ import { LifeBuoy } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api, { apiError } from '../lib/api';
+import { enumLabel } from '../lib/labels';
 import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
 
@@ -67,7 +68,7 @@ export default function Support() {
               {tickets.map((tk: any) => (
                 <div key={tk.id} className="flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
                   <span>{tk.subject}</span>
-                  <span className="chip">{tk.status}</span>
+                  <span className="chip">{enumLabel('ticketStatus', tk.status)}</span>
                 </div>
               ))}
             </div>

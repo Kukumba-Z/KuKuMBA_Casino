@@ -3,6 +3,7 @@ import { Tag } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api, { apiError } from '../lib/api';
+import { enumLabel } from '../lib/labels';
 import { toast } from '../store/toast';
 
 export default function Promo({ embedded = false }: { embedded?: boolean }) {
@@ -15,7 +16,7 @@ export default function Promo({ embedded = false }: { embedded?: boolean }) {
     e.preventDefault();
     try {
       const { data } = await api.post('/promocodes/redeem', { code });
-      toast.success(`${data.type}${data.amount && Number(data.amount) ? ` · +${data.amount} ${data.currency}` : ''}`);
+      toast.success(`${enumLabel('promoType', data.type)}${data.amount && Number(data.amount) ? ` · +${data.amount} ${data.currency}` : ''}`);
       setCode('');
       qc.invalidateQueries({ queryKey: ['balances'] });
       qc.invalidateQueries({ queryKey: ['promo-me'] });
@@ -32,12 +33,12 @@ export default function Promo({ embedded = false }: { embedded?: boolean }) {
         </h1>
       )}
       <form onSubmit={redeem} className="card space-y-3 p-6">
-        <label className="label">Введите промокод / Enter a promo code</label>
+        <label className="label">{t('promo.enter')}</label>
         <div className="flex gap-2">
           <input className="input uppercase" value={code} onChange={(e) => setCode(e.target.value)} placeholder="KUKUMBA" />
           <button className="btn-primary">{t('common.claim')}</button>
         </div>
-        <p className="text-xs text-white/40">Промокоды выдаются администрацией и в акциях.</p>
+        <p className="text-xs text-white/40">{t('promo.hint')}</p>
       </form>
 
       <div className="card p-5">

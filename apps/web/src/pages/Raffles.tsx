@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import api from '../lib/api';
 import { fmt } from '../lib/hooks';
+import { enumLabel } from '../lib/labels';
 
 export default function Raffles() {
   const { t, i18n } = useTranslation();
@@ -21,7 +22,7 @@ export default function Raffles() {
             <div className="mb-2 flex items-center justify-between">
               <span className="text-lg font-bold">{r.title}</span>
               <span className={`chip ${r.status === 'OPEN' ? 'text-mint' : 'text-white/50'}`}>
-                {r.status === 'OPEN' ? t('raffles.open') : t('raffles.drawn')}
+                {enumLabel('raffleStatus', r.status)}
               </span>
             </div>
             <p className="flex-1 text-sm text-white/55">{en ? r.descriptionEn : r.descriptionRu}</p>

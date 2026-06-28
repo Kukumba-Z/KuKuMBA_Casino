@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Mascot } from '../components/Mascot';
 import api, { apiError } from '../lib/api';
 import { fmt, useBalances, useCurrencies } from '../lib/hooks';
+import { enumLabel } from '../lib/labels';
 import { toast } from '../store/toast';
 
 export default function Wallet() {
@@ -27,7 +28,7 @@ export default function Wallet() {
           {(balances ?? []).map((b) => (
             <div key={b.currency + b.mode} className="flex items-center justify-between rounded-2xl bg-black/30 p-4">
               <div>
-                <div className="text-xs uppercase text-white/40">{b.mode}</div>
+                <div className="text-xs uppercase text-white/40">{enumLabel('mode', b.mode)}</div>
                 <div className="text-xl font-bold tabular-nums">
                   {fmt(b.amount, 6)} <span className="text-white/50">{b.currency}</span>
                 </div>
@@ -199,12 +200,12 @@ function Transactions() {
         {(data ?? []).map((x: any) => (
           <div key={x.id} className="flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
             <div className="flex items-center gap-2">
-              <span className="chip !px-2 !py-0.5 text-[10px]">{x.type}</span>
+              <span className="chip !px-2 !py-0.5 text-[10px]">{enumLabel('txType', x.type)}</span>
               <span className="text-white/50">{new Date(x.createdAt).toLocaleString()}</span>
             </div>
             <div className={`tabular-nums font-semibold ${x.direction === 'CREDIT' ? 'text-mint' : 'text-white/60'}`}>
               {x.direction === 'CREDIT' ? '+' : '−'}
-              {fmt(x.amount, 6)} {x.currency} <span className="text-white/30">({x.mode})</span>
+              {fmt(x.amount, 6)} {x.currency} <span className="text-white/30">({enumLabel('mode', x.mode)})</span>
             </div>
           </div>
         ))}

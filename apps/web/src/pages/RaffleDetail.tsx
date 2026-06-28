@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import api, { apiError } from '../lib/api';
 import { fmt } from '../lib/hooks';
+import { enumLabel } from '../lib/labels';
 import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
 
@@ -42,7 +43,7 @@ export default function RaffleDetail() {
       <div className="card space-y-4 p-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-extrabold">{r.title}</h1>
-          <span className={`chip ${r.status === 'OPEN' ? 'text-mint' : 'text-white/50'}`}>{r.status}</span>
+          <span className={`chip ${r.status === 'OPEN' ? 'text-mint' : 'text-white/50'}`}>{enumLabel('raffleStatus', r.status)}</span>
         </div>
         <p className="text-white/60">{en ? r.descriptionEn : r.descriptionRu}</p>
 

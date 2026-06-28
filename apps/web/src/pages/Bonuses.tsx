@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import api, { apiError } from '../lib/api';
 import { fmt } from '../lib/hooks';
+import { enumLabel } from '../lib/labels';
 import { BONUS_TABS } from '../lib/nav';
 import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
@@ -100,7 +101,7 @@ function BonusCatalog() {
           <div key={b.id} className="card flex flex-col p-5">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-lg font-bold">{b.name}</span>
-              <span className="chip">{b.type}</span>
+              <span className="chip">{enumLabel('bonusType', b.type)}</span>
             </div>
             <p className="flex-1 text-sm text-white/55">{en ? b.descriptionEn : b.descriptionRu}</p>
             <div className="mt-3 text-sm text-white/70">
@@ -114,7 +115,7 @@ function BonusCatalog() {
                 <Link to="/login" className="btn-ghost mt-3 text-center">{t('common.login')}</Link>
               )
             ) : (
-              <div className="mt-3 text-center text-xs text-white/40">Применяется автоматически</div>
+              <div className="mt-3 text-center text-xs text-white/40">{t('bonuses.autoApplied')}</div>
             )}
           </div>
         ))}
@@ -123,12 +124,12 @@ function BonusCatalog() {
 
       {authed && mine && mine.length > 0 && (
         <div className="card p-5">
-          <h2 className="mb-3 text-lg font-bold">Мои бонусы / My bonuses</h2>
+          <h2 className="mb-3 text-lg font-bold">{t('bonuses.mine')}</h2>
           <div className="space-y-2">
             {mine.map((m: any) => (
               <div key={m.id} className="flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
                 <span>{m.name}</span>
-                <span className="tabular-nums">{fmt(m.amount)} {m.currency} · {m.status}</span>
+                <span className="tabular-nums">{fmt(m.amount)} {m.currency} · {enumLabel('bonusStatus', m.status)}</span>
               </div>
             ))}
           </div>

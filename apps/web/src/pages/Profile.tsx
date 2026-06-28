@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Mascot } from '../components/Mascot';
 import api, { apiError } from '../lib/api';
 import { useMe } from '../lib/hooks';
+import { enumLabel } from '../lib/labels';
 import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
 
@@ -29,7 +30,7 @@ export default function Profile() {
           <div className="mt-2 flex flex-wrap gap-2">
             <span className="chip">{t('common.accountId')} #{me?.accountId}</span>
             <span className="chip">VIP {me?.vip?.level} · {me?.vip?.name}</span>
-            <span className="chip">KYC: {me?.kycStatus}</span>
+            <span className="chip">KYC: {enumLabel('kycStatus', me?.kycStatus)}</span>
             <span className="chip">{t('profile.betsLabel')}: {me?.stats?.bets ?? 0}</span>
           </div>
         </div>
@@ -104,7 +105,7 @@ function Kyc() {
 
   return (
     <Section title={t('profile.kyc')} icon={IdCard}>
-      <div className="chip mb-1">{t('profile.statusLabel')}: {data?.status ?? 'NONE'}</div>
+      <div className="chip mb-1">{t('profile.statusLabel')}: {enumLabel('kycStatus', data?.status ?? 'NONE')}</div>
       {data?.status !== 'VERIFIED' && (
         <form onSubmit={submit} className="space-y-2">
           <input className="input" placeholder={t('profile.fullName')} value={fullName} onChange={(e) => setFullName(e.target.value)} />
@@ -168,7 +169,7 @@ function Limits() {
       <div className="space-y-1 text-sm text-white/60">
         {(data ?? []).map((l: any) => (
           <div key={l.id} className="flex justify-between">
-            <span>{l.type} / {l.period}</span>
+            <span>{enumLabel('rgLimitType', l.type)} · {enumLabel('rgPeriod', l.period)}</span>
             <span>{l.amount}</span>
           </div>
         ))}

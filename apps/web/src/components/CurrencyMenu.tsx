@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { fmt, useBalances, useCurrencies } from '../lib/hooks';
+import { currencyLabel } from '../lib/labels';
 import { useUI } from '../store/ui';
 
 /**
@@ -71,8 +72,8 @@ export function CurrencyMenu() {
                   }`}
                 >
                   <span className="flex items-center gap-2">
-                    <span className="text-white/40">{c.symbol || c.code}</span>
-                    <span className="font-medium">{c.code}</span>
+                    <span className="w-6 text-center text-white/40">{c.symbol || c.code}</span>
+                    <span className="font-medium">{currencyLabel(c)}</span>
                   </span>
                   <span className="tabular-nums text-white/70">{fmt(balOf(c.code), 4)}</span>
                 </button>
