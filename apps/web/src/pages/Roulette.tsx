@@ -18,6 +18,7 @@ const cellColor = (n: number) => (n === 0 ? 'bg-roul-green' : RED.has(n) ? 'bg-r
 const TOP = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36];
 const MID = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35];
 const BOT = [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34];
+const NUMS = Array.from({ length: 36 }, (_, i) => i + 1); // 1..36, natural order for the portrait board
 const CHIPS = [1, 5, 10, 25, 100, 500];
 
 export default function Roulette() {
@@ -168,9 +169,24 @@ export default function Roulette() {
             </div>
           </div>
 
-          {/* numbers — horizontally scrollable on small screens; overscroll-x-contain
-              keeps the swipe inside the board instead of shifting the whole page */}
-          <div className="-mx-1 overflow-x-auto overscroll-x-contain px-1 pb-2">
+          {/* numbers — mobile (portrait): a 3-wide board so every number fits the
+              screen with no horizontal scroll. Rows read 1·2·3 / 4·5·6 / … / 34·35·36
+              (i.e. left→right, top→bottom), 0 spans the top, 2:1 column bets sit at
+              the bottom of each column. */}
+          <div className="grid grid-cols-3 gap-1.5 sm:hidden">
+            <Cell k="N:0" label="0" cls="col-span-3 bg-roul-green !aspect-auto py-3" />
+            {NUMS.map((n) => (
+              <Cell key={n} k={`N:${n}`} label={n} cls={`${cellColor(n)} text-white !aspect-auto py-3.5`} />
+            ))}
+            {['COLUMN_1', 'COLUMN_2', 'COLUMN_3'].map((c) => (
+              <Cell key={c} k={c} label="2:1" cls="bg-white/5 !aspect-auto py-3" />
+            ))}
+          </div>
+
+          {/* numbers — tablet/desktop (landscape): classic table, horizontally
+              scrollable if the viewport is narrow; overscroll-x-contain keeps the
+              swipe inside the board instead of shifting the whole page */}
+          <div className="-mx-1 hidden overflow-x-auto overscroll-x-contain px-1 pb-2 sm:block">
             <div className="flex min-w-[460px] gap-1.5">
               <Cell k="N:0" label="0" cls="bg-roul-green !aspect-auto w-11 self-stretch" />
               <div className="grid flex-1 grid-cols-12 gap-1.5">
