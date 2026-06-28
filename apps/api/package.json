@@ -12,6 +12,7 @@
     "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "db:reset": "dotenv -e ../../.env -- prisma migrate reset --force",
     "db:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "db:reconcile": "dotenv -e ../../.env -- tsx prisma/reconcile.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
