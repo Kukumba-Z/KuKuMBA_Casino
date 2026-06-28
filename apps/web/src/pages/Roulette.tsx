@@ -170,13 +170,14 @@ export default function Roulette() {
           </div>
 
           {/* numbers — mobile (portrait): a compact pad that fits the screen with no
-              horizontal scroll. 0 sits in a slim tile on top, 1..36 fill a 4-wide grid
-              (small tiles), and the three column (2:1) bets sit in a row underneath. */}
+              horizontal scroll. 0 sits in a slim tile on top, 1..36 fill a 9-wide grid
+              (4 rows: 1–9 / 10–18 / 19–27 / 28–36), and the three column (2:1) bets sit
+              in a row underneath. */}
           <div className="space-y-1.5 sm:hidden">
             <Cell k="N:0" label="0" cls="w-full bg-roul-green !aspect-auto py-2" />
-            <div className="grid grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-9 gap-1">
               {NUMS.map((n) => (
-                <Cell key={n} k={`N:${n}`} label={n} cls={`${cellColor(n)} text-white !aspect-auto py-2.5`} />
+                <Cell key={n} k={`N:${n}`} label={n} cls={`${cellColor(n)} text-white`} />
               ))}
             </div>
             <div className="grid grid-cols-3 gap-1.5">
