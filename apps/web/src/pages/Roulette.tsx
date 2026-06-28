@@ -3,7 +3,7 @@ import { Loader2, RotateCw, ShieldCheck, Target } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { ChatBox } from '../components/ChatBox';
+import { GameLayout } from '../components/GameLayout';
 import { RouletteWheel, SPIN_MS } from '../components/RouletteWheel';
 import i18n from '../i18n';
 import api, { apiError } from '../lib/api';
@@ -112,8 +112,7 @@ export default function Roulette() {
   );
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-      <div className="space-y-6">
+    <GameLayout>
         {/* Wheel + result */}
         <div className="card flex flex-col items-center gap-5 p-5 sm:p-6 md:flex-row md:items-center md:justify-around">
           <div className="w-full max-w-[280px] shrink-0 sm:max-w-[320px]">
@@ -252,13 +251,7 @@ export default function Roulette() {
             </div>
           </div>
         )}
-      </div>
-
-      {/* side: chat */}
-      <div className="space-y-6">
-        <ChatBox />
-      </div>
-    </div>
+    </GameLayout>
   );
 }
 

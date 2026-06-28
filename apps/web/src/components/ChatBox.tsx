@@ -17,7 +17,7 @@ export function ChatBox({ className = '' }: { className?: string }) {
   const authed = !!useAuth((s) => s.accessToken);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [text, setText] = useState('');
-  const endRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.get('/chat?limit=40').then((r) => setMessages(r.data));
@@ -29,8 +29,12 @@ export function ChatBox({ className = '' }: { className?: string }) {
     };
   }, []);
 
+  // Pin the message list to the bottom by scrolling the list container itself.
+  // (scrollIntoView would scroll every ancestor — including the window — which
+  // on mobile yanks the whole page down to the chat on load.)
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   const send = async (e: React.FormEvent) => {
@@ -50,14 +54,13 @@ export function ChatBox({ className = '' }: { className?: string }) {
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-sm font-bold">
         <MessageCircle size={16} className="text-lav" /> {t('chat.title')}
       </div>
-      <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3" style={{ maxHeight: 360 }}>
+      <div ref={listRef} className="flex-1 space-y-2 overflow-y-auto px-4 py-3" style={{ maxHeight: 360 }}>
         {messages.map((m) => (
           <div key={m.id} className="text-sm">
             <span className="font-semibold text-lav">{m.username}</span>{' '}
-            <span className="text-white/80">{m.body}</span>
+            <span className="break-words text-white/80">{m.body}</span>
           </div>
         ))}
-        <div ref={endRef} />
       </div>
       {authed ? (
         <form onSubmit={send} className="flex gap-2 border-t border-white/10 p-3">
