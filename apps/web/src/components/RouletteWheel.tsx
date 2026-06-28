@@ -51,18 +51,27 @@ export function RouletteWheel({
   useEffect(() => {
     if (result == null || spinId === 0) return;
     const idx = EURO.indexOf(result);
+    // Settle at a RANDOM screen angle each spin (not always the top) so the
+    // landing spot is a surprise — the ball and the winning pocket both end up
+    // at this angle, and you only learn the number once it rests there.
+    const theta = Math.random() * 360;
+
+    // Wheel: rotate so pocket `idx` (drawn at idx*SEG locally) lands at `theta`.
     const current = rotRef.current;
     const mod = ((current % 360) + 360) % 360;
-    const want = (360 - idx * SEG) % 360; // bring segment idx under the top pointer
-    const delta = ((want - mod) % 360 + 360) % 360;
-    const next = current + 360 * 6 + delta; // 6 full turns then settle
+    const wantRot = ((theta - idx * SEG) % 360 + 360) % 360;
+    const next = current + 360 * 6 + ((wantRot - mod) % 360 + 360) % 360; // 6 turns then settle
     rotRef.current = next;
-    // The ball orbits the opposite way and settles back at the top pointer
-    // (where the winning pocket has just been brought), for a livelier spin.
-    ballRef.current -= 360 * 9; // whole turns ⇒ lands at 0° (top)
-    setLanded(false);
     setRot(next);
-    setBallRot(ballRef.current);
+
+    // Ball: orbits the opposite way ~9 turns and rests at the same `theta`.
+    const b = ballRef.current;
+    const bmod = ((b % 360) + 360) % 360;
+    const ballNext = b - 360 * 9 + (((theta - bmod) % 360 + 360) % 360);
+    ballRef.current = ballNext;
+    setBallRot(ballNext);
+
+    setLanded(false);
     // fallback in case transitionend doesn't fire (reduced motion etc.)
     const tm = setTimeout(() => setLanded(true), SPIN_MS + 120);
     return () => clearTimeout(tm);
@@ -114,14 +123,21 @@ export function RouletteWheel({
         </svg>
       </div>
 
-      {/* the ball — orbits the rim while spinning and settles under the top pointer */}
+      {/* the ball — orbits the rim while spinning and settles at a random angle.
+          Bright with a glow + a soft trailing halo so it's easy to follow. */}
       <div
         className="pointer-events-none absolute inset-0 z-[15]"
         style={{ transform: `rotate(${ballRot}deg)`, transition: `transform ${SPIN_MS}ms cubic-bezier(0.18, 0.7, 0.12, 1)` }}
       >
+        {/* trailing halo (slightly behind the ball along the rim) */}
         <div
-          className="absolute left-1/2 h-[5%] w-[5%] -translate-x-1/2 rounded-full bg-white shadow-[0_0_10px_2px_rgba(255,255,255,0.85)]"
-          style={{ top: '3%' }}
+          className="absolute left-1/2 h-[7%] w-[7%] -translate-x-1/2 rounded-full bg-white/40 blur-[3px]"
+          style={{ top: '2.4%' }}
+        />
+        {/* the ball itself */}
+        <div
+          className="absolute left-1/2 h-[6%] w-[6%] -translate-x-1/2 rounded-full bg-white ring-2 ring-sun/70 shadow-[0_0_16px_5px_rgba(255,255,255,0.95)]"
+          style={{ top: '2.6%' }}
         />
       </div>
 

@@ -66,10 +66,11 @@ export const sfx = {
       const x = k / N;
       // ease-out: ticks get sparser toward the end, like a settling ball
       const at = dur * (1 - Math.pow(1 - x, 3));
-      blip(c, { freq: k % 2 ? 1240 : 1080, dur: 0.028, type: 'square', gain: 0.05, at });
+      // lower, woodier clacks — closer to a real ball on the frets (was ~1100–1240 Hz)
+      blip(c, { freq: k % 2 ? 300 : 240, dur: 0.022, type: 'triangle', gain: 0.06, at });
     }
     // final settle thunk
-    blip(c, { freq: 300, dur: 0.12, type: 'triangle', gain: 0.12, at: dur });
+    blip(c, { freq: 180, dur: 0.14, type: 'triangle', gain: 0.13, at: dur });
   },
 
   /** Bright ascending arpeggio on a win. */

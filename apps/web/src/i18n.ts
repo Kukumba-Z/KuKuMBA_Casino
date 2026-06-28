@@ -161,6 +161,7 @@ const ru = {
     pfHint: 'Хеш публикуется до спина — результат нельзя подделать.',
     bet: 'Ставка',
     maxBtn: 'Макс',
+    column: 'Колонка',
     info: 'Инфо и честность',
     limits: 'Лимит ставки',
     recent: 'Последние',
@@ -361,7 +362,7 @@ const en: typeof ru = {
     clientSeed: 'Client seed', nonce: 'Nonce', rotate: 'Rotate seed', rotated: 'Seed rotated', verify: 'Verify',
     needLogin: 'Sign in to place bets', won: 'You won', lost: 'No luck',
     pfHint: 'The hash is published before each spin — the result cannot be forged.',
-    bet: 'Bet', maxBtn: 'Max', info: 'Info & fairness', limits: 'Bet limit', recent: 'Recent',
+    bet: 'Bet', maxBtn: 'Max', column: 'Column', info: 'Info & fairness', limits: 'Bet limit', recent: 'Recent',
     soundOn: 'Sound on', soundOff: 'Sound off',
   },
   game: {

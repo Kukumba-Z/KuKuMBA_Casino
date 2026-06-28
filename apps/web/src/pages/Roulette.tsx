@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Shield, Target, Volume2, VolumeX } from 'lucide-react';
+import { Shield, Target, Volume2, VolumeX } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -96,13 +96,9 @@ export default function Roulette() {
         qc.invalidateQueries({ queryKey: ['balances'] });
         qc.invalidateQueries({ queryKey: ['roul-history'] });
         qc.invalidateQueries({ queryKey: ['pf-seed'] });
-        if (Number(data.net) > 0) {
-          sfx.win();
-          toast.success(`${t('roulette.won')} +${fmt(data.net, 4)} ${data.currency} · ${t('roulette.result')}: ${data.outcome}`);
-        } else {
-          sfx.lose();
-          toast.info(`${t('roulette.lost')} · ${t('roulette.result')}: ${data.outcome}`);
-        }
+        // The result is shown in the wheel — games never toast outcomes (only sound).
+        if (Number(data.net) > 0) sfx.win();
+        else sfx.lose();
       }, SPIN_MS);
     } catch (e) {
       toast.error(apiError(e));
@@ -223,66 +219,8 @@ export default function Roulette() {
           </div>
         </div>
 
-        {/* numbers — mobile (portrait): a compact pad that fits the screen with no
-            horizontal scroll. 0 sits in a slim tile on top, 1..36 fill a 9-wide grid
-            (4 rows: 1–9 / 10–18 / 19–27 / 28–36), and the three column (2:1) bets sit
-            in a row underneath. */}
-        <div className="space-y-1.5 sm:hidden">
-          <Cell k="N:0" label="0" cls="w-full bg-roul-green !aspect-auto py-2" />
-          <div className="grid grid-cols-9 gap-1">
-            {NUMS.map((n) => (
-              <Cell key={n} k={`N:${n}`} label={n} cls={`${cellColor(n)} text-white`} />
-            ))}
-          </div>
-          <div className="grid grid-cols-3 gap-1.5">
-            {['COLUMN_1', 'COLUMN_2', 'COLUMN_3'].map((c) => (
-              <Cell key={c} k={c} label="2:1" cls="bg-white/5 !aspect-auto py-2" />
-            ))}
-          </div>
-        </div>
-
-        {/* numbers — tablet/desktop (landscape): classic table, horizontally
-            scrollable if the viewport is narrow; overscroll-x-contain keeps the
-            swipe inside the board instead of shifting the whole page */}
-        <div className="-mx-1 hidden overflow-x-auto overscroll-x-contain px-1 pb-2 sm:block">
-          <div className="flex min-w-[460px] gap-1.5">
-            <Cell k="N:0" label="0" cls="bg-roul-green !aspect-auto w-11 self-stretch" />
-            <div className="grid flex-1 grid-cols-12 gap-1.5">
-              {[TOP, MID, BOT].map((row, ri) => (
-                <div key={ri} className="contents">
-                  {row.map((n) => (
-                    <Cell key={n} k={`N:${n}`} label={n} cls={`${cellColor(n)} text-white`} />
-                  ))}
-                </div>
-              ))}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              {['COLUMN_3', 'COLUMN_2', 'COLUMN_1'].map((c) => (
-                <Cell key={c} k={c} label="2:1" cls="bg-white/5 w-11 !aspect-auto flex-1" />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* dozens */}
-        <div className="grid grid-cols-3 gap-1.5">
-          <Cell k="DOZEN_1" label="1–12" cls="bg-white/5" wide />
-          <Cell k="DOZEN_2" label="13–24" cls="bg-white/5" wide />
-          <Cell k="DOZEN_3" label="25–36" cls="bg-white/5" wide />
-        </div>
-
-        {/* even-money */}
-        <div className="grid grid-cols-3 gap-1.5 md:grid-cols-6">
-          <Cell k="LOW" label="1–18" cls="bg-white/5" wide />
-          <Cell k="EVEN" label={t('roulette.even')} cls="bg-white/5" wide />
-          <Cell k="RED" label={t('roulette.red')} cls="bg-roul-red" wide />
-          <Cell k="BLACK" label={t('roulette.black')} cls="bg-roul-black" wide />
-          <Cell k="ODD" label={t('roulette.odd')} cls="bg-white/5" wide />
-          <Cell k="HIGH" label="19–36" cls="bg-white/5" wide />
-        </div>
-
-        {/* controls */}
-        <div className="flex items-center justify-between gap-2 pt-1">
+        {/* controls — above the board so the total/clear/spin stay in reach */}
+        <div className="flex items-center justify-between gap-2">
           <div className="text-sm">
             {t('roulette.totalBet')}: <b className="text-lg tabular-nums">{fmt(total, 2)}</b> {currency}
           </div>
@@ -291,9 +229,77 @@ export default function Roulette() {
               {t('roulette.clear')}
             </button>
             <button onClick={spin} className="btn-primary inline-flex min-w-28 items-center justify-center gap-2" disabled={busy || !total}>
-              {busy ? <Loader2 size={18} className="animate-spin" /> : <Target size={18} />}
-              {t('common.spin')}
+              <Target size={18} /> {t('common.spin')}
             </button>
+          </div>
+        </div>
+
+        {/* bets — uniform vertical gaps (match the number-grid gap). Order:
+            numbers, dozens, even-money, then the column (2:1) bets. */}
+        <div className="space-y-1">
+          {/* mobile (portrait): 0 on top, then 1..36 in a 9-wide grid (1–9 / 10–18 / 19–27 / 28–36) */}
+          <div className="space-y-1 sm:hidden">
+            <Cell k="N:0" label="0" cls="w-full bg-roul-green !aspect-auto py-2" />
+            <div className="grid grid-cols-9 gap-1">
+              {NUMS.map((n) => (
+                <Cell key={n} k={`N:${n}`} label={n} cls={`${cellColor(n)} text-white`} />
+              ))}
+            </div>
+          </div>
+
+          {/* tablet/desktop: classic 3×12 table, full width, no horizontal scroll */}
+          <div className="hidden gap-1 sm:flex">
+            <Cell k="N:0" label="0" cls="w-12 self-stretch bg-roul-green !aspect-auto" />
+            <div className="grid flex-1 grid-cols-12 gap-1">
+              {[TOP, MID, BOT].map((row, ri) => (
+                <div key={ri} className="contents">
+                  {row.map((n) => (
+                    <Cell key={n} k={`N:${n}`} label={n} cls={`${cellColor(n)} text-white`} />
+                  ))}
+                </div>
+              ))}
+            </div>
+            {/* the three "2:1" boxes sit at the end of each row — standard table convention */}
+            <div className="flex w-12 flex-col gap-1">
+              {['COLUMN_3', 'COLUMN_2', 'COLUMN_1'].map((c) => (
+                <Cell key={c} k={c} label="2:1" cls="flex-1 bg-white/5 !aspect-auto" />
+              ))}
+            </div>
+          </div>
+
+          {/* dozens */}
+          <div className="grid grid-cols-3 gap-1">
+            <Cell k="DOZEN_1" label="1–12" cls="bg-white/5" wide />
+            <Cell k="DOZEN_2" label="13–24" cls="bg-white/5" wide />
+            <Cell k="DOZEN_3" label="25–36" cls="bg-white/5" wide />
+          </div>
+
+          {/* even-money */}
+          <div className="grid grid-cols-3 gap-1 md:grid-cols-6">
+            <Cell k="LOW" label="1–18" cls="bg-white/5" wide />
+            <Cell k="EVEN" label={t('roulette.even')} cls="bg-white/5" wide />
+            <Cell k="RED" label={t('roulette.red')} cls="bg-roul-red" wide />
+            <Cell k="BLACK" label={t('roulette.black')} cls="bg-roul-black" wide />
+            <Cell k="ODD" label={t('roulette.odd')} cls="bg-white/5" wide />
+            <Cell k="HIGH" label="19–36" cls="bg-white/5" wide />
+          </div>
+
+          {/* column (2:1) bets — mobile only; on desktop they live in the table above.
+              Labelled clearly so "2:1 2:1 2:1" isn't a mystery. */}
+          <div className="grid grid-cols-3 gap-1 sm:hidden">
+            {[1, 2, 3].map((i) => (
+              <Cell
+                key={i}
+                k={`COLUMN_${i}`}
+                cls="bg-white/5 !aspect-auto py-1.5"
+                label={
+                  <span className="flex flex-col items-center leading-tight">
+                    <span>{t('roulette.column')} {i}</span>
+                    <span className="text-[9px] font-semibold text-white/45">2:1</span>
+                  </span>
+                }
+              />
+            ))}
           </div>
         </div>
         {!authed && (
