@@ -9,8 +9,24 @@ import api from '../lib/api';
 import { fmt, useGames } from '../lib/hooks';
 import { getSocket } from '../lib/socket';
 
-const pocketColor = (c: string) =>
-  c === 'red' ? 'bg-roul-red' : c === 'green' ? 'bg-roul-green' : 'bg-roul-black border border-white/15';
+/** One row of a live/big-win feed: "<game> · nick · STAKE → PAYOUT". */
+function FeedRow({ f }: { f: any }) {
+  const win = Number(f.payout) > 0;
+  return (
+    <div className="flex animate-fadeup items-center justify-between gap-2 rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
+      <div className="flex min-w-0 items-center gap-2">
+        {f.game && <span className="chip max-w-[92px] shrink-0 truncate !px-2 !py-0.5 text-[10px] text-white/55">{f.game}</span>}
+        <span className="truncate font-medium">{f.username}</span>
+      </div>
+      <div className="flex shrink-0 items-center gap-1 tabular-nums">
+        <span className="text-white/45">{fmt(f.stake, 2)}</span>
+        <ArrowRight size={13} className="text-white/30" />
+        <span className={`font-semibold ${win ? 'text-mint' : 'text-white/40'}`}>{fmt(f.payout, 2)}</span>
+        <span className="text-white/40">{f.currency}</span>
+      </div>
+    </div>
+  );
+}
 
 export default function Lobby() {
   const { t } = useTranslation();
@@ -77,7 +93,7 @@ export default function Lobby() {
         <div className="lg:col-span-2">
           <LiveBets />
         </div>
-        <BiggestWins wins={stats?.biggestWins ?? []} />
+        <BiggestWins />
       </div>
 
       {/* Slim trust strip (replaces the bulky feature cards) */}
@@ -92,36 +108,23 @@ export default function Lobby() {
   function LiveBets() {
     const [bets, setBets] = useState<any[]>([]);
     useEffect(() => {
-      api.get('/games/roulette/live?limit=12').then((r) => setBets(r.data));
+      api.get('/games/roulette/live?limit=100').then((r) => setBets(r.data)).catch(() => {});
       const s = getSocket();
-      // Only real-money action in the public feed — demo play stays private.
-      const onBet = (b: any) => { if (b.mode !== 'DEMO') setBets((prev) => [b, ...prev].slice(0, 12)); };
+      // Only real-money action in the public feed — demo play stays private. Cap 100.
+      const onBet = (b: any) => { if (b.mode !== 'DEMO') setBets((prev) => [b, ...prev].slice(0, 100)); };
       s.on('bet', onBet);
-      return () => {
-        s.off('bet', onBet);
-      };
+      return () => { s.off('bet', onBet); };
     }, []);
     return (
       <div className="card p-5">
         <h2 className="mb-4 flex items-center gap-2 text-lg font-bold">
           <span className="h-2 w-2 animate-pulse rounded-full bg-mint" /> {t('lobby.liveBets')}
         </h2>
-        <div className="space-y-1.5">
+        <div className="max-h-96 space-y-1.5 overflow-y-auto pr-1">
           {bets.length === 0 && <div className="py-6 text-center text-sm text-white/40">{t('common.empty')}</div>}
-          {bets.map((b, i) => {
-            const win = Number(b.payout) > 0;
-            return (
-              <div key={b.roundId + i} className="flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
-                <div className="flex items-center gap-2.5">
-                  <span className={`grid h-7 w-7 place-items-center rounded-lg text-xs font-bold ${pocketColor(b.color)}`}>{b.outcome}</span>
-                  <span className="font-medium">{b.username}</span>
-                </div>
-                <div className={`tabular-nums font-semibold ${win ? 'text-mint' : 'text-white/40'}`}>
-                  {win ? `+${fmt(b.payout, 2)}` : `−${fmt(b.stake, 2)}`} {b.currency}
-                </div>
-              </div>
-            );
-          })}
+          {bets.map((b) => (
+            <FeedRow key={b.roundId} f={b} />
+          ))}
         </div>
       </div>
     );
@@ -136,22 +139,26 @@ function TrustItem({ icon: Icon, label, accent }: { icon: any; label: string; ac
   );
 }
 
-function BiggestWins({ wins }: { wins: any[] }) {
+function BiggestWins() {
   const { t } = useTranslation();
+  const [wins, setWins] = useState<any[]>([]);
+  useEffect(() => {
+    api.get('/games/roulette/bigwins?limit=500').then((r) => setWins(r.data)).catch(() => {});
+    const s = getSocket();
+    // New big wins overshadow old ones; keep the latest 500 in memory.
+    const onBigWin = (w: any) => { if (w.mode !== 'DEMO') setWins((prev) => [w, ...prev].slice(0, 500)); };
+    s.on('bigwin', onBigWin);
+    return () => { s.off('bigwin', onBigWin); };
+  }, []);
   return (
     <div className="card p-5">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-bold">
         <Trophy size={18} className="text-sun" /> {t('lobby.biggestWins')}
       </h2>
-      <div className="space-y-1.5">
+      <div className="max-h-96 space-y-1.5 overflow-y-auto pr-1">
         {wins.length === 0 && <div className="py-6 text-center text-sm text-white/40">{t('common.empty')}</div>}
-        {wins.map((w, i) => (
-          <div key={i} className="flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
-            <span className="font-medium">{w.username}</span>
-            <span className="font-semibold tabular-nums text-sun">
-              +{fmt(w.payout, 2)} {w.currency}
-            </span>
-          </div>
+        {wins.map((w) => (
+          <FeedRow key={w.roundId} f={w} />
         ))}
       </div>
     </div>

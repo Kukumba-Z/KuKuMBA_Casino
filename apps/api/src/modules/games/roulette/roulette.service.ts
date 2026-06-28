@@ -188,6 +188,7 @@ export class RouletteService {
     });
     const feed = {
       roundId: result.round.id,
+      game: game.name,
       username: user?.username,
       accountId: user?.accountId,
       outcome: result.outcome,
@@ -257,16 +258,17 @@ export class RouletteService {
     });
   }
 
-  async liveFeed(limit = 20) {
+  async liveFeed(limit = 100) {
     const rounds = await this.prisma.gameRound.findMany({
       // Public live feed shows real-money rounds only (demo play stays private).
       where: { mode: 'REAL' },
       orderBy: { createdAt: 'desc' },
-      take: Math.min(limit, 50),
-      include: { user: { select: { username: true, accountId: true } } },
+      take: Math.min(limit, 100),
+      include: { user: { select: { username: true, accountId: true } }, game: { select: { name: true } } },
     });
     return rounds.map((r) => ({
       roundId: r.id,
+      game: r.game.name,
       username: r.user.username,
       accountId: r.user.accountId,
       outcome: r.outcome,
@@ -277,5 +279,29 @@ export class RouletteService {
       mode: r.mode,
       at: r.createdAt.getTime(),
     }));
+  }
+
+  /** Recent BIG wins (payout ≥ 10× stake, real money) — a rolling leaderboard
+   *  feed, newest first, that the lobby tops up live via the 'bigwin' socket. */
+  async bigWins(limit = 500) {
+    const rounds = await this.prisma.gameRound.findMany({
+      where: { mode: 'REAL', totalPayout: { gt: 0 } },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 500),
+      include: { user: { select: { username: true, accountId: true } }, game: { select: { name: true } } },
+    });
+    return rounds
+      .filter((r) => r.totalPayout.gte(r.totalStake.mul(10)))
+      .map((r) => ({
+        roundId: r.id,
+        game: r.game.name,
+        username: r.user.username,
+        accountId: r.user.accountId,
+        stake: r.totalStake.toFixed(),
+        payout: r.totalPayout.toFixed(),
+        currency: r.currency,
+        mode: r.mode,
+        at: r.createdAt.getTime(),
+      }));
   }
 }

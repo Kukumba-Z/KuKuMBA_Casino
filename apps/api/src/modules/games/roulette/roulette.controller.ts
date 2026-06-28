@@ -36,7 +36,13 @@ export class RouletteController {
   @Public()
   @Get('live')
   live(@Query('limit') limit?: string) {
-    return this.roulette.liveFeed(limit ? +limit : 20);
+    return this.roulette.liveFeed(limit ? +limit : 100);
+  }
+
+  @Public()
+  @Get('bigwins')
+  bigWins(@Query('limit') limit?: string) {
+    return this.roulette.bigWins(limit ? +limit : 500);
   }
 
   @Post('play')
