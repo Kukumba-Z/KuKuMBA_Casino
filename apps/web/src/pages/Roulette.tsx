@@ -101,7 +101,7 @@ export default function Roulette() {
       type="button"
       onClick={() => add(k)}
       disabled={busy}
-      className={`relative grid place-items-center rounded-lg border border-white/10 text-sm font-bold transition hover:brightness-125 disabled:opacity-60 ${cls} ${wide ? 'py-2' : 'aspect-square'}`}
+      className={`relative grid place-items-center rounded-lg border border-white/10 text-sm font-bold transition hover:brightness-125 disabled:opacity-60 ${cls} ${wide ? 'py-1.5 sm:py-2' : 'aspect-square'}`}
     >
       {label}
       {bets[k] ? (
@@ -169,18 +169,21 @@ export default function Roulette() {
             </div>
           </div>
 
-          {/* numbers — mobile (portrait): a 3-wide board so every number fits the
-              screen with no horizontal scroll. Rows read 1·2·3 / 4·5·6 / … / 34·35·36
-              (i.e. left→right, top→bottom), 0 spans the top, 2:1 column bets sit at
-              the bottom of each column. */}
-          <div className="grid grid-cols-3 gap-1.5 sm:hidden">
-            <Cell k="N:0" label="0" cls="col-span-3 bg-roul-green !aspect-auto py-3" />
-            {NUMS.map((n) => (
-              <Cell key={n} k={`N:${n}`} label={n} cls={`${cellColor(n)} text-white !aspect-auto py-3.5`} />
-            ))}
-            {['COLUMN_1', 'COLUMN_2', 'COLUMN_3'].map((c) => (
-              <Cell key={c} k={c} label="2:1" cls="bg-white/5 !aspect-auto py-3" />
-            ))}
+          {/* numbers — mobile (portrait): a compact pad that fits the screen with no
+              horizontal scroll. 0 sits in a slim tile on top, 1..36 fill a 4-wide grid
+              (small tiles), and the three column (2:1) bets sit in a row underneath. */}
+          <div className="space-y-1.5 sm:hidden">
+            <Cell k="N:0" label="0" cls="w-full bg-roul-green !aspect-auto py-2" />
+            <div className="grid grid-cols-4 gap-1.5">
+              {NUMS.map((n) => (
+                <Cell key={n} k={`N:${n}`} label={n} cls={`${cellColor(n)} text-white !aspect-auto py-2.5`} />
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {['COLUMN_1', 'COLUMN_2', 'COLUMN_3'].map((c) => (
+                <Cell key={c} k={c} label="2:1" cls="bg-white/5 !aspect-auto py-2" />
+              ))}
+            </div>
           </div>
 
           {/* numbers — tablet/desktop (landscape): classic table, horizontally
