@@ -71,8 +71,9 @@ const ru = {
   },
   lobby: {
     heroTitle: 'Играй в KuKuMBA',
-    heroSub: 'Честный рандом и provably-fair рулетка. Слоты и live-игры от провайдеров — уже в пути.',
+    heroSub: 'Милое provably-fair казино: своя рулетка уже здесь, слоты и live-игры от провайдеров — на подходе. Честный рандом и быстрые выплаты.',
     playNow: 'Играть сейчас',
+    fastPayouts: 'Быстрые выплаты',
     liveBets: 'Живые ставки',
     biggestWins: 'Крупные выигрыши',
     totalBets: 'Всего ставок',
@@ -289,8 +290,8 @@ const en: typeof ru = {
   },
   lobby: {
     heroTitle: 'Play KuKuMBA',
-    heroSub: 'Fair RNG and a provably-fair roulette. Provider slots and live games are on the way.',
-    playNow: 'Play now', liveBets: 'Live bets', biggestWins: 'Biggest wins', totalBets: 'Total bets',
+    heroSub: 'A cute provably-fair casino — our own roulette is live, with provider slots and live games on the way. Fair RNG and fast payouts.',
+    playNow: 'Play now', fastPayouts: 'Fast payouts', liveBets: 'Live bets', biggestWins: 'Biggest wins', totalBets: 'Total bets',
     rounds: 'Rounds', fair: 'Provably-fair', fairDesc: 'Every spin is cryptographically verifiable',
     rtpDesc: 'Industry-leading return to player', instant: 'Instant', instantDesc: 'Crypto & fiat deposits and withdrawals',
     games: 'Games', soon: 'Soon',

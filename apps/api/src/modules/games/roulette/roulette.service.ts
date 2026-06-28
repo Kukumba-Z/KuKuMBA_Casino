@@ -257,6 +257,8 @@ export class RouletteService {
 
   async liveFeed(limit = 20) {
     const rounds = await this.prisma.gameRound.findMany({
+      // Public live feed shows real-money rounds only (demo play stays private).
+      where: { mode: 'REAL' },
       orderBy: { createdAt: 'desc' },
       take: Math.min(limit, 50),
       include: { user: { select: { username: true, accountId: true } } },

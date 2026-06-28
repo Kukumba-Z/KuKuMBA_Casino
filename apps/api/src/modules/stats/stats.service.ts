@@ -15,7 +15,8 @@ export class StatsService {
       this.prisma.bet.count(),
       this.prisma.gameRound.count(),
       this.prisma.gameRound.findMany({
-        where: { totalPayout: { gt: 0 } },
+        // Real-money wins only — the public leaderboard never shows demo play.
+        where: { totalPayout: { gt: 0 }, mode: 'REAL' },
         orderBy: { totalPayout: 'desc' },
         take: 8,
         include: { user: { select: { username: true, accountId: true } } },
