@@ -13,6 +13,19 @@ import { RealtimeService } from '../realtime/realtime.service';
 import { WalletService } from '../wallet/wallet.service';
 
 /**
+ * Accept RTP as a fraction (0.973) or a percentage (97.3) — both are common —
+ * and validate the range, so a stray percentage can never silently break the
+ * payout math.
+ */
+function normalizeRtp(raw: any): number {
+  let n = Number(raw);
+  if (!isFinite(n) || n <= 0) throw new BadRequestException('RTP_INVALID');
+  if (n > 1) n = n / 100; // e.g. 97.3 → 0.973
+  if (n <= 0 || n > 1) throw new BadRequestException('RTP_OUT_OF_RANGE');
+  return Number(n.toFixed(4));
+}
+
+/**
  * The admin backend — a single, modular surface the admin SPA talks to. Every
  * mutating action writes an AuditLog entry so operator activity is traceable.
  */
@@ -390,7 +403,7 @@ export class AdminService {
       provider: dto.provider ?? 'KuKuMBA Originals',
       status: dto.status === 'COMING_SOON' ? 'COMING_SOON' : 'LIVE',
       route: dto.route || null,
-      rtp: dto.rtp !== undefined && dto.rtp !== '' ? Number(dto.rtp) : 0.97,
+      rtp: dto.rtp !== undefined && dto.rtp !== '' ? normalizeRtp(dto.rtp) : 0.97,
       minBet: D(dto.minBet ?? 0.1),
       maxBet: D(dto.maxBet ?? 100000),
       descriptionRu: dto.descriptionRu ?? null,
@@ -406,6 +419,30 @@ export class AdminService {
     });
     await this.audit(adminId, 'game.upsert', 'game', game.id, { key: dto.key });
     return game;
+  }
+
+  /**
+   * Partial update of a single game — only the provided fields change, so an
+   * RTP tweak never resets the rest of the row (unlike upsert, which fills
+   * missing fields with defaults). This is the authoritative RTP control:
+   * roulette reads `game.rtp`, so a change here flows to the engine, payouts
+   * and the in-game info/fairness panel.
+   */
+  async patchGame(adminId: string, key: string, dto: any) {
+    const game = await this.prisma.game.findUnique({ where: { key } });
+    if (!game) throw new NotFoundException('GAME_NOT_FOUND');
+    const data: Prisma.GameUpdateInput = {};
+    if (dto.rtp !== undefined && dto.rtp !== '') data.rtp = normalizeRtp(dto.rtp);
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.status !== undefined) data.status = dto.status === 'COMING_SOON' ? 'COMING_SOON' : 'LIVE';
+    if (dto.minBet !== undefined && dto.minBet !== '') data.minBet = D(dto.minBet);
+    if (dto.maxBet !== undefined && dto.maxBet !== '') data.maxBet = D(dto.maxBet);
+    if (dto.enabled !== undefined) data.enabled = !!dto.enabled;
+    if (dto.sortOrder !== undefined && dto.sortOrder !== '') data.sortOrder = Number(dto.sortOrder);
+    if (Object.keys(data).length === 0) throw new BadRequestException('NO_FIELDS');
+    const updated = await this.prisma.game.update({ where: { key }, data });
+    await this.audit(adminId, 'game.patch', 'game', updated.id, { key, fields: Object.keys(data) });
+    return updated;
   }
 
   async deleteGame(adminId: string, key: string) {

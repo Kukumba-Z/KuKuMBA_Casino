@@ -601,6 +601,10 @@ function Content() {
 function Settings() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['adm-set'], queryFn: async () => (await api.get('/admin/settings')).data });
+  // The roulette's live RTP is the game row's column — the engine, payouts and
+  // the in-game info/fairness panel all read it. Edit it here (not the AppSetting,
+  // which the per-game column shadows).
+  const { data: roul } = useQuery({ queryKey: ['adm-roulette'], queryFn: async () => (await api.get('/games/roulette')).data });
   const [key, setKey] = useState('game.rtp');
   const [value, setValue] = useState('0.973');
   const save = async (k = key, raw = value) => {
@@ -614,13 +618,33 @@ function Settings() {
       toast.error(apiError(e));
     }
   };
-  const rtp = (data ?? []).find((s: any) => s.key === 'game.rtp');
+  const saveRtp = async (raw: string) => {
+    try {
+      const { data: g } = await api.patch('/admin/games/roulette', { rtp: Number(raw) });
+      qc.invalidateQueries({ queryKey: ['adm-roulette'] });
+      qc.invalidateQueries({ queryKey: ['roulette-info'] });
+      qc.invalidateQueries({ queryKey: ['games'] });
+      toast.success(`Roulette RTP → ${(g.rtp * 100).toFixed(2)}%`);
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
   return (
     <div className="space-y-3">
       <div className="card flex flex-wrap items-end gap-3 p-4">
         <div>
-          <label className="label">Roulette RTP (0–1)</label>
-          <input className="input w-40" type="number" step="0.001" min="0.5" max="1" defaultValue={rtp?.value ?? 0.973} onBlur={(e) => save('game.rtp', e.target.value)} />
+          <label className="label">Roulette RTP</label>
+          <input
+            key={roul?.rtp}
+            className="input w-40"
+            type="number"
+            step="0.001"
+            min="0.5"
+            max="1"
+            defaultValue={roul?.rtp ?? 0.973}
+            onBlur={(e) => saveRtp(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-white/40">Доля 0–1 или % (напр. 97.3). Применяется к игре сразу.</p>
         </div>
         <p className="text-xs text-white/40">Edit any setting below; values are parsed as JSON when possible.</p>
       </div>

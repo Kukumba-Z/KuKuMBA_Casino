@@ -189,6 +189,12 @@ export class AdminController {
     return this.admin.upsertGame(adminId, body);
   }
 
+  @Patch('games/:key')
+  @RequirePermission('games.manage')
+  patchGame(@CurrentUser('id') adminId: string, @Param('key') key: string, @Body() body: any) {
+    return this.admin.patchGame(adminId, key, body);
+  }
+
   @Delete('games/:key')
   @RequirePermission('games.manage')
   deleteGame(@CurrentUser('id') adminId: string, @Param('key') key: string) {
