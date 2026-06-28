@@ -1,12 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
-import { Bell, LogOut, Menu, Shield, User as UserIcon, Wallet } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bell, CheckCheck, LogOut, Menu, Shield, User as UserIcon, Wallet } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import i18n from '../i18n';
 import { isStaff } from '../lib/roles';
 import api from '../lib/api';
 import { useOnline } from '../lib/hooks';
+import { getSocket } from '../lib/socket';
 import { ADMIN, bottomTabs, desktopTabs, MORE_ITEMS, NavItem } from '../lib/nav';
 import { useAuth } from '../store/auth';
 import { CurrencyMenu } from './CurrencyMenu';
@@ -45,26 +46,132 @@ function LangSwitch() {
   );
 }
 
-function BellLink() {
-  const { data } = useQuery({
+/** Relative "5m ago" timestamp, localized. */
+function timeAgo(iso: string, lng: string): string {
+  const rtf = new Intl.RelativeTimeFormat(lng?.startsWith('en') ? 'en' : 'ru', { numeric: 'auto' });
+  const diff = (new Date(iso).getTime() - Date.now()) / 1000; // negative = past
+  const steps: [Intl.RelativeTimeFormatUnit, number][] = [
+    ['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60], ['second', 1],
+  ];
+  for (const [unit, secs] of steps) {
+    if (Math.abs(diff) >= secs || unit === 'second') return rtf.format(Math.round(diff / secs), unit);
+  }
+  return '';
+}
+
+/**
+ * Notifications bell with a toggleable dropdown: tap to open, tap again (or
+ * click anywhere outside) to close. Shows the latest notifications inline with
+ * a "see all" link to the full page.
+ */
+function NotificationsMenu() {
+  const { t } = useTranslation();
+  const en = i18n.language?.startsWith('en');
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const { data: unread } = useQuery({
     queryKey: ['unread'],
     queryFn: async () => (await api.get('/notifications/unread-count')).data,
     refetchInterval: 20_000,
   });
-  const count = data?.count ?? 0;
+  const count = unread?.count ?? 0;
+
+  const { data: list } = useQuery({
+    queryKey: ['notifications', 'recent'],
+    queryFn: async () => (await api.get('/notifications?limit=8')).data,
+    enabled: open,
+  });
+
+  // Close when clicking/tapping outside the menu.
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  // Live updates: refresh badge + list when a notification arrives.
+  useEffect(() => {
+    const s = getSocket();
+    const onN = () => {
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      qc.invalidateQueries({ queryKey: ['unread'] });
+    };
+    s.on('notification', onN);
+    return () => { s.off('notification', onN); };
+  }, [qc]);
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['notifications'] });
+    qc.invalidateQueries({ queryKey: ['unread'] });
+  };
+  const readAll = async () => { await api.post('/notifications/read-all'); refresh(); };
+  const read = async (id: string) => { await api.post(`/notifications/${id}/read`); refresh(); };
+
   return (
-    <Link
-      to="/notifications"
-      className="relative grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/5 text-white/90 transition hover:bg-white/10"
-      aria-label="Notifications"
-    >
-      <Bell size={19} />
-      {count > 0 && (
-        <span className="absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-bubble px-1 text-[10px] font-bold text-night shadow">
-          {count > 9 ? '9+' : count}
-        </span>
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-label={t('nav.notifications')}
+        aria-expanded={open}
+        className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-white/10 transition ${
+          open ? 'bg-white/10 text-white' : 'bg-white/5 text-white/90 hover:bg-white/10'
+        }`}
+      >
+        <Bell size={19} />
+        {count > 0 && (
+          <span className="absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-bubble px-1 text-[10px] font-bold text-night shadow">
+            {count > 9 ? '9+' : count}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-white/10 bg-surface-2 shadow-card">
+          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+            <span className="flex items-center gap-2 text-sm font-bold">
+              <Bell size={15} className="text-sun" /> {t('nav.notifications')}
+            </span>
+            {count > 0 && (
+              <button onClick={readAll} className="inline-flex items-center gap-1 text-xs text-lav hover:underline">
+                <CheckCheck size={14} /> {t('common.readAll')}
+              </button>
+            )}
+          </div>
+
+          <div className="max-h-[60vh] overflow-y-auto">
+            {(list ?? []).map((n: any) => (
+              <button
+                key={n.id}
+                onClick={() => !n.readAt && read(n.id)}
+                className={`flex w-full flex-col gap-0.5 border-b border-white/5 px-4 py-3 text-left transition hover:bg-white/5 ${n.readAt ? 'opacity-55' : ''}`}
+              >
+                <div className="flex items-center gap-2">
+                  {!n.readAt && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-lav" />}
+                  <span className="truncate text-sm font-semibold">{en ? n.titleEn : n.titleRu}</span>
+                  <span className="ml-auto shrink-0 text-[10px] text-white/40">{timeAgo(n.createdAt, i18n.language)}</span>
+                </div>
+                <div className="line-clamp-2 text-xs text-white/55">{en ? n.bodyEn : n.bodyRu}</div>
+              </button>
+            ))}
+            {list && list.length === 0 && (
+              <div className="px-4 py-10 text-center text-sm text-white/40">{t('common.noNotifications')}</div>
+            )}
+          </div>
+
+          <Link
+            to="/notifications"
+            onClick={() => setOpen(false)}
+            className="block border-t border-white/10 px-4 py-2.5 text-center text-sm font-semibold text-lav hover:bg-white/5"
+          >
+            {t('common.seeAll')}
+          </Link>
+        </div>
       )}
-    </Link>
+    </div>
   );
 }
 
@@ -299,7 +406,7 @@ export default function Layout() {
           <div className="flex items-center gap-2">
             {authed && <CurrencyMenu />}
             <LangSwitch />
-            {authed && <BellLink />}
+            {authed && <NotificationsMenu />}
             {authed ? (
               <AccountButton />
             ) : (
@@ -318,7 +425,7 @@ export default function Layout() {
             {authed ? (
               <>
                 <CurrencyMenu />
-                <BellLink />
+                <NotificationsMenu />
               </>
             ) : (
               <>
