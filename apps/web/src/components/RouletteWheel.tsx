@@ -69,12 +69,11 @@ export function RouletteWheel({
   }, [spinId, result]);
 
   const showNumber = result != null && landed;
+  const resultBg =
+    result == null ? '' : result === 0 ? 'bg-roul-green' : RED.has(result) ? 'bg-roul-red' : 'bg-roul-black';
 
   return (
     <div className="relative mx-auto aspect-square w-full" style={{ maxWidth: size }}>
-      <div className="absolute left-1/2 top-[-2px] z-20 -translate-x-1/2">
-        <div className="h-0 w-0 border-x-8 border-t-[14px] border-x-transparent border-t-sun drop-shadow" />
-      </div>
       {/* clip the rotating square SVG: its corners sweep outside the box while it
           spins (and rest there when it settles at an angle), which otherwise
           overflows the page horizontally and shifts the whole layout sideways. */}
@@ -127,11 +126,15 @@ export function RouletteWheel({
       </div>
 
       <div className="absolute inset-0 z-10 grid place-items-center">
-        <div className="grid h-24 w-24 place-items-center rounded-full bg-holo-soft text-center shadow-glow">
+        <div
+          className={`grid h-24 w-24 place-items-center rounded-full text-center shadow-glow ring-2 ring-white/15 transition-colors duration-300 ${
+            showNumber ? `${resultBg} text-white` : 'bg-holo-soft'
+          }`}
+        >
           {showNumber ? (
             <div>
               <div className="text-3xl font-extrabold tabular-nums">{result}</div>
-              <div className="text-[10px] uppercase tracking-widest text-white/50">
+              <div className="text-[10px] uppercase tracking-widest text-white/70">
                 {result === 0 ? 'zero' : RED.has(result) ? 'red' : 'black'}
               </div>
             </div>
