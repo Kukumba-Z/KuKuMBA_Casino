@@ -9,8 +9,22 @@ export class ChatService {
     private realtime: RealtimeService,
   ) {}
 
+  // Sender's role/VIP/accountId are joined on read (they can change over time)
+  // so the client can colour names and open a moderation/profile popover.
+  private static readonly USER_SELECT = { accountId: true, role: true, vipLevel: true } as const;
+
   private view(m: any) {
-    return { id: m.id, room: m.room, username: m.username, body: m.body, createdAt: m.createdAt };
+    return {
+      id: m.id,
+      room: m.room,
+      userId: m.userId,
+      username: m.username,
+      accountId: m.user?.accountId,
+      role: m.user?.role,
+      vipLevel: m.user?.vipLevel,
+      body: m.body,
+      createdAt: m.createdAt,
+    };
   }
 
   async history(room = 'global', limit = 50) {
@@ -18,6 +32,7 @@ export class ChatService {
       where: { room, deleted: false },
       orderBy: { createdAt: 'desc' },
       take: Math.min(limit, 100),
+      include: { user: { select: ChatService.USER_SELECT } },
     });
     return msgs.reverse().map((m) => this.view(m));
   }
@@ -29,6 +44,7 @@ export class ChatService {
     if (row?.chatMutedUntil && row.chatMutedUntil > new Date()) throw new BadRequestException('CHAT_MUTED');
     const msg = await this.prisma.chatMessage.create({
       data: { room: room || 'global', userId: user.id, username: user.username, body },
+      include: { user: { select: ChatService.USER_SELECT } },
     });
     const view = this.view(msg);
     this.realtime.chatMessage(view);

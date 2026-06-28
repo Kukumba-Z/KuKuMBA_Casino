@@ -1,0 +1,70 @@
+import { useQuery } from '@tanstack/react-query';
+import { Ban, MicOff } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import api, { apiError } from '../lib/api';
+import { can, useAdminMe } from '../lib/hooks';
+import { enumLabel } from '../lib/labels';
+import { toast } from '../store/toast';
+import { Modal } from './Modal';
+
+/** Tap a chat nickname → mini profile (id, registered, VIP). Staff with
+ *  `chat.moderate` also get mute / ban-from-chat (reusing the admin mute
+ *  endpoint — ban is just a far-future mute). */
+export function ChatUserPopover({ user, onClose }: { user: any; onClose: () => void }) {
+  const { t } = useTranslation();
+  const { data: me } = useAdminMe();
+  const staff = can(me, 'chat.moderate');
+
+  const { data: card } = useQuery({
+    queryKey: ['user-card', user.accountId],
+    enabled: user.accountId != null,
+    queryFn: async () => (await api.get(`/users/${user.accountId}/card`)).data,
+  });
+
+  const mute = async (minutes: number, ok: string) => {
+    if (!user.userId) return;
+    try {
+      await api.post(`/admin/users/${user.userId}/mute`, { minutes });
+      toast.success(ok);
+      onClose();
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+
+  const registered = card?.createdAt ? new Date(card.createdAt).toLocaleDateString() : null;
+
+  return (
+    <Modal open onClose={onClose} title={user.username}>
+      <div className="space-y-3 text-sm">
+        <Row label={t('common.accountId')} value={`#${user.accountId ?? card?.accountId ?? '—'}`} />
+        <Row label="VIP" value={String(user.vipLevel ?? card?.vipLevel ?? 0)} />
+        {user.role && user.role !== 'USER' && <Row label={t('chat.role')} value={enumLabel('role', user.role)} />}
+        {registered && <Row label={t('chat.registered')} value={registered} />}
+
+        {staff && (
+          <div className="space-y-2 border-t border-white/10 pt-3">
+            <div className="text-xs uppercase tracking-wide text-white/40">{t('chat.moderation')}</div>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => mute(60, t('chat.muted'))} className="btn-ghost inline-flex items-center justify-center gap-1.5 text-sm">
+                <MicOff size={15} /> {t('chat.mute')}
+              </button>
+              <button onClick={() => mute(60 * 24 * 3650, t('chat.banned'))} className="btn-ghost inline-flex items-center justify-center gap-1.5 text-sm text-bubble">
+                <Ban size={15} /> {t('chat.ban')}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-white/45">{label}</span>
+      <span className="font-medium">{value}</span>
+    </div>
+  );
+}

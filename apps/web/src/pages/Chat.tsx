@@ -11,8 +11,9 @@ export default function Chat() {
         <MessagesSquare size={22} className="text-lav" />
         <span className="holo-text">{t('nav.chat')}</span>
       </h1>
-      {/* sized container so the message list fills the screen height */}
-      <ChatBox className="h-[calc(100vh-13rem)] lg:h-[calc(100vh-11rem)]" />
+      {/* dvh so the chat shrinks (input stays visible) when the mobile keyboard
+          opens, instead of the page scrolling unpredictably */}
+      <ChatBox className="h-[calc(100dvh-12rem)] lg:h-[calc(100dvh-10rem)]" />
     </div>
   );
 }
