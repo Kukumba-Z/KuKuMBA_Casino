@@ -176,6 +176,7 @@ function NotificationsMenu() {
 }
 
 function AccountButton() {
+  const { t } = useTranslation();
   const { user, clear } = useAuth();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
@@ -189,8 +190,8 @@ function AccountButton() {
     navigate('/');
   };
   const items: [string, string, any][] = [
-    ['/profile', 'Профиль / Profile', UserIcon],
-    ['/wallet', 'Кошелёк / Wallet', Wallet],
+    ['/profile', 'nav.profile', UserIcon],
+    ['/wallet', 'nav.wallet', Wallet],
   ];
   return (
     <div className="relative">
@@ -211,18 +212,18 @@ function AccountButton() {
           <div className="border-b border-white/10 px-4 py-3 text-xs text-white/50">
             ID #{user?.accountId} · {user?.role}
           </div>
-          {items.map(([to, label, Icon]) => (
+          {items.map(([to, key, Icon]) => (
             <Link key={to} to={to} onClick={() => setOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-white/5">
-              <Icon size={16} className="text-white/50" /> {label}
+              <Icon size={16} className="text-white/50" /> {t(key)}
             </Link>
           ))}
           {isStaff(user?.role) && (
             <Link to="/admin" onClick={() => setOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-sun hover:bg-white/5">
-              <Shield size={16} /> Admin
+              <Shield size={16} /> {t('nav.admin')}
             </Link>
           )}
           <button onClick={logout} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-bubble hover:bg-white/5">
-            <LogOut size={16} /> Выйти / Log out
+            <LogOut size={16} /> {t('common.logout')}
           </button>
         </div>
       )}
@@ -238,21 +239,29 @@ function Tab({ item, accent }: { item: NavItem; accent?: boolean }) {
       to={item.to}
       end={item.end}
       className={({ isActive }) =>
-        `flex flex-col items-center gap-0.5 py-2 text-[11px] transition ${isActive ? 'text-white' : 'text-white/55'}`
+        `flex flex-col items-center gap-0.5 py-2 text-[11px] transition ${
+          accent ? 'text-white' : isActive ? 'text-white' : 'text-white/55'
+        }`
       }
     >
-      {({ isActive }) => (
-        <>
-          <span
-            className={`grid h-7 w-7 place-items-center rounded-xl transition ${
-              accent ? 'bg-holo text-night shadow-glow' : isActive ? 'bg-white/10' : ''
-            }`}
-          >
-            <Icon size={18} />
-          </span>
-          {t(`nav.${item.key}`)}
-        </>
-      )}
+      {({ isActive }) =>
+        accent ? (
+          // Raised, glowing centre button so a live raffle is impossible to miss.
+          <>
+            <span className="-mt-5 grid h-12 w-12 place-items-center rounded-full bg-holo text-night shadow-glow ring-4 ring-night">
+              <Icon size={22} />
+            </span>
+            <span className="-mt-0.5 font-semibold text-sun">{t(`nav.${item.key}`)}</span>
+          </>
+        ) : (
+          <>
+            <span className={`grid h-7 w-7 place-items-center rounded-xl transition ${isActive ? 'bg-white/10' : ''}`}>
+              <Icon size={18} />
+            </span>
+            {t(`nav.${item.key}`)}
+          </>
+        )
+      }
     </NavLink>
   );
 }
@@ -347,12 +356,9 @@ function MoreSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
           })}
         </div>
 
+        {/* Language only — info links live in the footer now, account/support above. */}
         <div className="mt-4 flex items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
-            <Link to="/page/about" onClick={onClose} className="text-white/55 hover:text-white">{t('nav.about')}</Link>
-            <Link to="/page/responsible-gaming" onClick={onClose} className="text-white/55 hover:text-white">{t('nav.responsible')}</Link>
-            <Link to="/page/contacts" onClick={onClose} className="text-white/55 hover:text-white">{t('nav.contacts')}</Link>
-          </div>
+          <span className="text-sm text-white/45">{t('common.language')}</span>
           <LangSwitch />
         </div>
 
@@ -480,27 +486,27 @@ function Footer() {
         <FooterCol title={t('nav.lobby')} links={[['/', t('nav.lobby')], ['/games', t('nav.games')], ['/roulette', t('nav.roulette')], ['/bonuses', t('nav.bonuses')]]} />
         <FooterCol title={t('nav.profile')} links={[['/wallet', t('nav.wallet')], ['/profile', t('nav.profile')], ['/notifications', t('nav.notifications')], ['/support', t('nav.support')]]} />
         <FooterCol
-          title="Инфо / Info"
+          title={t('footer.info')}
           links={[
             ['/page/about', t('nav.about')],
             ['/page/responsible-gaming', t('nav.responsible')],
             ['/page/contacts', t('nav.contacts')],
-            ['/page/terms', 'Условия / Terms'],
+            ['/page/terms', t('nav.terms')],
           ]}
         />
       </div>
 
-      {/* compact link row — mobile only */}
+      {/* compact info row — mobile only (the More sheet no longer carries these) */}
       <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 border-t border-white/10 px-4 py-3 text-xs text-white/50 sm:hidden">
-        <Link to="/games" className="hover:text-white">{t('nav.games')}</Link>
-        <Link to="/bonuses" className="hover:text-white">{t('nav.bonuses')}</Link>
-        <Link to="/page/responsible-gaming" className="hover:text-white">{t('nav.responsible')}</Link>
         <Link to="/page/about" className="hover:text-white">{t('nav.about')}</Link>
+        <Link to="/page/responsible-gaming" className="hover:text-white">{t('nav.responsible')}</Link>
+        <Link to="/page/contacts" className="hover:text-white">{t('nav.contacts')}</Link>
+        <Link to="/page/terms" className="hover:text-white">{t('nav.terms')}</Link>
         <Link to="/support" className="hover:text-white">{t('nav.support')}</Link>
       </div>
 
       <div className="border-t border-white/10 px-4 py-3 text-center text-[11px] text-white/40">
-        © {new Date().getFullYear()} KuKuMBA · Demo &amp; Real
+        © {new Date().getFullYear()} KuKuMBA · {t('footer.copyright')}
       </div>
     </footer>
   );

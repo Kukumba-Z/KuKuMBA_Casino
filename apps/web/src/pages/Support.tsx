@@ -3,7 +3,6 @@ import { LifeBuoy } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api, { apiError } from '../lib/api';
-import { ChatBox } from '../components/ChatBox';
 import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
 
@@ -32,7 +31,7 @@ export default function Support() {
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+    <div className="mx-auto max-w-2xl">
       <div className="space-y-6">
         <h1 className="flex items-center gap-2 text-2xl font-extrabold">
           <LifeBuoy size={24} className="text-sky" /> {t('support.title')}
@@ -74,10 +73,6 @@ export default function Support() {
             </div>
           </div>
         )}
-      </div>
-
-      <div>
-        <ChatBox />
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import {
   LayoutGrid,
   LifeBuoy,
   type LucideIcon,
+  MessagesSquare,
   PartyPopper,
   Shield,
   Sparkles,
@@ -27,6 +28,7 @@ export interface NavItem {
 // Primary tabs shared by the mobile bottom bar and the desktop top bar.
 export const HOME: NavItem = { to: '/', key: 'lobby', icon: Home, end: true };
 export const GAMES: NavItem = { to: '/games', key: 'games', icon: LayoutGrid };
+export const CHAT: NavItem = { to: '/chat', key: 'chat', icon: MessagesSquare };
 export const BONUSES: NavItem = { to: '/bonuses', key: 'bonuses', icon: Gift };
 export const PROFILE: NavItem = { to: '/profile', key: 'profile', icon: User };
 export const RAFFLES: NavItem = { to: '/raffles', key: 'raffles', icon: PartyPopper, accent: true };
@@ -48,16 +50,21 @@ export const BONUS_TABS: BonusTab[] = [
   { key: 'referrals', icon: Users },
 ];
 
-/** Build the ordered list of bottom-bar tabs for the current state. */
+/**
+ * Bottom-bar tabs. Base set is Lobby · Chat · Bonuses · Profile (the catalog is
+ * reachable from the lobby's "All games", so there's no separate Games tab).
+ * When a raffle is live, the accented Raffles tab is inserted in the centre so
+ * players notice it immediately.
+ */
 export function bottomTabs(opts: { raffleActive: boolean }): NavItem[] {
-  const tabs: NavItem[] = [HOME, GAMES, BONUSES];
-  if (opts.raffleActive) tabs.push(RAFFLES);
+  const tabs: NavItem[] = [HOME, CHAT, BONUSES, PROFILE];
+  if (opts.raffleActive) tabs.splice(2, 0, RAFFLES); // centre slot
   return tabs;
 }
 
 /** Desktop top-bar primary links. */
 export function desktopTabs(opts: { raffleActive: boolean }): NavItem[] {
-  const tabs: NavItem[] = [HOME, GAMES, BONUSES];
+  const tabs: NavItem[] = [HOME, CHAT, BONUSES];
   if (opts.raffleActive) tabs.push(RAFFLES);
   return tabs;
 }

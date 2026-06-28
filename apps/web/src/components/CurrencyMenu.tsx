@@ -92,7 +92,9 @@ export function CurrencyMenu() {
         )}
       </div>
 
-      <Link to="/wallet" className="btn-primary !rounded-xl !px-2 !py-1.5" aria-label={t('common.deposit')}>
+      {/* Quick deposit shortcut — desktop only; on mobile the dropdown's wallet
+          link (and the demo "+") cover this, keeping the slim top bar uncluttered. */}
+      <Link to="/wallet" className="btn-primary !hidden !rounded-xl !px-2 !py-1.5 lg:!inline-flex" aria-label={t('common.deposit')}>
         <Plus size={16} />
       </Link>
     </div>

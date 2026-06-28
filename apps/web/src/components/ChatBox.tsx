@@ -54,7 +54,7 @@ export function ChatBox({ className = '' }: { className?: string }) {
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-sm font-bold">
         <MessageCircle size={16} className="text-lav" /> {t('chat.title')}
       </div>
-      <div ref={listRef} className="flex-1 space-y-2 overflow-y-auto px-4 py-3" style={{ maxHeight: 360 }}>
+      <div ref={listRef} className="min-h-[320px] flex-1 space-y-2 overflow-y-auto px-4 py-3">
         {messages.map((m) => (
           <div key={m.id} className="text-sm">
             <span className="font-semibold text-lav">{m.username}</span>{' '}
