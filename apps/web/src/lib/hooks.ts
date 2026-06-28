@@ -10,6 +10,7 @@ export interface Currency {
   type: 'DEMO' | 'FIAT' | 'CRYPTO';
   symbol?: string;
   decimals: number;
+  usdRate?: number; // value of 1 unit in USD — used to derive bet limits across currencies
   networks: string[];
   enabled: boolean;
 }

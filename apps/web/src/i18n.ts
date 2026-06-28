@@ -126,6 +126,11 @@ const ru = {
     won: 'Вы выиграли',
     lost: 'Не повезло',
     pfHint: 'Хеш публикуется до спина — результат нельзя подделать.',
+    bet: 'Ставка',
+    maxBtn: 'Макс',
+    info: 'Инфо и честность',
+    limits: 'Лимит ставки',
+    recent: 'Последние',
   },
   wallet: {
     title: 'Кошелёк',
@@ -281,6 +286,7 @@ const en: typeof ru = {
     clientSeed: 'Client seed', nonce: 'Nonce', rotate: 'Rotate seed', rotated: 'Seed rotated', verify: 'Verify',
     needLogin: 'Sign in to place bets', won: 'You won', lost: 'No luck',
     pfHint: 'The hash is published before each spin — the result cannot be forged.',
+    bet: 'Bet', maxBtn: 'Max', info: 'Info & fairness', limits: 'Bet limit', recent: 'Recent',
   },
   wallet: {
     title: 'Wallet', yourBalances: 'Your balances', newDeposit: 'New deposit', depositAddr: 'Deposit address',

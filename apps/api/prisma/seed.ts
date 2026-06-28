@@ -46,7 +46,7 @@ async function main() {
       status: 'LIVE',
       route: '/roulette',
       rtp: ROULETTE_RTP,
-      minBet: 0.1,
+      minBet: 0.01,
       maxBet: 100000,
       sortOrder: 0,
       descriptionRu:
