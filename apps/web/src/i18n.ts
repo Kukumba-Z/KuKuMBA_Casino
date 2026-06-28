@@ -43,7 +43,7 @@ const ru = {
     withdrawalStatus: { PENDING: 'Ожидает', APPROVED: 'Одобрен', REJECTED: 'Отклонён', PROCESSING: 'В обработке', COMPLETED: 'Выполнен', FAILED: 'Ошибка' },
     userStatus: { ACTIVE: 'Активен', SUSPENDED: 'Заморожен', BANNED: 'Бан', SELF_EXCLUDED: 'Самоисключение' },
   },
-  bonuses: { mine: 'Мои бонусы', autoApplied: 'Применяется автоматически' },
+  bonuses: { mine: 'Мои бонусы', autoApplied: 'Применяется автоматически', claimed: 'Уже получено' },
   promo: { enter: 'Введите промокод', hint: 'Промокоды выдаёт администрация и акции.' },
   referrals: {
     yourCode: 'Ваш реферальный код', link: 'Ссылка',
@@ -318,7 +318,7 @@ const en: typeof ru = {
     withdrawalStatus: { PENDING: 'Pending', APPROVED: 'Approved', REJECTED: 'Rejected', PROCESSING: 'Processing', COMPLETED: 'Completed', FAILED: 'Failed' },
     userStatus: { ACTIVE: 'Active', SUSPENDED: 'Suspended', BANNED: 'Banned', SELF_EXCLUDED: 'Self-excluded' },
   },
-  bonuses: { mine: 'My bonuses', autoApplied: 'Applied automatically' },
+  bonuses: { mine: 'My bonuses', autoApplied: 'Applied automatically', claimed: 'Already claimed' },
   promo: { enter: 'Enter a promo code', hint: 'Promo codes are issued by the team and in campaigns.' },
   referrals: {
     yourCode: 'Your referral code', link: 'Link',

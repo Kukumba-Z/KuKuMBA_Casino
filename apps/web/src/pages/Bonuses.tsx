@@ -82,6 +82,7 @@ function BonusCatalog() {
   const en = i18n.language?.startsWith('en');
   const { data: catalog } = useQuery({ queryKey: ['bonuses'], queryFn: async () => (await api.get('/bonuses')).data });
   const { data: mine } = useQuery({ queryKey: ['my-bonuses'], enabled: authed, queryFn: async () => (await api.get('/bonuses/me')).data });
+  const claimedIds = new Set((mine ?? []).map((m: any) => m.bonusId));
 
   const claim = async (key: string, name: string) => {
     try {
@@ -109,7 +110,9 @@ function BonusCatalog() {
               {b.wagerMultiplier ? ` · wager x${b.wagerMultiplier}` : ''}
             </div>
             {['WELCOME', 'NO_DEPOSIT'].includes(b.type) ? (
-              authed ? (
+              claimedIds.has(b.id) ? (
+                <div className="mt-3 text-center text-xs font-semibold text-mint">{t('bonuses.claimed')}</div>
+              ) : authed ? (
                 <button onClick={() => claim(b.key, b.name)} className="btn-primary mt-3">{t('common.claim')}</button>
               ) : (
                 <Link to="/login" className="btn-ghost mt-3 text-center">{t('common.login')}</Link>

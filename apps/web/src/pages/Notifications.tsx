@@ -40,8 +40,8 @@ export default function Notifications() {
         <h1 className="flex items-center gap-2 text-2xl font-extrabold">
           <Bell size={24} className="text-sun" /> {t('nav.notifications')}
         </h1>
-        <button onClick={readAll} className="btn-ghost inline-flex items-center gap-1.5 text-sm">
-          <CheckCheck size={16} /> {t('common.readAll')}
+        <button onClick={readAll} className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/70 transition hover:bg-white/10">
+          <CheckCheck size={14} /> {t('common.readAll')}
         </button>
       </div>
       <div className="space-y-2">

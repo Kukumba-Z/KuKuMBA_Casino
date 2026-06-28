@@ -504,7 +504,6 @@ function Footer() {
         <Link to="/page/responsible-gaming" className="hover:text-white">{t('nav.responsible')}</Link>
         <Link to="/page/contacts" className="hover:text-white">{t('nav.contacts')}</Link>
         <Link to="/page/terms" className="hover:text-white">{t('nav.terms')}</Link>
-        <Link to="/support" className="hover:text-white">{t('nav.support')}</Link>
       </div>
 
       <div className="border-t border-white/10 px-4 py-3 text-center text-[11px] text-white/40">

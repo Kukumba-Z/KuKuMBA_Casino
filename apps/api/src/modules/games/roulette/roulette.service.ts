@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { WalletMode } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
-import { D } from '../../../common/utils/money';
+import { D, roundTo } from '../../../common/utils/money';
 import { SettingsService } from '../../../config/settings.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { rouletteResult } from '../../provably-fair/provably-fair.crypto';
@@ -131,7 +131,9 @@ export class RouletteService {
         const stake = D(b.stake);
         const mult = multiplierFor(b.betType as any, rtp);
         const win = isWin(b.betType as any, b.selection, outcome);
-        const payout = win ? stake.mul(mult) : D(0);
+        // Round the credit to the currency's precision so a 10 ×2 pays exactly
+        // 20.00, not 20.0006 (the RTP-exact multiplier carries tiny dust).
+        const payout = win ? roundTo(stake.mul(mult), cur.decimals) : D(0);
         totalPayout = totalPayout.plus(payout);
         betRows.push(
           await tx.bet.create({
