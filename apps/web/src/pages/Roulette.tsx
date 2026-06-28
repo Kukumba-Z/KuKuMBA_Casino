@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Shield, Target } from 'lucide-react';
+import { Loader2, Shield, Target, Volume2, VolumeX } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -9,6 +9,7 @@ import { RouletteWheel, SPIN_MS } from '../components/RouletteWheel';
 import api, { apiError } from '../lib/api';
 import { betLimits, clampStake, roundStake } from '../lib/bets';
 import { fmt, useBalances, useCurrencies } from '../lib/hooks';
+import { setSoundEnabled, sfx } from '../lib/sound';
 import { useAuth } from '../store/auth';
 import { useUI } from '../store/ui';
 import { toast } from '../store/toast';
@@ -25,7 +26,10 @@ export default function Roulette() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const authed = !!useAuth((s) => s.accessToken);
-  const { mode, currency } = useUI();
+  const { mode, currency, sound, toggleSound } = useUI();
+
+  // Keep the sound engine in sync with the persisted preference.
+  useEffect(() => setSoundEnabled(sound), [sound]);
 
   const { data: info } = useQuery({ queryKey: ['roulette-info'], queryFn: async () => (await api.get('/games/roulette')).data });
   const { data: balances } = useBalances();
@@ -58,8 +62,10 @@ export default function Roulette() {
   const total = Object.values(bets).reduce((a, b) => a + b, 0);
   const setStake = (v: number) => setStakeStr(String(clampStake(v, limits)));
 
-  const add = (key: string) =>
+  const add = (key: string) => {
+    sfx.chip();
     setBets((p) => ({ ...p, [key]: roundStake((p[key] || 0) + stake, limits.decimals) }));
+  };
   const clear = () => setBets({});
 
   const toApi = () =>
@@ -82,6 +88,7 @@ export default function Roulette() {
       // Start the wheel spinning toward the outcome…
       setResult(data.outcome);
       setSpinId((x) => x + 1);
+      sfx.spin(SPIN_MS);
       clear();
       // …and only reveal the outcome (toast only) + refresh balances once it lands.
       revealRef.current = window.setTimeout(() => {
@@ -90,8 +97,10 @@ export default function Roulette() {
         qc.invalidateQueries({ queryKey: ['roul-history'] });
         qc.invalidateQueries({ queryKey: ['pf-seed'] });
         if (Number(data.net) > 0) {
+          sfx.win();
           toast.success(`${t('roulette.won')} +${fmt(data.net, 4)} ${data.currency} · ${t('roulette.result')}: ${data.outcome}`);
         } else {
+          sfx.lose();
           toast.info(`${t('roulette.lost')} · ${t('roulette.result')}: ${data.outcome}`);
         }
       }, SPIN_MS);
@@ -142,6 +151,15 @@ export default function Roulette() {
     <GameLayout>
       {/* Wheel only — title, RTP, description and fairness live behind the shield button. */}
       <div className="card relative flex flex-col items-center gap-3 p-4 sm:p-6">
+        <button
+          type="button"
+          onClick={toggleSound}
+          className="absolute left-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/5 text-white/70 transition hover:bg-white/10"
+          aria-label={sound ? t('roulette.soundOff') : t('roulette.soundOn')}
+          title={sound ? t('roulette.soundOff') : t('roulette.soundOn')}
+        >
+          {sound ? <Volume2 size={18} /> : <VolumeX size={18} className="text-white/40" />}
+        </button>
         <button
           type="button"
           onClick={() => setInfoOpen(true)}

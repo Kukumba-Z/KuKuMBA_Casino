@@ -1,4 +1,3 @@
-import { Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Mascot } from './Mascot';
 
@@ -44,8 +43,10 @@ export function RouletteWheel({
   const rText = (rO + rI) / 2;
 
   const [rot, setRot] = useState(0);
+  const [ballRot, setBallRot] = useState(0);
   const [landed, setLanded] = useState(true);
   const rotRef = useRef(0);
+  const ballRef = useRef(0);
 
   useEffect(() => {
     if (result == null || spinId === 0) return;
@@ -56,8 +57,12 @@ export function RouletteWheel({
     const delta = ((want - mod) % 360 + 360) % 360;
     const next = current + 360 * 6 + delta; // 6 full turns then settle
     rotRef.current = next;
+    // The ball orbits the opposite way and settles back at the top pointer
+    // (where the winning pocket has just been brought), for a livelier spin.
+    ballRef.current -= 360 * 9; // whole turns ⇒ lands at 0° (top)
     setLanded(false);
     setRot(next);
+    setBallRot(ballRef.current);
     // fallback in case transitionend doesn't fire (reduced motion etc.)
     const tm = setTimeout(() => setLanded(true), SPIN_MS + 120);
     return () => clearTimeout(tm);
@@ -109,6 +114,18 @@ export function RouletteWheel({
           <circle cx={cx} cy={cy} r={rI} fill="#14102A" stroke="rgba(255,255,255,0.1)" strokeWidth="2" />
         </svg>
       </div>
+
+      {/* the ball — orbits the rim while spinning and settles under the top pointer */}
+      <div
+        className="pointer-events-none absolute inset-0 z-[15]"
+        style={{ transform: `rotate(${ballRot}deg)`, transition: `transform ${SPIN_MS}ms cubic-bezier(0.18, 0.7, 0.12, 1)` }}
+      >
+        <div
+          className="absolute left-1/2 h-[5%] w-[5%] -translate-x-1/2 rounded-full bg-white shadow-[0_0_10px_2px_rgba(255,255,255,0.85)]"
+          style={{ top: '3%' }}
+        />
+      </div>
+
       <div className="absolute inset-0 z-10 grid place-items-center">
         <div className="grid h-24 w-24 place-items-center rounded-full bg-holo-soft text-center shadow-glow">
           {showNumber ? (
@@ -118,8 +135,6 @@ export function RouletteWheel({
                 {result === 0 ? 'zero' : RED.has(result) ? 'red' : 'black'}
               </div>
             </div>
-          ) : result != null ? (
-            <Loader2 size={32} className="animate-spin text-white/70" />
           ) : (
             <Mascot size={44} />
           )}

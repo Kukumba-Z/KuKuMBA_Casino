@@ -1,0 +1,92 @@
+/**
+ * Tiny synthesized sound effects via the Web Audio API — no asset files, so
+ * nothing binary is committed and the bundle stays small. Shared across games;
+ * each effect is a no-op when sound is disabled. The AudioContext is created
+ * lazily on the first call (which always follows a user gesture, so browsers
+ * allow it) and resumed if suspended.
+ */
+let ctx: AudioContext | null = null;
+let enabled = true;
+
+export function setSoundEnabled(v: boolean) {
+  enabled = v;
+}
+
+function audio(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    if (!ctx) {
+      const AC = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+    }
+    if (ctx.state === 'suspended') void ctx.resume();
+    return ctx;
+  } catch {
+    return null; // audio unavailable — effects become silent no-ops
+  }
+}
+
+function blip(
+  c: AudioContext,
+  { freq, dur, type = 'sine', gain = 0.18, at = 0, slideTo }: { freq: number; dur: number; type?: OscillatorType; gain?: number; at?: number; slideTo?: number },
+) {
+  const t0 = c.currentTime + at;
+  const osc = c.createOscillator();
+  const g = c.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t0);
+  if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(g).connect(c.destination);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.03);
+}
+
+export const sfx = {
+  /** Soft chip click when a bet is placed on a position. */
+  chip() {
+    if (!enabled) return;
+    const c = audio();
+    if (!c) return;
+    blip(c, { freq: 520, dur: 0.05, type: 'triangle', gain: 0.16 });
+    blip(c, { freq: 880, dur: 0.06, type: 'triangle', gain: 0.12, at: 0.02 });
+  },
+
+  /** Decelerating "ball clacking the wheel" ticks, spread over the spin duration. */
+  spin(durationMs: number) {
+    if (!enabled) return;
+    const c = audio();
+    if (!c) return;
+    const dur = durationMs / 1000;
+    const N = 46;
+    for (let k = 1; k <= N; k++) {
+      const x = k / N;
+      // ease-out: ticks get sparser toward the end, like a settling ball
+      const at = dur * (1 - Math.pow(1 - x, 3));
+      blip(c, { freq: k % 2 ? 1240 : 1080, dur: 0.028, type: 'square', gain: 0.05, at });
+    }
+    // final settle thunk
+    blip(c, { freq: 300, dur: 0.12, type: 'triangle', gain: 0.12, at: dur });
+  },
+
+  /** Bright ascending arpeggio on a win. */
+  win() {
+    if (!enabled) return;
+    const c = audio();
+    if (!c) return;
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
+      blip(c, { freq: f, dur: 0.18, type: 'sine', gain: 0.16, at: i * 0.09 }),
+    );
+  },
+
+  /** Soft low blip on a loss. */
+  lose() {
+    if (!enabled) return;
+    const c = audio();
+    if (!c) return;
+    blip(c, { freq: 320, dur: 0.32, type: 'sine', gain: 0.12, slideTo: 170 });
+  },
+};

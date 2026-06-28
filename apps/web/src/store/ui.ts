@@ -6,8 +6,10 @@ type Mode = 'DEMO' | 'REAL';
 interface UIState {
   mode: Mode;
   currency: string; // active currency for the selected mode
+  sound: boolean; // game sound effects on/off (shared by all games)
   setMode: (mode: Mode) => void;
   setCurrency: (currency: string) => void;
+  toggleSound: () => void;
 }
 
 export const useUI = create<UIState>()(
@@ -15,6 +17,7 @@ export const useUI = create<UIState>()(
     (set) => ({
       mode: 'DEMO',
       currency: 'DEMO',
+      sound: true,
       setMode: (mode) =>
         set((s) => ({
           mode,
@@ -22,6 +25,7 @@ export const useUI = create<UIState>()(
           currency: mode === 'DEMO' ? 'DEMO' : s.currency === 'DEMO' ? 'USDT' : s.currency,
         })),
       setCurrency: (currency) => set({ currency }),
+      toggleSound: () => set((s) => ({ sound: !s.sound })),
     }),
     { name: 'kukumba-ui' },
   ),
