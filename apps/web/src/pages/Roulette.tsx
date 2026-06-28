@@ -1,12 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, RotateCw, Shield, ShieldCheck, Target } from 'lucide-react';
+import { Loader2, Shield, Target } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { GameInfoModal } from '../components/GameInfoModal';
 import { GameLayout } from '../components/GameLayout';
-import { Modal } from '../components/Modal';
 import { RouletteWheel, SPIN_MS } from '../components/RouletteWheel';
-import i18n from '../i18n';
 import api, { apiError } from '../lib/api';
 import { betLimits, clampStake, roundStake } from '../lib/bets';
 import { fmt, useBalances, useCurrencies } from '../lib/hooks';
@@ -289,55 +288,21 @@ export default function Roulette() {
         )}
       </div>
 
-      {/* Info & fairness — opened by the shield button on the wheel. */}
-      <Modal open={infoOpen} onClose={() => setInfoOpen(false)} title={<span className="holo-text">{t('roulette.title')}</span>}>
-        <div className="space-y-4">
-          <p className="flex items-center gap-1.5 text-sm text-white/60">
-            <ShieldCheck size={15} className="text-mint" /> RTP {((info?.rtp ?? 0.973) * 100).toFixed(1)}% · provably-fair
-          </p>
-          {(info?.descriptionRu || info?.descriptionEn) && (
-            <p className="text-sm text-white/50">
-              {i18n.language?.startsWith('en') ? info?.descriptionEn : info?.descriptionRu}
-            </p>
-          )}
-
-          <div className="rounded-xl bg-black/30 p-3 text-sm text-white/60">
-            {t('roulette.limits')}: <b className="text-white/80">{fmt(limits.min, 2)}–{fmt(limits.max, 2)} {currency}</b>
-          </div>
-
-          {authed && seed ? (
-            <div className="space-y-3">
-              <h3 className="flex items-center gap-2 text-sm font-bold">
-                <ShieldCheck size={16} className="text-mint" /> {t('roulette.provablyFair')}
-              </h3>
-              <div className="grid gap-2">
-                <Field label={t('roulette.serverHash')} value={seed.serverSeedHash} mono />
-                <Field label={t('roulette.clientSeed')} value={seed.clientSeed} mono />
-                <Field label={t('roulette.nonce')} value={String(seed.nonce)} />
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={rotateSeed} className="btn-soft inline-flex items-center gap-1.5 text-sm">
-                  <RotateCw size={15} /> {t('roulette.rotate')}
-                </button>
-              </div>
-              <p className="text-xs text-white/40">{t('roulette.pfHint')}</p>
-            </div>
-          ) : (
-            <p className="text-xs text-white/40">{t('roulette.pfHint')}</p>
-          )}
-        </div>
-      </Modal>
+      {/* Info, rules & fairness — opened by the shield button on the wheel. */}
+      <GameInfoModal
+        open={infoOpen}
+        onClose={() => setInfoOpen(false)}
+        title={<span className="holo-text">{info?.name ?? t('roulette.title')}</span>}
+        rtp={info?.rtp ?? 0.973}
+        descriptionRu={info?.descriptionRu}
+        descriptionEn={info?.descriptionEn}
+        bets={info?.bets}
+        pockets={info?.pockets?.length}
+        limits={limits}
+        currency={currency}
+        seed={authed ? seed : null}
+        onRotateSeed={rotateSeed}
+      />
     </GameLayout>
-  );
-}
-
-function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="rounded-xl bg-black/30 p-3">
-      <div className="mb-1 text-xs text-white/40">{label}</div>
-      <div className={`truncate text-sm ${mono ? 'font-mono' : ''}`} title={value}>
-        {value}
-      </div>
-    </div>
   );
 }
