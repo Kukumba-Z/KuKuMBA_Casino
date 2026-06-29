@@ -11,8 +11,24 @@ export class RealtimeService {
   private server?: Server;
   private clients = new Map<string, string | undefined>(); // socketId -> userId
 
+  // Rolling in-memory buffer of the most recent live bets. Only the last N are
+  // kept in server memory; older ones are dropped (the DB GameRound rows stay —
+  // they're the audit/history record, this is just the live ticker's cache).
+  private static readonly LIVE_CAP = 15;
+  private recent: any[] = [];
+
   bind(server: Server) {
     this.server = server;
+  }
+
+  /** The last ≤15 live bets, newest first — what the lobby seeds its ticker from. */
+  recentBets(): any[] {
+    return this.recent;
+  }
+
+  /** Seed the buffer (e.g. from the DB on startup) so it isn't empty after a restart. */
+  seedBets(items: any[]) {
+    this.recent = items.slice(0, RealtimeService.LIVE_CAP);
   }
 
   addClient(socketId: string, userId?: string) {
@@ -43,6 +59,9 @@ export class RealtimeService {
 
   // Convenience broadcasters ---------------------------------------------------
   liveBet(payload: any) {
+    // Keep only the last N in memory; drop the rest.
+    this.recent.unshift(payload);
+    if (this.recent.length > RealtimeService.LIVE_CAP) this.recent.length = RealtimeService.LIVE_CAP;
     this.emit('bet', payload);
   }
   chatMessage(payload: any) {

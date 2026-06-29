@@ -3,11 +3,13 @@ import { ArrowRight, LayoutGrid, ShieldCheck, Sparkles, Trophy, Zap } from 'luci
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { GameCard } from '../components/GameCard';
+import { GameCard, categoryMeta } from '../components/GameCard';
 import { Mascot } from '../components/Mascot';
+import { Switch } from '../components/Switch';
 import api from '../lib/api';
 import { fmt, useGames } from '../lib/hooks';
 import { getSocket } from '../lib/socket';
+import { useUI } from '../store/ui';
 
 /** One row of a live/big-win feed: "<game> · nick · STAKE → PAYOUT". */
 function FeedRow({ f }: { f: any }) {
@@ -24,6 +26,90 @@ function FeedRow({ f }: { f: any }) {
         <span className={`font-semibold ${win ? 'text-mint' : 'text-white/40'}`}>{fmt(f.payout, 2)}</span>
         <span className="text-white/40">{f.currency}</span>
       </div>
+    </div>
+  );
+}
+
+// Shared 5-column template so the header and rows line up: game · player · stake · coeff · win.
+const LIVE_GRID = 'grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto_auto_auto]';
+
+/** Small game tile for a live-bet row — gradient + category icon, echoing the game card. */
+function LiveGameIcon({ category }: { category?: string }) {
+  const meta = categoryMeta(category ?? 'ROULETTE');
+  const Icon = meta.icon;
+  return (
+    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br ${meta.grad}`}>
+      <Icon size={15} className="text-white/85" />
+    </span>
+  );
+}
+
+/** One live-bet row: game · player(nick) · stake · coeff · win. */
+function LiveBetRow({ f }: { f: any }) {
+  const { t } = useTranslation();
+  const win = Number(f.payout) > 0;
+  const stake = Number(f.stake);
+  const coeff = stake > 0 ? Number(f.payout) / stake : 0;
+  const meta = categoryMeta(f.category ?? 'ROULETTE');
+  return (
+    <div className={`grid animate-fadeup ${LIVE_GRID} items-center gap-2 rounded-xl bg-white/[0.03] px-2.5 py-2 text-sm`}>
+      <div className="flex min-w-0 items-center gap-2">
+        <LiveGameIcon category={f.category} />
+        <span className="truncate text-white/70">{t(meta.labelKey)}</span>
+      </div>
+      <span className="truncate font-medium">{f.username}</span>
+      <span className="text-right tabular-nums text-white/55">{fmt(f.stake, 2)}</span>
+      <span className="text-right tabular-nums text-white/45">{coeff.toFixed(2)}×</span>
+      <span className={`text-right tabular-nums font-semibold ${win ? 'text-mint' : 'text-white/35'}`}>
+        {fmt(f.payout, 2)}
+        <span className="ml-1 text-[10px] font-normal text-white/35">{f.currency}</span>
+      </span>
+    </div>
+  );
+}
+
+/** Lobby live-bet ticker: last 15, real-time with a smooth fade-in, toggleable. */
+function LiveBets() {
+  const { t } = useTranslation();
+  const liveBets = useUI((s) => s.liveBets);
+  const toggleLiveBets = useUI((s) => s.toggleLiveBets);
+  const [bets, setBets] = useState<any[]>([]);
+  useEffect(() => {
+    if (!liveBets) return; // off → don't fetch or subscribe
+    api.get('/games/roulette/live').then((r) => setBets(r.data)).catch(() => {});
+    const s = getSocket();
+    // Only real-money action in the public feed — demo play stays private. Keep last 15.
+    const onBet = (b: any) => { if (b.mode !== 'DEMO') setBets((prev) => [b, ...prev].slice(0, 15)); };
+    s.on('bet', onBet);
+    return () => { s.off('bet', onBet); };
+  }, [liveBets]);
+  return (
+    <div className="card p-4 sm:p-5">
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-lg font-bold">
+          <span className={`h-2 w-2 rounded-full bg-mint ${liveBets ? 'animate-pulse' : 'opacity-40'}`} /> {t('lobby.liveBets')}
+        </h2>
+        <Switch checked={liveBets} onChange={toggleLiveBets} label={t('lobby.liveBets')} />
+      </div>
+      {!liveBets ? (
+        <div className="py-8 text-center text-sm text-white/40">{t('lobby.liveOff')}</div>
+      ) : (
+        <>
+          <div className={`mb-1.5 grid ${LIVE_GRID} items-center gap-2 px-2.5 text-[11px] uppercase tracking-wide text-white/35`}>
+            <span>{t('lobby.colGame')}</span>
+            <span>{t('lobby.colPlayer')}</span>
+            <span className="text-right">{t('lobby.colStake')}</span>
+            <span className="text-right">{t('lobby.colCoeff')}</span>
+            <span className="text-right">{t('lobby.colWin')}</span>
+          </div>
+          <div className="max-h-96 space-y-1.5 overflow-y-auto pr-1">
+            {bets.length === 0 && <div className="py-6 text-center text-sm text-white/40">{t('common.empty')}</div>}
+            {bets.map((b) => (
+              <LiveBetRow key={b.roundId} f={b} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -105,30 +191,6 @@ export default function Lobby() {
     </div>
   );
 
-  function LiveBets() {
-    const [bets, setBets] = useState<any[]>([]);
-    useEffect(() => {
-      api.get('/games/roulette/live?limit=100').then((r) => setBets(r.data)).catch(() => {});
-      const s = getSocket();
-      // Only real-money action in the public feed — demo play stays private. Cap 100.
-      const onBet = (b: any) => { if (b.mode !== 'DEMO') setBets((prev) => [b, ...prev].slice(0, 100)); };
-      s.on('bet', onBet);
-      return () => { s.off('bet', onBet); };
-    }, []);
-    return (
-      <div className="card p-5">
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-bold">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-mint" /> {t('lobby.liveBets')}
-        </h2>
-        <div className="max-h-96 space-y-1.5 overflow-y-auto pr-1">
-          {bets.length === 0 && <div className="py-6 text-center text-sm text-white/40">{t('common.empty')}</div>}
-          {bets.map((b) => (
-            <FeedRow key={b.roundId} f={b} />
-          ))}
-        </div>
-      </div>
-    );
-  }
 }
 
 function TrustItem({ icon: Icon, label, accent }: { icon: any; label: string; accent: string }) {

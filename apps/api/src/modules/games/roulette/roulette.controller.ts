@@ -35,8 +35,9 @@ export class RouletteController {
 
   @Public()
   @Get('live')
-  live(@Query('limit') limit?: string) {
-    return this.roulette.liveFeed(limit ? +limit : 100);
+  live() {
+    // Always the in-memory ticker buffer (last ≤15); the limit query is ignored.
+    return this.roulette.liveFeed();
   }
 
   @Public()

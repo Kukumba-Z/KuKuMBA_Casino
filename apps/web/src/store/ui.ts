@@ -7,9 +7,11 @@ interface UIState {
   mode: Mode;
   currency: string; // active currency for the selected mode
   sound: boolean; // game sound effects on/off (shared by all games)
+  liveBets: boolean; // show the lobby's live-bets ticker
   setMode: (mode: Mode) => void;
   setCurrency: (currency: string) => void;
   toggleSound: () => void;
+  toggleLiveBets: () => void;
 }
 
 export const useUI = create<UIState>()(
@@ -18,6 +20,7 @@ export const useUI = create<UIState>()(
       mode: 'DEMO',
       currency: 'DEMO',
       sound: true,
+      liveBets: true,
       setMode: (mode) =>
         set((s) => ({
           mode,
@@ -26,6 +29,7 @@ export const useUI = create<UIState>()(
         })),
       setCurrency: (currency) => set({ currency }),
       toggleSound: () => set((s) => ({ sound: !s.sound })),
+      toggleLiveBets: () => set((s) => ({ liveBets: !s.liveBets })),
     }),
     { name: 'kukumba-ui' },
   ),

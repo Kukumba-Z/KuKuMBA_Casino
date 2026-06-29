@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
 import { WalletMode } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { tableMaxStake } from '../../../common/utils/bet-limits';
@@ -22,7 +22,7 @@ export interface PlaceBetInput {
 }
 
 @Injectable()
-export class RouletteService {
+export class RouletteService implements OnModuleInit {
   constructor(
     private prisma: PrismaService,
     private wallet: WalletService,
@@ -33,6 +33,15 @@ export class RouletteService {
     private realtime: RealtimeService,
     private notifications: NotificationsService,
   ) {}
+
+  /** Seed the live-bet ticker buffer from the DB so it isn't empty after a restart. */
+  async onModuleInit() {
+    try {
+      this.realtime.seedBets(await this.recentFromDb(15));
+    } catch {
+      /* DB not ready yet — the buffer simply fills as bets come in */
+    }
+  }
 
   async game() {
     return this.prisma.game.findUnique({ where: { key: 'roulette' } });
@@ -198,6 +207,8 @@ export class RouletteService {
     const feed = {
       roundId: result.round.id,
       game: game.name,
+      gameKey: game.key,
+      category: game.category,
       username: user?.username,
       accountId: user?.accountId,
       outcome: result.outcome,
@@ -267,17 +278,28 @@ export class RouletteService {
     });
   }
 
-  async liveFeed(limit = 100) {
+  /** Public live feed — served from the in-memory ticker buffer (last ≤15). */
+  liveFeed() {
+    return this.realtime.recentBets();
+  }
+
+  /** Newest real-money rounds straight from the DB — only used to seed the buffer. */
+  private async recentFromDb(limit = 15) {
     const rounds = await this.prisma.gameRound.findMany({
       // Public live feed shows real-money rounds only (demo play stays private).
       where: { mode: 'REAL' },
       orderBy: { createdAt: 'desc' },
-      take: Math.min(limit, 100),
-      include: { user: { select: { username: true, accountId: true } }, game: { select: { name: true } } },
+      take: Math.min(limit, 15),
+      include: {
+        user: { select: { username: true, accountId: true } },
+        game: { select: { name: true, key: true, category: true } },
+      },
     });
     return rounds.map((r) => ({
       roundId: r.id,
       game: r.game.name,
+      gameKey: r.game.key,
+      category: r.game.category,
       username: r.user.username,
       accountId: r.user.accountId,
       outcome: r.outcome,
