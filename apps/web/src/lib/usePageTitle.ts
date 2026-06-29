@@ -8,7 +8,6 @@ const HOME_TITLE = 'KuKuMBA — милое онлайн-казино';
 /** Route → i18n nav key. Keeps titles data-driven and localized. */
 const ROUTE_TITLE: Record<string, string> = {
   '/games': 'nav.games',
-  '/chat': 'nav.chat',
   '/roulette': 'nav.roulette',
   '/bonuses': 'nav.bonuses',
   '/raffles': 'nav.raffles',

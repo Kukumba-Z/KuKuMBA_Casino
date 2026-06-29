@@ -9,7 +9,6 @@ import { useAuth } from './store/auth';
 import AdminPage from './pages/Admin';
 import AuthPage from './pages/Auth';
 import Bonuses from './pages/Bonuses';
-import Chat from './pages/Chat';
 import Games from './pages/Games';
 import Lobby from './pages/Lobby';
 import Notifications from './pages/Notifications';
@@ -52,7 +51,6 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Lobby />} />
           <Route path="/games" element={<Games />} />
-          <Route path="/chat" element={<Chat />} />
           <Route path="/roulette" element={<Roulette />} />
           <Route path="/raffles" element={<Raffles />} />
           <Route path="/raffles/:id" element={<RaffleDetail />} />
