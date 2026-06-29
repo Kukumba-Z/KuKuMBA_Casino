@@ -18,6 +18,33 @@ async function main() {
     data: { minBet: 0.01 },
   });
   if (minBet.count) console.log(`reconcile: roulette minBet 0.1 → 0.01 (${minBet.count} row)`);
+
+  // Bonuses are now REAL money only. The original seed shipped welcome/nodep as
+  // DEMO grants; convert those exact rows to their new USDT values. Rows an admin
+  // already moved off DEMO are left untouched.
+  const welcome = await prisma.bonus.updateMany({
+    where: { key: 'welcome', currency: 'DEMO' },
+    data: {
+      currency: 'USDT',
+      amount: 5,
+      wagerMultiplier: 10,
+      descriptionRu: 'Приветственный бонус 5 USDT для новых игроков.',
+      descriptionEn: '5 USDT welcome bonus for new players.',
+    },
+  });
+  if (welcome.count) console.log(`reconcile: welcome bonus DEMO → USDT (${welcome.count} row)`);
+
+  const nodep = await prisma.bonus.updateMany({
+    where: { key: 'nodep', currency: 'DEMO' },
+    data: {
+      currency: 'USDT',
+      amount: 2,
+      wagerMultiplier: 15,
+      descriptionRu: 'Бездепозитный бонус 2 USDT — без пополнения.',
+      descriptionEn: '2 USDT, no deposit needed.',
+    },
+  });
+  if (nodep.count) console.log(`reconcile: nodep bonus DEMO → USDT (${nodep.count} row)`);
 }
 
 main()

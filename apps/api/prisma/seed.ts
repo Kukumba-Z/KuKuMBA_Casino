@@ -235,9 +235,12 @@ async function main() {
   // The account counter stays at 100000 (admin's id); the next real sign-up gets 100001.
 
   // ── Bonuses ──────────────────────────────────────────────────────────
+  // Bonuses are REAL money only — demo is free via the demo top-up, so no demo
+  // bonuses exist. The no-deposit/welcome offers are modest real grants (admin
+  // can retune amounts or disable them in the panel).
   const bonuses = [
-    { key: 'welcome', name: 'Welcome Bonus', type: 'WELCOME', currency: 'DEMO', amount: 1000, wagerMultiplier: 1, descriptionRu: 'Приветственный бонус 1000 демо-монет.', descriptionEn: '1000 demo coins welcome bonus.' },
-    { key: 'nodep', name: 'No-Deposit Spark', type: 'NO_DEPOSIT', currency: 'DEMO', amount: 500, wagerMultiplier: 2, descriptionRu: 'Бездепозитный бонус 500 демо-монет.', descriptionEn: '500 demo coins, no deposit needed.' },
+    { key: 'welcome', name: 'Welcome Bonus', type: 'WELCOME', currency: 'USDT', amount: 5, wagerMultiplier: 10, descriptionRu: 'Приветственный бонус 5 USDT для новых игроков.', descriptionEn: '5 USDT welcome bonus for new players.' },
+    { key: 'nodep', name: 'No-Deposit Spark', type: 'NO_DEPOSIT', currency: 'USDT', amount: 2, wagerMultiplier: 15, descriptionRu: 'Бездепозитный бонус 2 USDT — без пополнения.', descriptionEn: '2 USDT, no deposit needed.' },
     { key: 'deposit100', name: '100% First Deposit', type: 'DEPOSIT', currency: 'USDT', amount: 0, percent: 100, maxAmount: 500, wagerMultiplier: 3, descriptionRu: '100% к первому депозиту до 500 USDT.', descriptionEn: '100% first deposit match up to 500 USDT.' },
   ];
   for (const b of bonuses) {

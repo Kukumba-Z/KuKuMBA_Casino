@@ -256,6 +256,13 @@ const ru = {
     saved: 'Сохранено',
   },
   vip: { title: 'VIP-программа', level: 'Уровень', progress: 'Прогресс', perks: 'Привилегии', cashback: 'Кешбэк', rakeback: 'Рейкбэк' },
+  cashback: {
+    percentLabel: 'Ваш процент кешбэка (от VIP-уровня)',
+    available: 'Доступно',
+    none: 'Нет доступного кешбэка. Делайте реальные ставки, чтобы накопить.',
+    nextClaim: 'Следующее получение через',
+    weeklyNote: 'Кешбэк начисляется раз в неделю — процент от чистых реальных потерь за последние 7 дней.',
+  },
   raffles: { title: 'Розыгрыши', join: 'Участвовать', participants: 'Участников', prize: 'Призовой фонд', winners: 'Победителей', entry: 'Вход', free: 'Бесплатно', drawn: 'Завершён', open: 'Идёт', myTickets: 'Ваши билеты', live: 'Активный розыгрыш', joined: 'Вы участвуете!', drawAdmin: 'Провести розыгрыш', winnersTitle: 'Победители', provablyFair: 'Честность розыгрыша' },
   support: { title: 'Поддержка', faq: 'Частые вопросы', tickets: 'Мои тикеты', newTicket: 'Новый тикет', subject: 'Тема', message: 'Сообщение', reply: 'Ответить', ticketCreated: 'Тикет создан' },
   errors: {
@@ -291,6 +298,7 @@ const ru = {
     BONUS_NOT_CLAIMABLE: 'Этот бонус нельзя получить вручную.',
     ALREADY_CLAIMED: 'Уже получено.',
     NOTHING_TO_CLAIM: 'Пока нечего забирать.',
+    CASHBACK_ON_COOLDOWN: 'Кешбэк можно получать раз в неделю.',
     RAFFLE_NOT_OPEN: 'Розыгрыш недоступен.',
     RAFFLE_NOT_FOUND: 'Розыгрыш не найден.',
     RAFFLE_CLOSED: 'Розыгрыш уже закрыт.',
@@ -455,6 +463,13 @@ const en: typeof ru = {
     saved: 'Saved',
   },
   vip: { title: 'VIP program', level: 'Level', progress: 'Progress', perks: 'Perks', cashback: 'Cashback', rakeback: 'Rakeback' },
+  cashback: {
+    percentLabel: 'Your cashback rate (by VIP level)',
+    available: 'Available',
+    none: 'No cashback yet. Place real bets to build it up.',
+    nextClaim: 'Next claim in',
+    weeklyNote: 'Cashback is weekly — a percentage of your net real losses over the last 7 days.',
+  },
   raffles: { title: 'Raffles', join: 'Join', participants: 'Participants', prize: 'Prize pool', winners: 'Winners', entry: 'Entry', free: 'Free', drawn: 'Completed', open: 'Live', myTickets: 'Your tickets', live: 'Live raffle', joined: 'You joined!', drawAdmin: 'Draw winners', winnersTitle: 'Winners', provablyFair: 'Provably-fair draw' },
   support: { title: 'Support', faq: 'FAQ', tickets: 'My tickets', newTicket: 'New ticket', subject: 'Subject', message: 'Message', reply: 'Reply', ticketCreated: 'Ticket created' },
   errors: {
@@ -490,6 +505,7 @@ const en: typeof ru = {
     BONUS_NOT_CLAIMABLE: 'This bonus cannot be claimed manually.',
     ALREADY_CLAIMED: 'Already claimed.',
     NOTHING_TO_CLAIM: 'Nothing to claim yet.',
+    CASHBACK_ON_COOLDOWN: 'Cashback can be claimed once a week.',
     RAFFLE_NOT_OPEN: 'Raffle is unavailable.',
     RAFFLE_NOT_FOUND: 'Raffle not found.',
     RAFFLE_CLOSED: 'The raffle is already closed.',

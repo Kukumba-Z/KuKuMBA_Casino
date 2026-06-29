@@ -1,13 +1,17 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { WalletMode } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { D, ZERO } from '../../common/utils/money';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WalletService } from '../wallet/wallet.service';
 
+/** Cashback is a weekly perk: claimable once every 7 days. */
+const PERIOD_DAYS = 7;
+const PERIOD_MS = PERIOD_DAYS * 24 * 60 * 60 * 1000;
+
 /**
- * Cashback = a slice of NET losses since the last claim, sized by VIP level.
- * Computed per (currency, mode) so it's correct across the multi-currency wallet.
+ * Cashback = a slice of NET REAL losses over the trailing 7 days, sized by VIP
+ * level, claimable once per week. Demo play never counts (demo is free). Losses
+ * are computed per currency so it's correct across the multi-currency wallet.
  */
 @Injectable()
 export class CashbackService {
@@ -26,56 +30,58 @@ export class CashbackService {
       where: { userId, status: 'CLAIMED' },
       orderBy: { createdAt: 'desc' },
     });
-    const since = last?.createdAt ?? user?.createdAt ?? new Date(0);
+    const now = new Date();
+    const nextClaimAt = last ? new Date(last.createdAt.getTime() + PERIOD_MS) : null;
+    const onCooldown = !!nextClaimAt && nextClaimAt > now;
+
+    // Cashback covers REAL net losses over the trailing 7 days. The weekly
+    // cooldown guarantees this window never overlaps a previous claim.
+    const since = new Date(now.getTime() - PERIOD_MS);
 
     const [bets, wins] = await Promise.all([
       this.prisma.transaction.groupBy({
-        by: ['currency', 'mode'],
-        where: { userId, type: 'BET', createdAt: { gte: since } },
+        by: ['currency'],
+        where: { userId, type: 'BET', mode: 'REAL', createdAt: { gte: since } },
         _sum: { amount: true },
       }),
       this.prisma.transaction.groupBy({
-        by: ['currency', 'mode'],
-        where: { userId, type: 'WIN', createdAt: { gte: since } },
+        by: ['currency'],
+        where: { userId, type: 'WIN', mode: 'REAL', createdAt: { gte: since } },
         _sum: { amount: true },
       }),
     ]);
 
-    const key = (c: string, m: string) => `${c}:${m}`;
-    const map = new Map<string, { currency: string; mode: WalletMode; netLoss: any }>();
+    const map = new Map<string, { currency: string; netLoss: any }>();
     for (const b of bets) {
-      map.set(key(b.currency, b.mode), {
-        currency: b.currency,
-        mode: b.mode,
-        netLoss: D(b._sum.amount ?? 0),
-      });
+      map.set(b.currency, { currency: b.currency, netLoss: D(b._sum.amount ?? 0) });
     }
     for (const w of wins) {
-      const k = key(w.currency, w.mode);
-      const cur = map.get(k);
+      const cur = map.get(w.currency);
       if (cur) cur.netLoss = cur.netLoss.minus(D(w._sum.amount ?? 0));
     }
 
     const items = [...map.values()]
       .map((it) => ({
         currency: it.currency,
-        mode: it.mode,
         netLoss: it.netLoss,
         cashback: it.netLoss.gt(0) ? it.netLoss.mul(percent / 100) : ZERO,
       }))
       .filter((it) => it.cashback.gt(0));
 
-    return { percent, since, items };
+    return { percent, since, items, now, nextClaimAt, onCooldown };
   }
 
   async status(userId: string) {
-    const { percent, since, items } = await this.compute(userId);
+    const { percent, since, items, nextClaimAt, onCooldown } = await this.compute(userId);
     return {
       percent,
+      periodDays: PERIOD_DAYS,
       since,
+      onCooldown,
+      nextClaimAt,
       claimable: items.map((i) => ({
         currency: i.currency,
-        mode: i.mode,
+        mode: 'REAL' as const,
         netLoss: i.netLoss.toFixed(),
         cashback: i.cashback.toFixed(),
       })),
@@ -83,10 +89,10 @@ export class CashbackService {
   }
 
   async claim(userId: string) {
-    const { percent, since, items } = await this.compute(userId);
+    const { percent, since, items, now, onCooldown } = await this.compute(userId);
+    if (onCooldown) throw new BadRequestException('CASHBACK_ON_COOLDOWN');
     if (!items.length) throw new BadRequestException('NOTHING_TO_CLAIM');
 
-    const now = new Date();
     const credited: any[] = [];
     await this.prisma.$transaction(async (tx) => {
       for (const it of items) {
@@ -94,7 +100,7 @@ export class CashbackService {
           userId,
           type: 'CASHBACK',
           currency: it.currency,
-          mode: it.mode,
+          mode: 'REAL',
           amount: it.cashback,
           refType: 'cashback',
           description: 'Cashback',
@@ -105,7 +111,7 @@ export class CashbackService {
             periodStart: since,
             periodEnd: now,
             currency: it.currency,
-            mode: it.mode,
+            mode: 'REAL',
             netLoss: it.netLoss,
             percent,
             amount: it.cashback,
@@ -113,7 +119,7 @@ export class CashbackService {
             claimedAt: now,
           },
         });
-        credited.push({ currency: it.currency, mode: it.mode, amount: it.cashback.toFixed() });
+        credited.push({ currency: it.currency, mode: 'REAL', amount: it.cashback.toFixed() });
       }
     });
 

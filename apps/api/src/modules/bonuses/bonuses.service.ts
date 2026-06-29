@@ -12,9 +12,12 @@ export class BonusesService {
     private notifications: NotificationsService,
   ) {}
 
-  /** Public catalog of available bonuses. */
+  /** Public catalog of available bonuses (REAL money only — demo is free). */
   catalog() {
-    return this.prisma.bonus.findMany({ where: { enabled: true }, orderBy: { createdAt: 'asc' } });
+    return this.prisma.bonus.findMany({
+      where: { enabled: true, NOT: { currency: 'DEMO' } },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
   myBonuses(userId: string) {
@@ -35,8 +38,10 @@ export class BonusesService {
     if (existing) throw new BadRequestException('ALREADY_CLAIMED');
 
     const amount = D(bonus.amount);
-    const currency = bonus.currency ?? 'DEMO';
-    const mode = currency === 'DEMO' ? 'DEMO' : 'REAL';
+    const currency = bonus.currency;
+    // Bonuses are REAL money only — a demo/unset currency means it's misconfigured.
+    if (!currency || currency === 'DEMO') throw new BadRequestException('BONUS_NOT_CLAIMABLE');
+    const mode = 'REAL' as const;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.userBonus.create({
