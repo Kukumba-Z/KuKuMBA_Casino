@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { WalletMode } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { tableMaxStake } from '../../../common/utils/bet-limits';
 import { isOriginalGame } from '../../../common/utils/games';
 import { D, roundTo } from '../../../common/utils/money';
 import { SettingsService } from '../../../config/settings.service';
@@ -93,6 +94,11 @@ export class RouletteService {
       if (stake.gt(game.maxBet)) throw new BadRequestException('STAKE_ABOVE_MAX');
       total = total.plus(stake);
     }
+
+    // Whole-table limit (anti-martingale): the sum of all bets may not exceed the
+    // per-currency cap, mirrored from the web client so UI and server agree.
+    const tableCap = tableMaxStake(cur.usdRate?.toString(), mode === 'DEMO' || currency === 'DEMO');
+    if (total.gt(tableCap)) throw new BadRequestException('TABLE_LIMIT_EXCEEDED');
 
     const result = await this.prisma.$transaction(async (tx) => {
       // 1) take the stakes

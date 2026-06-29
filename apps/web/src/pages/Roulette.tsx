@@ -35,7 +35,6 @@ export default function Roulette() {
   const { data: balances } = useBalances();
   const { data: currencies } = useCurrencies();
   const { data: seed } = useQuery({ queryKey: ['pf-seed'], enabled: authed, queryFn: async () => (await api.get('/provably-fair/seed')).data });
-  const { data: history } = useQuery({ queryKey: ['roul-history'], enabled: authed, queryFn: async () => (await api.get('/games/roulette/history?limit=18')).data });
 
   const cur = currencies?.find((c) => c.code === currency);
   const limits = useMemo(() => betLimits(cur, mode), [cur, mode]);
@@ -46,6 +45,9 @@ export default function Roulette() {
   const [result, setResult] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  // Recent outcomes are session-only: they live in local state and reset when the
+  // player leaves the roulette page (component unmount), so the strip starts empty.
+  const [recent, setRecent] = useState<number[]>([]);
   const revealRef = useRef<number | null>(null);
 
   useEffect(() => () => { if (revealRef.current) window.clearTimeout(revealRef.current); }, []);
@@ -62,9 +64,21 @@ export default function Roulette() {
   const total = Object.values(bets).reduce((a, b) => a + b, 0);
   const setStake = (v: number) => setStakeStr(String(clampStake(v, limits)));
 
+  // Show a limit hint over the input while the typed amount is out of range.
+  const stakeNum = Number(stakeStr);
+  const outOfRange = stakeStr.trim() !== '' && (stakeNum > limits.max || stakeNum < limits.min);
+
   const add = (key: string) => {
+    // Whole-table limit: the sum of all bets on the table may not exceed limits.max.
+    // This is the anti-martingale guard — repeated clicks stop once the table is full.
+    const room = roundStake(limits.max - total, limits.decimals);
+    if (room <= 0) {
+      toast.info(`${t('roulette.limits')}: ${fmt(limits.max, 2)} ${currency}`);
+      return;
+    }
+    const place = roundStake(Math.min(stake, room), limits.decimals);
     sfx.chip();
-    setBets((p) => ({ ...p, [key]: roundStake((p[key] || 0) + stake, limits.decimals) }));
+    setBets((p) => ({ ...p, [key]: roundStake((p[key] || 0) + place, limits.decimals) }));
   };
   const clear = () => setBets({});
 
@@ -94,8 +108,9 @@ export default function Roulette() {
       revealRef.current = window.setTimeout(() => {
         setBusy(false);
         qc.invalidateQueries({ queryKey: ['balances'] });
-        qc.invalidateQueries({ queryKey: ['roul-history'] });
         qc.invalidateQueries({ queryKey: ['pf-seed'] });
+        // Session-only history: prepend this spin's outcome (capped at 10, newest first).
+        setRecent((r) => [data.outcome, ...r].slice(0, 10));
         // The result is shown in the wheel — games never toast outcomes (only sound).
         if (Number(data.net) > 0) sfx.win();
         else sfx.lose();
@@ -170,12 +185,12 @@ export default function Roulette() {
           <RouletteWheel result={result} spinId={spinId} />
         </div>
 
-        {/* recent outcomes */}
-        {history && history.length > 0 && (
+        {/* recent outcomes — this visit only; cleared when leaving the page */}
+        {recent.length > 0 && (
           <div className="flex flex-wrap justify-center gap-1.5">
-            {history.slice(0, 10).map((r: any) => (
-              <span key={r.id} className={`grid h-6 w-6 place-items-center rounded-md text-[11px] font-bold ${cellColor(r.outcome)}`}>
-                {r.outcome}
+            {recent.map((n, i) => (
+              <span key={i} className={`grid h-6 w-6 place-items-center rounded-md text-[11px] font-bold ${cellColor(n)}`}>
+                {n}
               </span>
             ))}
           </div>
@@ -188,6 +203,13 @@ export default function Roulette() {
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
+              {/* Limit hint — appears only while the typed amount is outside the range,
+                  and disappears once it's back within min–max. */}
+              {outOfRange && (
+                <div className="absolute bottom-full left-0 z-20 mb-1 rounded-lg border border-white/10 bg-night px-2.5 py-1.5 text-[11px] font-medium text-white/80 shadow-card">
+                  {t('roulette.limits')}: {fmt(limits.min, 2)}–{fmt(limits.max, 2)} {currency}
+                </div>
+              )}
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold uppercase tracking-wide text-white/40">
                 {t('roulette.bet')}
               </span>
@@ -197,7 +219,8 @@ export default function Roulette() {
                 onChange={(e) => setStakeStr(e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))}
                 onBlur={() => setStakeStr(String(stake))}
                 disabled={busy}
-                className="input !py-2.5 !pl-16 !pr-14 text-right font-bold tabular-nums"
+                aria-invalid={outOfRange}
+                className={`input !py-2.5 !pl-16 !pr-14 text-right font-bold tabular-nums ${outOfRange ? '!border-roul-red' : ''}`}
                 aria-label={t('roulette.bet')}
               />
               <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-white/40">
@@ -206,16 +229,9 @@ export default function Roulette() {
             </div>
             <QuickBtn label="½" onClick={() => setStake(stake / 2)} />
             <QuickBtn label="2×" onClick={() => setStake(stake * 2)} />
-            <QuickBtn label={t('roulette.maxBtn')} onClick={() => setStake(limits.max)} />
-          </div>
-          <div className="flex items-center justify-between gap-2 text-xs text-white/45">
-            <span>
-              {t('roulette.limits')}: {fmt(limits.min, 2)}–{fmt(limits.max, 2)} {currency}
-            </span>
-            <span>
-              {t('common.balance')}: <b className="text-white/70">{fmt(bal?.amount ?? 0, 2)} {currency}</b>
-              <span className="ml-1.5 text-white/40">{mode === 'DEMO' ? t('common.demo') : t('common.real')}</span>
-            </span>
+            {/* Max = all-in: the largest amount you can actually wager (your balance,
+                but never above the table limit). */}
+            <QuickBtn label={t('roulette.maxBtn')} onClick={() => setStake(Math.min(limits.max, Number(bal?.amount ?? limits.max)))} />
           </div>
         </div>
 
