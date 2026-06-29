@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { UsersService } from './users.service';
@@ -8,6 +8,13 @@ class UpdateProfileDto {
   @IsOptional() @IsString() @MaxLength(500) avatarUrl?: string;
   @IsOptional() @IsString() @MaxLength(2) countryCode?: string;
   @IsOptional() @IsString() locale?: string;
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(20)
+  @Matches(/^[a-zA-Z0-9_]+$/, { message: 'username must be alphanumeric/underscore' })
+  username?: string;
+  @IsOptional() @IsEmail() email?: string;
 }
 class ChangePasswordDto {
   @IsString() oldPassword: string;

@@ -1,9 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { IdCard, Link2, Lock, Plus, ShieldAlert, X, type LucideIcon } from 'lucide-react';
-import { useState } from 'react';
+import { Check, IdCard, Link2, Lock, Plus, ShieldAlert, UserCog, X, type LucideIcon } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Mascot } from '../components/Mascot';
 import api, { apiError } from '../lib/api';
+import { AVATAR_PRESETS, avatarBg, avatarPresetKey } from '../lib/avatar';
 import { useMe } from '../lib/hooks';
 import { enumLabel } from '../lib/labels';
 import { useAuth } from '../store/auth';
@@ -21,7 +22,7 @@ export default function Profile() {
 
       {/* identity */}
       <div className="card flex flex-wrap items-center gap-6 p-6">
-        <span className="grid h-20 w-20 place-items-center rounded-3xl bg-holo-soft text-night shadow-glow">
+        <span className={`grid h-20 w-20 place-items-center rounded-3xl text-night shadow-glow ${avatarBg(me?.avatarUrl)}`}>
           <Mascot size={52} />
         </span>
         <div className="flex-1">
@@ -37,12 +38,90 @@ export default function Profile() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
+        <Account />
         <Security />
         <Kyc />
         <Limits />
         <Linked />
       </div>
     </div>
+  );
+}
+
+function Account() {
+  const { t } = useTranslation();
+  const { data: me } = useMe();
+  const qc = useQueryClient();
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [avatar, setAvatar] = useState<string | null>(null);
+
+  // Seed local fields once the profile loads (and after a save invalidates it).
+  useEffect(() => {
+    if (me) {
+      setUsername(me.username ?? '');
+      setEmail(me.email ?? '');
+      setAvatar(me.avatarUrl ?? null);
+    }
+  }, [me?.username, me?.email, me?.avatarUrl]);
+
+  const save = async (patch: Record<string, string>, ok = t('profile.saved')) => {
+    try {
+      await api.patch('/users/me', patch);
+      await qc.invalidateQueries({ queryKey: ['me'] });
+      toast.success(ok);
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const patch: Record<string, string> = {};
+    if (username && username !== me?.username) patch.username = username;
+    if (email && email !== me?.email) patch.email = email;
+    if (Object.keys(patch).length === 0) return;
+    save(patch);
+  };
+
+  const pickAvatar = (key: string) => {
+    const token = `preset:${key}`;
+    setAvatar(token);
+    save({ avatarUrl: token });
+  };
+
+  const currentKey = avatarPresetKey(avatar);
+  const emailChanged = !!email && email !== me?.email;
+
+  return (
+    <Section title={t('profile.account')} icon={UserCog}>
+      <form onSubmit={submit} className="space-y-2">
+        <label className="block text-xs text-white/50">{t('profile.username')}</label>
+        <input className="input" value={username} maxLength={20} onChange={(e) => setUsername(e.target.value)} />
+        <label className="block text-xs text-white/50">{t('profile.email')}</label>
+        <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        {emailChanged && <p className="text-xs text-sun/80">{t('profile.emailNote')}</p>}
+        <button className="btn-soft w-full">{t('common.save')}</button>
+      </form>
+      <div>
+        <div className="mb-1.5 text-xs text-white/50">{t('profile.avatar')}</div>
+        <div className="flex flex-wrap gap-2">
+          {AVATAR_PRESETS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => pickAvatar(p.key)}
+              aria-label={p.key}
+              className={`grid h-11 w-11 place-items-center rounded-2xl ${p.class} ring-2 transition ${
+                currentKey === p.key ? 'shadow-glow ring-white' : 'ring-transparent hover:ring-white/40'
+              }`}
+            >
+              {currentKey === p.key && <Check size={16} className="text-night" />}
+            </button>
+          ))}
+        </div>
+      </div>
+    </Section>
   );
 }
 
