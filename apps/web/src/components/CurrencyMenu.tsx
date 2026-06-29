@@ -1,10 +1,14 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Plus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import api, { apiError } from '../lib/api';
 import { fmt, useBalances, useCurrencies } from '../lib/hooks';
 import { currencyLabel } from '../lib/labels';
 import { useUI } from '../store/ui';
+import { toast } from '../store/toast';
+import { Modal } from './Modal';
 
 /**
  * Balance display + account switcher. Tap to open a dropdown: choose Demo/Real
@@ -15,8 +19,25 @@ export function CurrencyMenu() {
   const { mode, setMode, currency, setCurrency } = useUI();
   const { data: currencies } = useCurrencies();
   const { data: balances } = useBalances();
+  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [topupOpen, setTopupOpen] = useState(false);
+  const [claiming, setClaiming] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  const claimDemo = async () => {
+    setClaiming(true);
+    try {
+      await api.post('/wallet/demo/topup');
+      await qc.invalidateQueries({ queryKey: ['balances'] });
+      toast.success(t('demoTopup.done'));
+      setTopupOpen(false);
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setClaiming(false);
+    }
+  };
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -61,22 +82,37 @@ export function CurrencyMenu() {
             </div>
             <div className="max-h-64 overflow-y-auto border-t border-white/10 py-1">
               {list.map((c) => (
-                <button
+                <div
                   key={c.code}
-                  onClick={() => {
-                    setCurrency(c.code);
-                    setOpen(false);
-                  }}
-                  className={`flex w-full items-center justify-between px-3 py-2 text-sm transition hover:bg-white/5 ${
-                    currency === c.code ? 'bg-white/5' : ''
-                  }`}
+                  className={`flex w-full items-center ${currency === c.code ? 'bg-white/5' : ''}`}
                 >
-                  <span className="flex items-center gap-2">
-                    <span className="w-6 text-center text-white/40">{c.symbol || c.code}</span>
-                    <span className="font-medium">{currencyLabel(c)}</span>
-                  </span>
-                  <span className="tabular-nums text-white/70">{fmt(balOf(c.code), 4)}</span>
-                </button>
+                  <button
+                    onClick={() => {
+                      setCurrency(c.code);
+                      setOpen(false);
+                    }}
+                    className="flex flex-1 items-center justify-between px-3 py-2 text-sm transition hover:bg-white/5"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="w-6 text-center text-white/40">{c.symbol || c.code}</span>
+                      <span className="font-medium">{currencyLabel(c)}</span>
+                    </span>
+                    <span className="tabular-nums text-white/70">{fmt(balOf(c.code), 4)}</span>
+                  </button>
+                  {c.type === 'DEMO' && (
+                    <button
+                      onClick={() => {
+                        setOpen(false);
+                        setTopupOpen(true);
+                      }}
+                      className="mr-1.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-lav/20 text-lav transition hover:bg-lav/30"
+                      aria-label={t('demoTopup.add')}
+                      title={t('demoTopup.add')}
+                    >
+                      <Plus size={15} />
+                    </button>
+                  )}
+                </div>
               ))}
               {list.length === 0 && (
                 <div className="px-3 py-3 text-center text-xs text-white/40">{t('common.loading')}</div>
@@ -98,6 +134,13 @@ export function CurrencyMenu() {
       <Link to="/wallet" className="btn-primary !hidden !rounded-xl !px-2 !py-1.5 lg:!inline-flex" aria-label={t('common.deposit')}>
         <Plus size={16} />
       </Link>
+
+      <Modal open={topupOpen} onClose={() => setTopupOpen(false)} title={t('demoTopup.title')}>
+        <p className="text-sm leading-relaxed text-white/70">{t('demoTopup.desc')}</p>
+        <button onClick={claimDemo} disabled={claiming} className="btn-primary mt-4 w-full disabled:opacity-60">
+          {t('demoTopup.claim')}
+        </button>
+      </Modal>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Post, Query } from '@nestjs/common';
 import { TransactionType } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
@@ -15,6 +15,11 @@ export class WalletController {
   @Get('balances')
   balances(@CurrentUser('id') userId: string) {
     return this.wallet.balances(userId);
+  }
+
+  @Post('demo/topup')
+  demoTopup(@CurrentUser('id') userId: string) {
+    return this.wallet.demoTopup(userId);
   }
 
   @Public()

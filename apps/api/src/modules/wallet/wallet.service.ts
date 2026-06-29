@@ -81,6 +81,36 @@ export class WalletService {
     return this.runInTx((tx) => this.apply(tx, input));
   }
 
+  /**
+   * Grant 10,000 demo coins — but only when the player's demo balance is empty.
+   * Demo is for trying games, not an infinite faucet. The balance row is locked
+   * FOR UPDATE before the check so concurrent claims can't both succeed.
+   */
+  async demoTopup(userId: string) {
+    const DEMO = 'DEMO';
+    return this.runInTx(async (tx) => {
+      const bal = await tx.balance.upsert({
+        where: { userId_currency_mode: { userId, currency: DEMO, mode: 'DEMO' } },
+        create: { userId, currency: DEMO, mode: 'DEMO', amount: 0, locked: 0 },
+        update: {},
+      });
+      await tx.$queryRawUnsafe('SELECT 1 FROM "Balance" WHERE id = $1 FOR UPDATE', bal.id);
+      const locked = await tx.balance.findUnique({ where: { id: bal.id } });
+      if (D(locked.amount).gt(0)) throw new BadRequestException('DEMO_BALANCE_NOT_EMPTY');
+
+      await this.apply(tx, {
+        userId,
+        type: 'BONUS',
+        currency: DEMO,
+        mode: 'DEMO',
+        amount: 10000,
+        refType: 'demo-topup',
+        description: 'Demo coins top-up',
+      });
+      return { ok: true, amount: '10000' };
+    });
+  }
+
   /** Current balances for a user (one row per currency × mode). */
   async balances(userId: string) {
     const rows = await this.prisma.balance.findMany({ where: { userId } });

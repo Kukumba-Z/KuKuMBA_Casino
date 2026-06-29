@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { WalletMode } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { isOriginalGame } from '../../../common/utils/games';
 import { D, roundTo } from '../../../common/utils/money';
 import { SettingsService } from '../../../config/settings.service';
 import { NotificationsService } from '../../notifications/notifications.service';
@@ -76,6 +77,8 @@ export class RouletteService {
     if (!cur || !cur.enabled) throw new BadRequestException('CURRENCY_DISABLED');
     if (mode === 'DEMO' && currency !== 'DEMO') throw new BadRequestException('DEMO_MODE_USES_DEMO_CURRENCY');
     if (mode === 'REAL' && currency === 'DEMO') throw new BadRequestException('REAL_MODE_REQUIRES_REAL_CURRENCY');
+    // Demo coins are only for trying our own games — reject demo on provider titles.
+    if (mode === 'DEMO' && !isOriginalGame(game.provider)) throw new BadRequestException('DEMO_ONLY_ORIGINALS');
 
     if (!dto.bets?.length) throw new BadRequestException('NO_BETS');
     if (dto.bets.length > 50) throw new BadRequestException('TOO_MANY_BETS');

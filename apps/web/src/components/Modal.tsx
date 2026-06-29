@@ -1,10 +1,15 @@
 import { X } from 'lucide-react';
 import { useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * Reusable overlay dialog: a bottom sheet on mobile, a centered card on desktop.
  * Closes on backdrop click or Escape. Shared by games (e.g. roulette's
  * info/fairness panel) so we don't reinvent a dialog per feature.
+ *
+ * Rendered through a portal to <body> so `position: fixed` is anchored to the
+ * viewport — otherwise a backdrop-blur ancestor (e.g. the glass header) becomes
+ * the containing block and the dialog gets clipped/mispositioned.
  */
 export function Modal({
   open,
@@ -26,7 +31,7 @@ export function Modal({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[60] grid place-items-end sm:place-items-center" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
@@ -45,6 +50,7 @@ export function Modal({
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
