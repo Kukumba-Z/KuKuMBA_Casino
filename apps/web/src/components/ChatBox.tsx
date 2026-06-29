@@ -2,6 +2,8 @@ import { MessageCircle, Send } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
+import { useVipColors } from '../lib/hooks';
+import { ROLE_TAGS, nameColor } from '../lib/roles';
 import { getSocket } from '../lib/socket';
 import { useAuth } from '../store/auth';
 import { ChatUserPopover } from './ChatUserPopover';
@@ -23,6 +25,7 @@ const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-di
 export function ChatBox({ className = '' }: { className?: string }) {
   const { t } = useTranslation();
   const authed = !!useAuth((s) => s.accessToken);
+  const { data: vipColors } = useVipColors();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [text, setText] = useState('');
   const [sel, setSel] = useState<Msg | null>(null);
@@ -63,20 +66,29 @@ export function ChatBox({ className = '' }: { className?: string }) {
         <MessageCircle size={16} className="text-lav" /> {t('chat.title')}
       </div>
       <div ref={listRef} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-4 py-3">
-        {messages.map((m) => (
-          <div key={m.id} className="text-sm leading-snug">
-            <span className="mr-1 text-[11px] tabular-nums text-white/30">{hhmm(m.createdAt)}</span>
-            <button
-              type="button"
-              onClick={() => setSel(m)}
-              className="font-semibold text-lav hover:underline"
-            >
-              {m.username}
-            </button>
-            <span className="text-white/30">:</span>{' '}
-            <span className="break-words text-white/80">{m.body}</span>
-          </div>
-        ))}
+        {messages.map((m) => {
+          const tag = m.role ? ROLE_TAGS[m.role] : undefined;
+          return (
+            <div key={m.id} className="text-sm leading-snug">
+              <span className="mr-1 text-[11px] tabular-nums text-white/30">{hhmm(m.createdAt)}</span>
+              <button
+                type="button"
+                onClick={() => setSel(m)}
+                className="font-semibold hover:underline"
+                style={{ color: nameColor({ role: m.role, vipLevel: m.vipLevel }, vipColors) }}
+              >
+                {m.username}
+              </button>
+              {tag && (
+                <span className="ml-1 rounded bg-white/10 px-1 py-px align-middle text-[9px] font-bold uppercase tracking-wide text-white/55">
+                  {tag}
+                </span>
+              )}
+              <span className="text-white/30">:</span>{' '}
+              <span className="break-words text-white/80">{m.body}</span>
+            </div>
+          );
+        })}
       </div>
       {authed ? (
         <form onSubmit={send} className="flex gap-2 border-t border-white/10 p-3">

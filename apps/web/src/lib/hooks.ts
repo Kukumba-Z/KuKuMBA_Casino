@@ -94,6 +94,20 @@ export function useCurrencies() {
   });
 }
 
+/** Map of VIP level → colour (from /vip/levels), used to tint usernames in chat. */
+export function useVipColors() {
+  return useQuery<Record<number, string>>({
+    queryKey: ['vip-colors'],
+    queryFn: async () => {
+      const levels = (await api.get('/vip/levels')).data as { level: number; color?: string }[];
+      const map: Record<number, string> = {};
+      for (const l of levels) if (l.color) map[l.level] = l.color;
+      return map;
+    },
+    staleTime: 300_000,
+  });
+}
+
 export function useBalances() {
   const authed = !!useAuth((s) => s.accessToken);
   return useQuery<Balance[]>({

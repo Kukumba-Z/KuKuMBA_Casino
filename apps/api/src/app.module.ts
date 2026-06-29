@@ -18,6 +18,7 @@ import { ChatModule } from './modules/chat/chat.module';
 import { ContentModule } from './modules/content/content.module';
 import { GamesModule } from './modules/games/games.module';
 import { KycModule } from './modules/kyc/kyc.module';
+import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PromocodesModule } from './modules/promocodes/promocodes.module';
@@ -64,6 +65,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
     StatsModule,
     ContentModule,
     AdminModule,
+    MaintenanceModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
