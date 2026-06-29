@@ -8,6 +8,7 @@ import { RouletteWheel, SPIN_MS } from '../components/RouletteWheel';
 import i18n from '../i18n';
 import api, { apiError } from '../lib/api';
 import { fmt, useBalances } from '../lib/hooks';
+import { playRouletteSpin, primeRouletteAudio } from '../lib/sound';
 import { useAuth } from '../store/auth';
 import { useUI } from '../store/ui';
 import { toast } from '../store/toast';
@@ -60,12 +61,16 @@ export default function Roulette() {
     }
     const apiBets = toApi();
     if (!apiBets.length) return;
+    // Unlock audio while we're still inside the click gesture (Safari requirement).
+    primeRouletteAudio();
     setBusy(true);
     try {
       const { data } = await api.post('/games/roulette/play', { currency, mode, bets: apiBets });
       // Start the wheel spinning toward the outcome…
       setResult(data.outcome);
       setSpinId((x) => x + 1);
+      // …with the ticking spin sound in sync with the wheel's deceleration.
+      playRouletteSpin(SPIN_MS);
       clear();
       // …and only reveal the outcome (toast only) + refresh balances once it lands.
       revealRef.current = window.setTimeout(() => {
