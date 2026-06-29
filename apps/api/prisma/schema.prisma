@@ -436,6 +436,32 @@ model GameRound {
   @@index([userId, createdAt])
 }
 
+/// All-time leaderboards (biggest wins by USD, biggest multipliers). A dedicated,
+/// permanently-bounded store (≤500 rows per board) so the top stays durable even
+/// after the source GameRound is pruned by retention — and storage never grows.
+model LeaderboardEntry {
+  id        String   @id @default(cuid())
+  board     String // "WINS" (ranked by usd) | "X" (ranked by coeff)
+  roundId   String
+  gameKey   String
+  gameName  String
+  category  String
+  username  String
+  accountId Int
+  currency  String
+  stake     Decimal  @db.Decimal(38, 18)
+  payout    Decimal  @db.Decimal(38, 18)
+  usd       Float // payout in USD-equivalent — ranking key for WINS
+  coeff     Float // payout / stake — ranking key for X
+  at        DateTime // when the round happened
+  createdAt DateTime @default(now())
+
+  @@unique([board, roundId])
+  @@index([board, usd])
+  @@index([board, coeff])
+  @@index([board, gameKey])
+}
+
 model Bet {
   id         String     @id @default(cuid())
   roundId    String

@@ -4,6 +4,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { tableMaxStake } from '../../../common/utils/bet-limits';
 import { isOriginalGame } from '../../../common/utils/games';
 import { D, roundTo } from '../../../common/utils/money';
+import { LeaderboardsService } from '../../leaderboards/leaderboards.service';
 import { SettingsService } from '../../../config/settings.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { rouletteResult } from '../../provably-fair/provably-fair.crypto';
@@ -32,6 +33,7 @@ export class RouletteService implements OnModuleInit {
     private referrals: ReferralsService,
     private realtime: RealtimeService,
     private notifications: NotificationsService,
+    private leaderboards: LeaderboardsService,
   ) {}
 
   /** Seed the live-bet ticker buffer from the DB so it isn't empty after a restart. */
@@ -223,6 +225,22 @@ export class RouletteService implements OnModuleInit {
       at: Date.now(),
     };
     this.realtime.liveBet(feed);
+    // Fold the round into the durable all-time leaderboards (bounded store) — fire
+    // and forget so it never blocks the bet. Only wins are recorded.
+    void this.leaderboards.record({
+      roundId: result.round.id,
+      gameKey: game.key,
+      gameName: game.name,
+      category: game.category,
+      username: user?.username ?? '',
+      accountId: user?.accountId ?? 0,
+      currency,
+      stake: total.toFixed(),
+      payout: result.totalPayout.toFixed(),
+      usd: result.totalPayout.mul(cur.usdRate).toNumber(),
+      coeff: total.gt(0) ? result.totalPayout.div(total).toNumber() : 0,
+      at: new Date(),
+    });
 
     if (result.vipRes?.leveledUp) {
       this.notifications.notify(userId, {
