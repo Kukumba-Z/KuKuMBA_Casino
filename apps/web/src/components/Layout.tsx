@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, CheckCheck, LogOut, Menu, Shield, User as UserIcon, Wallet } from 'lucide-react';
+import { Bell, CheckCheck, LogOut, Menu, MessagesSquare, Shield, User as UserIcon, Wallet } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -11,6 +11,8 @@ import { getSocket } from '../lib/socket';
 import { usePageTitle } from '../lib/usePageTitle';
 import { ADMIN, bottomTabs, desktopTabs, MORE_ITEMS, NavItem } from '../lib/nav';
 import { useAuth } from '../store/auth';
+import { useChat } from '../store/chat';
+import { ChatDrawer } from './ChatDrawer';
 import { CurrencyMenu } from './CurrencyMenu';
 import { Logo, Mascot } from './Mascot';
 
@@ -267,6 +269,26 @@ function Tab({ item, accent }: { item: NavItem; accent?: boolean }) {
   );
 }
 
+/** Bottom-bar Chat entry — toggles the global chat drawer instead of navigating,
+    so it opens over the current page and the same tap closes it again. */
+function ChatTab() {
+  const { t } = useTranslation();
+  const { open, toggle } = useChat();
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-expanded={open}
+      className={`flex flex-col items-center gap-0.5 py-2 text-[11px] transition ${open ? 'text-white' : 'text-white/55'}`}
+    >
+      <span className={`grid h-7 w-7 place-items-center rounded-xl transition ${open ? 'bg-white/10' : ''}`}>
+        <MessagesSquare size={18} />
+      </span>
+      {t('nav.chat')}
+    </button>
+  );
+}
+
 function BottomNav({ tabs, onMore, moreOpen }: { tabs: NavItem[]; onMore: () => void; moreOpen: boolean }) {
   const { t } = useTranslation();
   const cols = tabs.length + 1;
@@ -276,9 +298,9 @@ function BottomNav({ tabs, onMore, moreOpen }: { tabs: NavItem[]; onMore: () => 
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <div className="mx-auto grid max-w-lg" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-        {tabs.map((tb) => (
-          <Tab key={tb.to} item={tb} accent={tb.accent} />
-        ))}
+        {tabs.map((tb) =>
+          tb.key === 'chat' ? <ChatTab key={tb.to} /> : <Tab key={tb.to} item={tb} accent={tb.accent} />,
+        )}
         <button
           onClick={onMore}
           className={`flex flex-col items-center gap-0.5 py-2 text-[11px] transition ${moreOpen ? 'text-white' : 'text-white/55'}`}
@@ -378,11 +400,14 @@ export default function Layout() {
   const authed = !!useAuth((s) => s.accessToken);
   const raffleActive = useRaffleActive();
   const [moreOpen, setMoreOpen] = useState(false);
+  const chat = useChat();
   const location = useLocation();
   usePageTitle();
 
   useEffect(() => {
     setMoreOpen(false);
+    // Navigating to another tab closes the chat overlay.
+    useChat.getState().close();
   }, [location.pathname]);
 
   const dTabs = desktopTabs({ raffleActive });
@@ -397,6 +422,20 @@ export default function Layout() {
           <nav className="flex items-center gap-1">
             {dTabs.map((n) => {
               const Icon = n.icon;
+              // Chat toggles the drawer (opens over the current page) rather than navigating.
+              if (n.key === 'chat') {
+                return (
+                  <button
+                    key={n.to}
+                    type="button"
+                    onClick={chat.toggle}
+                    aria-expanded={chat.open}
+                    className={`nav-link !py-2 text-sm ${chat.open ? 'nav-link-active' : ''}`}
+                  >
+                    <Icon size={16} /> {t(`nav.${n.key}`)}
+                  </button>
+                );
+              }
               return (
                 <NavLink
                   key={n.to}
@@ -453,6 +492,7 @@ export default function Layout() {
 
       <BottomNav tabs={bTabs} onMore={() => setMoreOpen(true)} moreOpen={moreOpen} />
       <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
+      <ChatDrawer />
       <div className="h-16 lg:hidden" />
     </div>
   );
