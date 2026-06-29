@@ -9,6 +9,7 @@ const HOME_TITLE = 'KuKuMBA — милое онлайн-казино';
 const ROUTE_TITLE: Record<string, string> = {
   '/games': 'nav.games',
   '/roulette': 'nav.roulette',
+  '/top': 'top.title',
   '/bonuses': 'nav.bonuses',
   '/raffles': 'nav.raffles',
   '/profile': 'nav.profile',

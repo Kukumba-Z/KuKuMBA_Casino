@@ -40,12 +40,6 @@ export class RouletteController {
     return this.roulette.liveFeed();
   }
 
-  @Public()
-  @Get('bigwins')
-  bigWins(@Query('limit') limit?: string) {
-    return this.roulette.bigWins(limit ? +limit : 500);
-  }
-
   @Post('play')
   play(@CurrentUser('id') userId: string, @Body() dto: PlayDto) {
     return this.roulette.play(userId, { bets: dto.bets, currency: dto.currency, mode: dto.mode as any });

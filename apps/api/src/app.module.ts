@@ -18,6 +18,7 @@ import { ChatModule } from './modules/chat/chat.module';
 import { ContentModule } from './modules/content/content.module';
 import { GamesModule } from './modules/games/games.module';
 import { KycModule } from './modules/kyc/kyc.module';
+import { LeaderboardsModule } from './modules/leaderboards/leaderboards.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PaymentsModule } from './modules/payments/payments.module';
@@ -63,6 +64,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
     ResponsibleGamingModule,
     ChatModule,
     StatsModule,
+    LeaderboardsModule,
     ContentModule,
     AdminModule,
     MaintenanceModule,

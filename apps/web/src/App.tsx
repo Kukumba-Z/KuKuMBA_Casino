@@ -18,6 +18,7 @@ import Raffles from './pages/Raffles';
 import Roulette from './pages/Roulette';
 import StaticPage from './pages/StaticPage';
 import Support from './pages/Support';
+import Top from './pages/Top';
 import Wallet from './pages/Wallet';
 
 function RequireAuth({ children, admin }: { children: JSX.Element; admin?: boolean }) {
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="/" element={<Lobby />} />
           <Route path="/games" element={<Games />} />
           <Route path="/roulette" element={<Roulette />} />
+          <Route path="/top" element={<Top />} />
           <Route path="/raffles" element={<Raffles />} />
           <Route path="/raffles/:id" element={<RaffleDetail />} />
           {/* Bonuses hub holds cashback / promo / vip / referrals as tabs */}

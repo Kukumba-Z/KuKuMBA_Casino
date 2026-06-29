@@ -215,12 +215,14 @@ export class RouletteService implements OnModuleInit {
       color: result.outcomeColor,
       stake: total.toFixed(),
       payout: result.totalPayout.toFixed(),
+      // USD-equivalent of the payout — lets the all-time "biggest wins" leaderboard
+      // rank fairly across currencies without a per-client rate lookup.
+      usd: result.totalPayout.mul(cur.usdRate).toNumber(),
       currency,
       mode,
       at: Date.now(),
     };
     this.realtime.liveBet(feed);
-    if (result.totalPayout.gt(total.mul(10))) this.realtime.bigWin(feed);
 
     if (result.vipRes?.leveledUp) {
       this.notifications.notify(userId, {
@@ -310,29 +312,5 @@ export class RouletteService implements OnModuleInit {
       mode: r.mode,
       at: r.createdAt.getTime(),
     }));
-  }
-
-  /** Recent BIG wins (payout ≥ 10× stake, real money) — a rolling leaderboard
-   *  feed, newest first, that the lobby tops up live via the 'bigwin' socket. */
-  async bigWins(limit = 500) {
-    const rounds = await this.prisma.gameRound.findMany({
-      where: { mode: 'REAL', totalPayout: { gt: 0 } },
-      orderBy: { createdAt: 'desc' },
-      take: Math.min(limit, 500),
-      include: { user: { select: { username: true, accountId: true } }, game: { select: { name: true } } },
-    });
-    return rounds
-      .filter((r) => r.totalPayout.gte(r.totalStake.mul(10)))
-      .map((r) => ({
-        roundId: r.id,
-        game: r.game.name,
-        username: r.user.username,
-        accountId: r.user.accountId,
-        stake: r.totalStake.toFixed(),
-        payout: r.totalPayout.toFixed(),
-        currency: r.currency,
-        mode: r.mode,
-        at: r.createdAt.getTime(),
-      }));
   }
 }

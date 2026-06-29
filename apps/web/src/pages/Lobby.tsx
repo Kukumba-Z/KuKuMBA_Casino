@@ -4,45 +4,17 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { GameCard, categoryMeta } from '../components/GameCard';
+import { GameIcon } from '../components/GameIcon';
 import { Mascot } from '../components/Mascot';
 import { Switch } from '../components/Switch';
+import { WinHeader, WinRow } from '../components/WinRow';
 import api from '../lib/api';
 import { fmt, useGames } from '../lib/hooks';
 import { getSocket } from '../lib/socket';
 import { useUI } from '../store/ui';
 
-/** One row of a live/big-win feed: "<game> · nick · STAKE → PAYOUT". */
-function FeedRow({ f }: { f: any }) {
-  const win = Number(f.payout) > 0;
-  return (
-    <div className="flex animate-fadeup items-center justify-between gap-2 rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
-      <div className="flex min-w-0 items-center gap-2">
-        {f.game && <span className="chip max-w-[92px] shrink-0 truncate !px-2 !py-0.5 text-[10px] text-white/55">{f.game}</span>}
-        <span className="truncate font-medium">{f.username}</span>
-      </div>
-      <div className="flex shrink-0 items-center gap-1 tabular-nums">
-        <span className="text-white/45">{fmt(f.stake, 2)}</span>
-        <ArrowRight size={13} className="text-white/30" />
-        <span className={`font-semibold ${win ? 'text-mint' : 'text-white/40'}`}>{fmt(f.payout, 2)}</span>
-        <span className="text-white/40">{f.currency}</span>
-      </div>
-    </div>
-  );
-}
-
 // Shared 5-column template so the header and rows line up: game · player · stake · coeff · win.
 const LIVE_GRID = 'grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto_auto_auto]';
-
-/** Small game tile for a live-bet row — gradient + category icon, echoing the game card. */
-function LiveGameIcon({ category }: { category?: string }) {
-  const meta = categoryMeta(category ?? 'ROULETTE');
-  const Icon = meta.icon;
-  return (
-    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br ${meta.grad}`}>
-      <Icon size={15} className="text-white/85" />
-    </span>
-  );
-}
 
 /** One live-bet row: game · player(nick) · stake · coeff · win. */
 function LiveBetRow({ f }: { f: any }) {
@@ -54,7 +26,7 @@ function LiveBetRow({ f }: { f: any }) {
   return (
     <div className={`grid animate-fadeup ${LIVE_GRID} items-center gap-2 rounded-xl bg-white/[0.03] px-2.5 py-2 text-sm`}>
       <div className="flex min-w-0 items-center gap-2">
-        <LiveGameIcon category={f.category} />
+        <GameIcon category={f.category} />
         <span className="truncate text-white/70">{t(meta.labelKey)}</span>
       </div>
       <span className="truncate font-medium">{f.username}</span>
@@ -174,11 +146,9 @@ export default function Lobby() {
         <Stat label={t('nav.games')} value={games?.length ?? 0} accent="text-sun" />
       </section>
 
-      {/* Live activity — compact two-up */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <LiveBets />
-        </div>
+      {/* Live activity + all-time leaders — full-width, stacked */}
+      <div className="space-y-6">
+        <LiveBets />
         <BiggestWins />
       </div>
 
@@ -201,28 +171,48 @@ function TrustItem({ icon: Icon, label, accent }: { icon: any; label: string; ac
   );
 }
 
+/** Lobby all-time leaderboard: the 10 biggest wins ever (USD-ranked), live, with
+ *  an 11th "see more" row opening the full leaderboards page. */
 function BiggestWins() {
   const { t } = useTranslation();
   const [wins, setWins] = useState<any[]>([]);
   useEffect(() => {
-    api.get('/games/roulette/bigwins?limit=500').then((r) => setWins(r.data)).catch(() => {});
+    api.get('/leaderboards/wins?limit=10').then((r) => setWins(r.data)).catch(() => {});
     const s = getSocket();
-    // New big wins overshadow old ones; keep the latest 500 in memory.
-    const onBigWin = (w: any) => { if (w.mode !== 'DEMO') setWins((prev) => [w, ...prev].slice(0, 500)); };
-    s.on('bigwin', onBigWin);
-    return () => { s.off('bigwin', onBigWin); };
+    // Fold each new real-money win into the top-10, ranked by USD value.
+    const onBet = (b: any) => {
+      if (b.mode === 'DEMO' || !(Number(b.payout) > 0)) return;
+      setWins((prev) => {
+        if (prev.some((w) => w.roundId === b.roundId)) return prev;
+        return [...prev, b].sort((a, c) => Number(c.usd) - Number(a.usd)).slice(0, 10);
+      });
+    };
+    s.on('bet', onBet);
+    return () => { s.off('bet', onBet); };
   }, []);
   return (
-    <div className="card p-5">
+    <div className="card p-4 sm:p-5">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-bold">
         <Trophy size={18} className="text-sun" /> {t('lobby.biggestWins')}
       </h2>
-      <div className="max-h-96 space-y-1.5 overflow-y-auto pr-1">
-        {wins.length === 0 && <div className="py-6 text-center text-sm text-white/40">{t('common.empty')}</div>}
-        {wins.map((w) => (
-          <FeedRow key={w.roundId} f={w} />
-        ))}
-      </div>
+      {wins.length === 0 ? (
+        <div className="py-6 text-center text-sm text-white/40">{t('common.empty')}</div>
+      ) : (
+        <>
+          <WinHeader />
+          <div className="space-y-1.5">
+            {wins.slice(0, 10).map((w) => (
+              <WinRow key={w.roundId} f={w} />
+            ))}
+          </div>
+        </>
+      )}
+      <Link
+        to="/top"
+        className="mt-2 flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm font-semibold text-lav transition hover:bg-white/[0.06]"
+      >
+        {t('lobby.seeMore')} <ArrowRight size={15} />
+      </Link>
     </div>
   );
 }

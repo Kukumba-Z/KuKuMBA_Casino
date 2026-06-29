@@ -67,9 +67,6 @@ export class RealtimeService {
   chatMessage(payload: any) {
     this.emit('chat', payload);
   }
-  bigWin(payload: any) {
-    this.emit('bigwin', payload);
-  }
   raffleUpdate(payload: any) {
     this.emit('raffle', payload);
   }
