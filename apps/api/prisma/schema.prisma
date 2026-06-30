@@ -751,6 +751,9 @@ model SupportTicket {
   status       TicketStatus   @default(OPEN)
   priority     TicketPriority @default(NORMAL)
   assignedToId String?
+  // When the ticket was last moved to CLOSED — drives attachment retention
+  // (files are pruned N days after closing; the ticket record is kept).
+  closedAt     DateTime?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 

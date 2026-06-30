@@ -35,5 +35,6 @@ pnpm-debug.log*
 # test/coverage
 coverage/
 
-# uploads (KYC docs etc. — local dev)
+# uploads (KYC docs, support-ticket attachments — local dev)
 apps/api/uploads/
+/uploads/

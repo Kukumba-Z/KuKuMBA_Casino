@@ -36,6 +36,11 @@ services:
       # This overrides any DATABASE_URL that may sit in .env.production.
       DATABASE_URL: postgresql://${POSTGRES_USER:-kukumba}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-kukumba}?schema=public
       REDIS_URL: redis://redis:6379
+      # Where uploaded ticket attachments live — backed by the "uploads" volume
+      # below so files persist across container rebuilds/redeploys.
+      UPLOADS_DIR: /data/uploads
+    volumes:
+      - uploads:/data/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -72,3 +77,4 @@ services:
 
 volumes:
   pgdata:
+  uploads:

@@ -1,9 +1,16 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { TicketPriority } from '@prisma/client';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { TicketPriority, TicketStatus } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
-const STAFF = ['ADMIN', 'SUPPORT'];
+// Roles that may read/answer any ticket and move its status. MODERATOR also
+// holds tickets.manage, so it's included for parity with the admin surface.
+const STAFF = ['ADMIN', 'SUPPORT', 'MODERATOR'];
 
 const FAQ = [
   {
@@ -50,6 +57,7 @@ export class SupportService {
   createTicket(
     userId: string,
     dto: { subject: string; category?: string; message: string; priority?: TicketPriority },
+    attachmentUrl?: string,
   ) {
     return this.prisma.supportTicket.create({
       data: {
@@ -58,7 +66,9 @@ export class SupportService {
         category: dto.category ?? 'general',
         priority: dto.priority ?? 'NORMAL',
         status: 'OPEN',
-        messages: { create: { authorId: userId, authorRole: 'USER', body: dto.message } },
+        messages: {
+          create: { authorId: userId, authorRole: 'USER', body: dto.message, attachmentUrl: attachmentUrl ?? null },
+        },
       },
       include: { messages: true },
     });
@@ -75,25 +85,49 @@ export class SupportService {
   async getTicket(user: { id: string; role: string }, id: string) {
     const t = await this.prisma.supportTicket.findUnique({
       where: { id },
-      include: { messages: { orderBy: { createdAt: 'asc' } } },
+      include: {
+        messages: { orderBy: { createdAt: 'asc' } },
+        user: { select: { username: true, accountId: true } },
+      },
     });
     if (!t) throw new NotFoundException('TICKET_NOT_FOUND');
     if (t.userId !== user.id && !STAFF.includes(user.role)) throw new ForbiddenException();
     return t;
   }
 
-  async reply(user: { id: string; role: string }, id: string, body: string) {
+  /** Staff-only status change. Stamps closedAt on CLOSE (drives file retention). */
+  async setStatus(user: { id: string; role: string }, id: string, status: TicketStatus) {
+    if (!STAFF.includes(user.role)) throw new ForbiddenException();
+    if (!Object.values(TicketStatus).includes(status)) throw new BadRequestException('INVALID_STATUS');
+    const t = await this.prisma.supportTicket.findUnique({ where: { id } });
+    if (!t) throw new NotFoundException('TICKET_NOT_FOUND');
+    return this.prisma.supportTicket.update({
+      where: { id },
+      data: { status, closedAt: status === 'CLOSED' ? new Date() : null },
+    });
+  }
+
+  async reply(user: { id: string; role: string }, id: string, body?: string, attachmentUrl?: string) {
     const t = await this.prisma.supportTicket.findUnique({ where: { id } });
     if (!t) throw new NotFoundException('TICKET_NOT_FOUND');
     const isStaff = STAFF.includes(user.role);
     if (t.userId !== user.id && !isStaff) throw new ForbiddenException();
+    if (!body?.trim() && !attachmentUrl) throw new BadRequestException('EMPTY_REPLY');
 
     const msg = await this.prisma.supportMessage.create({
-      data: { ticketId: id, authorId: user.id, authorRole: user.role as any, body },
+      data: {
+        ticketId: id,
+        authorId: user.id,
+        authorRole: user.role as any,
+        body: body?.trim() ?? '',
+        attachmentUrl: attachmentUrl ?? null,
+      },
     });
+    // A reply is activity, so the ticket is no longer "closed": clear closedAt
+    // (and reset the attachment-retention clock) alongside the status bump.
     await this.prisma.supportTicket.update({
       where: { id },
-      data: { status: isStaff ? 'ANSWERED' : 'PENDING' },
+      data: { status: isStaff ? 'ANSWERED' : 'PENDING', closedAt: null },
     });
     if (isStaff && t.userId !== user.id) {
       await this.notifications.notify(t.userId, {

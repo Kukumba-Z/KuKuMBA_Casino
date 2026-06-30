@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Modal } from '../components/Modal';
+import { TicketThread } from '../components/TicketThread';
 import i18n from '../i18n';
 import api, { apiError } from '../lib/api';
 import { can, fmt, useAdminMe, useCurrencies, type AdminMe } from '../lib/hooks';
@@ -691,18 +693,30 @@ function Broadcast() {
 }
 
 function Tickets() {
+  const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['adm-tickets'], queryFn: async () => (await api.get('/admin/tickets')).data });
+  const [openId, setOpenId] = useState<string | null>(null);
   return (
-    <Table
-      rows={data ?? []}
-      cols={['user', 'subject', 'status', 'updated']}
-      render={(t: any) => [
-        `${t.user?.username} #${t.user?.accountId}`,
-        t.subject,
-        t.status,
-        new Date(t.updatedAt).toLocaleString(),
-      ]}
-    />
+    <>
+      <Table
+        rows={data ?? []}
+        cols={['user', 'subject', 'status', 'updated', '']}
+        render={(t: any) => [
+          `${t.user?.username} #${t.user?.accountId}`,
+          t.subject,
+          enumLabel('ticketStatus', t.status),
+          new Date(t.updatedAt).toLocaleString(),
+          <button key="o" onClick={() => setOpenId(t.id)} className="btn-soft px-3 py-1.5 text-xs">
+            {i18n.t('support.open')}
+          </button>,
+        ]}
+      />
+      <Modal open={!!openId} onClose={() => setOpenId(null)} title={i18n.t('support.title')}>
+        {openId && (
+          <TicketThread ticketId={openId} base="/admin" admin onChanged={() => qc.invalidateQueries({ queryKey: ['adm-tickets'] })} />
+        )}
+      </Modal>
+    </>
   );
 }
 

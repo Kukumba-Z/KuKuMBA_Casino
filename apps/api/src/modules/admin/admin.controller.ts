@@ -1,14 +1,33 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { SupportService } from '../support/support.service';
+import { multerOptionsFor, type UploadedFileLike } from '../uploads/uploads.config';
+import { UploadsService } from '../uploads/uploads.service';
 import { AdminService } from './admin.service';
 
 @Roles('ADMIN', 'SUPPORT', 'MODERATOR')
 @Controller('admin')
 export class AdminController {
-  constructor(private admin: AdminService) {}
+  constructor(
+    private admin: AdminService,
+    private support: SupportService,
+    private uploads: UploadsService,
+  ) {}
 
   // Current operator — role + the capabilities they may use (gates the SPA).
   @Get('me')
@@ -243,6 +262,32 @@ export class AdminController {
   @RequirePermission('tickets.manage')
   tickets(@Query('status') status?: string) {
     return this.admin.listTickets(status);
+  }
+
+  // Full thread for the detail view (delegates to the shared SupportService).
+  @Get('tickets/:id')
+  @RequirePermission('tickets.manage')
+  ticket(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.support.getTicket(user, id);
+  }
+
+  @Post('tickets/:id/reply')
+  @RequirePermission('tickets.manage')
+  @UseInterceptors(FileInterceptor('file', multerOptionsFor('support')))
+  replyTicket(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() body: { body?: string },
+    @UploadedFile() file?: UploadedFileLike,
+  ) {
+    const url = file ? this.uploads.publicUrl('support', file.filename) : undefined;
+    return this.support.reply(user, id, body?.body, url);
+  }
+
+  @Patch('tickets/:id/status')
+  @RequirePermission('tickets.manage')
+  setTicketStatus(@CurrentUser() user: any, @Param('id') id: string, @Body() body: { status: any }) {
+    return this.support.setStatus(user, id, body?.status);
   }
 
   @Get('chat')

@@ -30,6 +30,7 @@ import { ReferralsModule } from './modules/referrals/referrals.module';
 import { ResponsibleGamingModule } from './modules/responsible-gaming/responsible-gaming.module';
 import { StatsModule } from './modules/stats/stats.module';
 import { SupportModule } from './modules/support/support.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
 import { UsersModule } from './modules/users/users.module';
 import { VipModule } from './modules/vip/vip.module';
 import { WalletModule } from './modules/wallet/wallet.module';
@@ -51,6 +52,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
     ReferralsModule,
     PaymentsModule,
     RafflesModule,
+    UploadsModule,
 
     // feature modules
     AuthModule,

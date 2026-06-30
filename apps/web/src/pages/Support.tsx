@@ -1,7 +1,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { LifeBuoy } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronRight, LifeBuoy, Paperclip, X } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Modal } from '../components/Modal';
+import { TicketThread } from '../components/TicketThread';
 import api, { apiError } from '../lib/api';
 import { enumLabel } from '../lib/labels';
 import { useAuth } from '../store/auth';
@@ -15,15 +17,24 @@ export default function Support() {
   const { data: faq } = useQuery({ queryKey: ['faq'], queryFn: async () => (await api.get('/support/faq')).data });
   const { data: tickets } = useQuery({ queryKey: ['tickets'], enabled: authed, queryFn: async () => (await api.get('/support/tickets')).data });
 
+  const fileRef = useRef<HTMLInputElement>(null);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/support/tickets', { subject, message });
+      const fd = new FormData();
+      fd.append('subject', subject);
+      fd.append('message', message);
+      if (file) fd.append('file', file);
+      await api.post('/support/tickets', fd);
       setSubject('');
       setMessage('');
+      setFile(null);
+      if (fileRef.current) fileRef.current.value = '';
       toast.success(t('support.ticketCreated'));
       qc.invalidateQueries({ queryKey: ['tickets'] });
     } catch (e) {
@@ -56,6 +67,28 @@ export default function Support() {
             <form onSubmit={create} className="space-y-3">
               <input className="input" placeholder={t('support.subject')} value={subject} onChange={(e) => setSubject(e.target.value)} required />
               <textarea className="input min-h-28" placeholder={t('support.message')} value={message} onChange={(e) => setMessage(e.target.value)} required />
+              <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => fileRef.current?.click()} className="btn-ghost px-3 py-2">
+                  <Paperclip size={16} /> {t('support.attachPhotoVideo')}
+                </button>
+                {file && (
+                  <span className="flex min-w-0 items-center gap-1 text-xs text-white/60">
+                    <span className="truncate">{file.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFile(null);
+                        if (fileRef.current) fileRef.current.value = '';
+                      }}
+                      className="text-white/40 hover:text-white"
+                      aria-label={t('common.remove')}
+                    >
+                      <X size={14} />
+                    </button>
+                  </span>
+                )}
+              </div>
               <button className="btn-primary">{t('common.submit')}</button>
             </form>
           </div>
@@ -66,15 +99,28 @@ export default function Support() {
             <h2 className="mb-3 text-lg font-bold">{t('support.tickets')}</h2>
             <div className="space-y-2">
               {tickets.map((tk: any) => (
-                <div key={tk.id} className="flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
-                  <span>{tk.subject}</span>
-                  <span className="chip">{enumLabel('ticketStatus', tk.status)}</span>
-                </div>
+                <button
+                  key={tk.id}
+                  onClick={() => setOpenId(tk.id)}
+                  className="flex w-full items-center justify-between gap-2 rounded-xl bg-white/[0.03] px-3 py-2 text-left text-sm transition hover:bg-white/[0.06]"
+                >
+                  <span className="truncate">{tk.subject}</span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="chip">{enumLabel('ticketStatus', tk.status)}</span>
+                    <ChevronRight size={16} className="text-white/40" />
+                  </span>
+                </button>
               ))}
             </div>
           </div>
         )}
       </div>
+
+      <Modal open={!!openId} onClose={() => setOpenId(null)} title={t('support.title')}>
+        {openId && (
+          <TicketThread ticketId={openId} base="/support" onChanged={() => qc.invalidateQueries({ queryKey: ['tickets'] })} />
+        )}
+      </Modal>
     </div>
   );
 }
