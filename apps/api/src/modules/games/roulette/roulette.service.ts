@@ -226,23 +226,26 @@ export class RouletteService implements OnModuleInit {
       mode,
       at: Date.now(),
     };
-    this.realtime.liveBet(feed);
-    // Fold the round into the durable all-time leaderboards (bounded store) — fire
-    // and forget so it never blocks the bet. Only wins are recorded.
-    void this.leaderboards.record({
-      roundId: result.round.id,
-      gameKey: game.key,
-      gameName: game.name,
-      category: game.category,
-      username: user?.username ?? '',
-      accountId: user?.accountId ?? 0,
-      currency,
-      stake: total.toFixed(),
-      payout: result.totalPayout.toFixed(),
-      usd: result.totalPayout.mul(cur.usdRate).toNumber(),
-      coeff: total.gt(0) ? result.totalPayout.div(total).toNumber() : 0,
-      at: new Date(),
-    });
+    // The public ticker and the all-time leaderboards are real-money only —
+    // demo play is just test chips and stays private. Fire-and-forget so neither
+    // ever blocks the bet. (Only wins are recorded on the leaderboards.)
+    if (mode === 'REAL') {
+      this.realtime.liveBet(feed);
+      void this.leaderboards.record({
+        roundId: result.round.id,
+        gameKey: game.key,
+        gameName: game.name,
+        category: game.category,
+        username: user?.username ?? '',
+        accountId: user?.accountId ?? 0,
+        currency,
+        stake: total.toFixed(),
+        payout: result.totalPayout.toFixed(),
+        usd: result.totalPayout.mul(cur.usdRate).toNumber(),
+        coeff: total.gt(0) ? result.totalPayout.div(total).toNumber() : 0,
+        at: new Date(),
+      });
+    }
     // Per-round bookkeeping: persistent counters, lifetime stats, history prune.
     void this.stats.recordRound({ userId, bets: dto.bets.length, stake: total.toFixed() });
 
@@ -295,7 +298,8 @@ export class RouletteService implements OnModuleInit {
 
   history(userId: string, limit = 30) {
     return this.prisma.gameRound.findMany({
-      where: { userId },
+      // Real-money rounds only — demo play is test chips, not real history.
+      where: { userId, mode: 'REAL' },
       include: { bets: true },
       orderBy: { createdAt: 'desc' },
       take: Math.min(limit, 100),

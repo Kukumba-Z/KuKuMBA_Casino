@@ -53,10 +53,25 @@ export class LeaderboardsService implements OnModuleInit {
   /** One-time backfill from existing rounds so the boards aren't empty on first deploy. */
   async onModuleInit() {
     try {
+      await this.purgeDemoEntries();
       if ((await this.prisma.leaderboardEntry.count()) === 0) await this.backfill();
     } catch (e) {
       this.log.warn(`leaderboard backfill skipped: ${String(e)}`);
     }
+  }
+
+  /**
+   * Drop any leaderboard rows tied to a demo round. Demo wins used to be recorded
+   * before the real-money guard; this clears that legacy data. Cheap & idempotent
+   * (the boards are capped, so the table is tiny).
+   */
+  private async purgeDemoEntries(): Promise<void> {
+    const removed = await this.prisma.$executeRawUnsafe(
+      `DELETE FROM "LeaderboardEntry" le
+         USING "GameRound" gr
+        WHERE gr."id" = le."roundId" AND gr."mode" = 'DEMO'`,
+    );
+    if (removed) this.log.log(`leaderboard: purged ${removed} demo entries`);
   }
 
   /** Biggest wins of all time (ranked by USD-equivalent payout). */

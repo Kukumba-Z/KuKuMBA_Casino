@@ -3,45 +3,18 @@ import { ArrowRight, Gift, LayoutGrid, ShieldCheck, Sparkles, Trophy, Zap } from
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { GameCard, categoryMeta } from '../components/GameCard';
-import { GameIcon } from '../components/GameIcon';
+import { GameCard } from '../components/GameCard';
 import { Mascot } from '../components/Mascot';
 import { Switch } from '../components/Switch';
-import { WinHeader, WinRow } from '../components/WinRow';
+import { BetRow, WinRow } from '../components/WinRow';
 import api from '../lib/api';
-import { fmt, useGames } from '../lib/hooks';
+import { useGames } from '../lib/hooks';
 import { getSocket } from '../lib/socket';
 import { useAuth } from '../store/auth';
 import { useUI } from '../store/ui';
 
-// Shared 5-column template so the header and rows line up: game · player · stake · coeff · win.
-const LIVE_GRID = 'grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto_auto_auto]';
-
-/** One live-bet row: game · player(nick) · stake · coeff · win. */
-function LiveBetRow({ f }: { f: any }) {
-  const { t } = useTranslation();
-  const win = Number(f.payout) > 0;
-  const stake = Number(f.stake);
-  const coeff = stake > 0 ? Number(f.payout) / stake : 0;
-  const meta = categoryMeta(f.category ?? 'ROULETTE');
-  return (
-    <div className={`grid animate-fadeup ${LIVE_GRID} items-center gap-2 rounded-xl bg-white/[0.03] px-2.5 py-2 text-sm`}>
-      <div className="flex min-w-0 items-center gap-2">
-        <GameIcon category={f.category} />
-        <span className="truncate text-white/70">{t(meta.labelKey)}</span>
-      </div>
-      <span className="truncate font-medium">{f.username}</span>
-      <span className="text-right tabular-nums text-white/55">{fmt(f.stake, 2)}</span>
-      <span className="text-right tabular-nums text-white/45">{coeff.toFixed(2)}×</span>
-      <span className={`text-right tabular-nums font-semibold ${win ? 'text-mint' : 'text-white/35'}`}>
-        {fmt(f.payout, 2)}
-        <span className="ml-1 text-[10px] font-normal text-white/35">{f.currency}</span>
-      </span>
-    </div>
-  );
-}
-
-/** Lobby live-bet ticker: last 15, real-time with a smooth fade-in, toggleable. */
+/** Lobby live-bet ticker: last 15 real-money rounds, real-time with a smooth
+ *  fade-in, toggleable. When off it collapses to just the title + switch. */
 function LiveBets() {
   const { t } = useTranslation();
   const liveBets = useUI((s) => s.liveBets);
@@ -49,39 +22,28 @@ function LiveBets() {
   const [bets, setBets] = useState<any[]>([]);
   useEffect(() => {
     if (!liveBets) return; // off → don't fetch or subscribe
-    api.get('/games/roulette/live').then((r) => setBets(r.data)).catch(() => {});
+    // Real-money action only — demo play is private (the server excludes it too).
+    api.get('/games/roulette/live').then((r) => setBets((r.data ?? []).filter((b: any) => b.mode !== 'DEMO'))).catch(() => {});
     const s = getSocket();
-    // Only real-money action in the public feed — demo play stays private. Keep last 15.
     const onBet = (b: any) => { if (b.mode !== 'DEMO') setBets((prev) => [b, ...prev].slice(0, 15)); };
     s.on('bet', onBet);
     return () => { s.off('bet', onBet); };
   }, [liveBets]);
   return (
     <div className="card p-4 sm:p-5">
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <div className={`flex items-center justify-between gap-2 ${liveBets ? 'mb-4' : ''}`}>
         <h2 className="flex items-center gap-2 text-lg font-bold">
           <span className={`h-2 w-2 rounded-full bg-mint ${liveBets ? 'animate-pulse' : 'opacity-40'}`} /> {t('lobby.liveBets')}
         </h2>
         <Switch checked={liveBets} onChange={toggleLiveBets} label={t('lobby.liveBets')} />
       </div>
-      {!liveBets ? (
-        <div className="py-8 text-center text-sm text-white/40">{t('lobby.liveOff')}</div>
-      ) : (
-        <>
-          <div className={`mb-1.5 grid ${LIVE_GRID} items-center gap-2 px-2.5 text-[11px] uppercase tracking-wide text-white/35`}>
-            <span>{t('lobby.colGame')}</span>
-            <span>{t('lobby.colPlayer')}</span>
-            <span className="text-right">{t('lobby.colStake')}</span>
-            <span className="text-right">{t('lobby.colCoeff')}</span>
-            <span className="text-right">{t('lobby.colWin')}</span>
-          </div>
-          <div className="max-h-96 space-y-1.5 overflow-y-auto pr-1">
-            {bets.length === 0 && <div className="py-6 text-center text-sm text-white/40">{t('common.empty')}</div>}
-            {bets.map((b) => (
-              <LiveBetRow key={b.roundId} f={b} />
-            ))}
-          </div>
-        </>
+      {liveBets && (
+        <div className="max-h-96 space-y-1.5 overflow-y-auto pr-1">
+          {bets.length === 0 && <div className="py-6 text-center text-sm text-white/40">{t('common.empty')}</div>}
+          {bets.map((b) => (
+            <BetRow key={b.roundId} f={b} />
+          ))}
+        </div>
       )}
     </div>
   );
@@ -235,14 +197,11 @@ function BiggestWins() {
       {wins.length === 0 ? (
         <div className="py-6 text-center text-sm text-white/40">{t('common.empty')}</div>
       ) : (
-        <>
-          <WinHeader />
-          <div className="space-y-1.5">
-            {wins.slice(0, 10).map((w) => (
-              <WinRow key={w.roundId} f={w} />
-            ))}
-          </div>
-        </>
+        <div className="space-y-1.5">
+          {wins.slice(0, 10).map((w) => (
+            <WinRow key={w.roundId} f={w} />
+          ))}
+        </div>
       )}
       <Link
         to="/top"

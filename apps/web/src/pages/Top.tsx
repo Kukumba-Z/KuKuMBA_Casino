@@ -2,7 +2,7 @@ import { Trophy, Zap } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isOriginal } from '../components/GameCard';
-import { WinHeader, WinRow } from '../components/WinRow';
+import { WinRow } from '../components/WinRow';
 import api from '../lib/api';
 import { useGames } from '../lib/hooks';
 import { getSocket } from '../lib/socket';
@@ -70,14 +70,11 @@ export default function Top() {
         {rows.length === 0 ? (
           <div className="py-10 text-center text-sm text-white/40">{t('common.empty')}</div>
         ) : (
-          <>
-            <WinHeader />
-            <div className="max-h-[72vh] space-y-1.5 overflow-y-auto pr-1">
-              {rows.map((w) => (
-                <WinRow key={w.roundId} f={w} />
-              ))}
-            </div>
-          </>
+          <div className="max-h-[72vh] space-y-1.5 overflow-y-auto pr-1">
+            {rows.map((w) => (
+              <WinRow key={w.roundId} f={w} />
+            ))}
+          </div>
         )}
       </div>
     </div>

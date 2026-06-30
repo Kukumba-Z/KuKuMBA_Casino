@@ -3,7 +3,7 @@ import { Check, History, IdCard, Link2, Lock, Plus, ShieldAlert, UserCog, X, typ
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isOriginal } from '../components/GameCard';
-import { HistoryHeader, HistoryRow } from '../components/HistoryRow';
+import { HistoryRow } from '../components/HistoryRow';
 import { Mascot } from '../components/Mascot';
 import api, { apiError } from '../lib/api';
 import { AVATAR_PRESETS, avatarBg, avatarPresetKey } from '../lib/avatar';
@@ -87,7 +87,6 @@ function GameHistory() {
         <div className="py-8 text-center text-sm text-white/40">{t('common.empty')}</div>
       ) : (
         <>
-          <HistoryHeader />
           <div className="space-y-1.5">
             {rows.map((r) => (
               <HistoryRow key={r.roundId} f={r} />
