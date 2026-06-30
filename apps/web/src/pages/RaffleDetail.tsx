@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarClock, Coins, Dices, ShieldCheck, Ticket, Users } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import RaffleDraw from '../components/RaffleDraw';
@@ -27,11 +27,22 @@ export default function RaffleDetail() {
     queryFn: async () => (await api.get(`/raffles/${id}/participants`)).data,
   });
 
-  // Live updates: the cron may draw this raffle while the page is open.
+  // Live, synchronized draw: when the server starts a draw it pushes the winners +
+  // participant handles so every open client spins the same reel at the same time.
+  // Winners/notifications only land once the reel finishes (see the API service).
+  const [live, setLive] = useState<{ winners: any[]; participants: any[] } | null>(null);
   useEffect(() => {
     const s = getSocket();
     const handler = (p: any) => {
-      if (p?.raffleId === id) qc.invalidateQueries({ queryKey: ['raffle', id] });
+      if (p?.raffleId !== id) return;
+      if (p.phase === 'draw' && Array.isArray(p.winners)) {
+        setLive({ winners: p.winners, participants: p.participants ?? [] });
+        qc.invalidateQueries({ queryKey: ['raffle', id] });
+      } else {
+        // Draw finished, a participant joined, or it was cancelled — just refresh.
+        qc.invalidateQueries({ queryKey: ['raffle', id] });
+        qc.invalidateQueries({ queryKey: ['raffle-parts', id] });
+      }
     };
     s.on('raffle', handler);
     return () => {
@@ -105,7 +116,7 @@ export default function RaffleDetail() {
                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-1.5">
                   <Coins size={14} className="text-sun" />
                   {r.minDeposit && Number(r.minDeposit) > 0
-                    ? `${t('raffles.minDeposit')} ${fmt(r.minDeposit)} ${r.currency}`
+                    ? `${t('raffles.minDeposit')} $${fmt(r.minDeposit)}`
                     : t('raffles.requiresDeposit')}
                   {r.depositWithinDays ? ` · ${t('raffles.depositWindow')} ${r.depositWithinDays} ${t('raffles.days')}` : ''}
                 </span>
@@ -127,10 +138,20 @@ export default function RaffleDetail() {
         )}
       </div>
 
-      {/* Provably-fair draw reel — plays through to the real winner(s). */}
-      {r.status === 'COMPLETED' && r.winners?.length > 0 && (
-        <RaffleDraw participants={parts ?? []} winners={r.winners} currency={r.currency} />
-      )}
+      {/* Provably-fair draw reel. Live runs spin in real time for everyone watching;
+          an already-completed raffle just shows its landed result (no re-spin). */}
+      {live ? (
+        <RaffleDraw participants={live.participants} winners={live.winners} currency={r.currency} autoPlay />
+      ) : r.status === 'COMPLETED' && r.winners?.length > 0 ? (
+        <RaffleDraw participants={parts ?? []} winners={r.winners} currency={r.currency} autoPlay={false} />
+      ) : r.status === 'DRAWING' ? (
+        <div className="card p-6 text-center">
+          <div className="flex items-center justify-center gap-2 font-bold">
+            <Dices size={18} className="animate-pulse text-bubble" /> {t('raffles.drawing')}
+          </div>
+          <div className="mt-1 text-sm text-white/50">{t('raffles.drawingSub')}</div>
+        </div>
+      ) : null}
 
       <div className="card p-6 text-xs text-white/50">
         <div className="mb-2 flex items-center gap-1.5 font-semibold text-white/70">

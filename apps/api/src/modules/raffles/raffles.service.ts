@@ -16,6 +16,9 @@ import { WalletService } from '../wallet/wallet.service';
 /** Allowed qualifying-deposit windows (days). Kept here so the API and the admin UI agree. */
 export const DEPOSIT_WINDOWS = [1, 7, 14, 30] as const;
 
+/** How many completed raffles we keep in storage; older ones are pruned. */
+export const COMPLETED_KEEP = 20;
+
 export interface RaffleConditionsDto {
   requiresDeposit?: boolean;
   minDeposit?: string | null;
@@ -60,6 +63,8 @@ export interface UpdateRaffleDto extends RaffleConditionsDto {
 @Injectable()
 export class RafflesService {
   private readonly log = new Logger(RafflesService.name);
+  /** Pending reveal timers, so a draw flips to COMPLETED only after the reel lands. */
+  private readonly finalizeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(
     private prisma: PrismaService,
@@ -69,13 +74,21 @@ export class RafflesService {
   ) {}
 
   async list() {
-    const raffles = await this.prisma.raffle.findMany({
-      where: { status: { in: ['OPEN', 'DRAWING', 'COMPLETED'] } },
-      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
-      take: 50,
-      include: { _count: { select: { entries: true } }, winners: true },
-    });
-    return raffles.map((r) => this.publicView(r));
+    // Active raffles always show; completed ones are capped at the newest COMPLETED_KEEP.
+    const [active, completed] = await Promise.all([
+      this.prisma.raffle.findMany({
+        where: { status: { in: ['OPEN', 'DRAWING'] } },
+        orderBy: { createdAt: 'desc' },
+        include: { _count: { select: { entries: true } }, winners: true },
+      }),
+      this.prisma.raffle.findMany({
+        where: { status: 'COMPLETED' },
+        orderBy: { drawAt: 'desc' },
+        take: COMPLETED_KEEP,
+        include: { _count: { select: { entries: true } }, winners: true },
+      }),
+    ]);
+    return [...active, ...completed].map((r) => this.publicView(r));
   }
 
   async get(id: string, userId?: string) {
@@ -134,12 +147,17 @@ export class RafflesService {
       // serverSeed/clientSeed revealed only once drawn (provably-fair verification)
       serverSeed: r.status === 'COMPLETED' ? r.serverSeed : undefined,
       clientSeed: r.status === 'COMPLETED' ? r.clientSeed : undefined,
-      winners: (r.winners ?? []).map((w: any) => ({
-        username: w.user?.username,
-        accountId: w.user?.accountId,
-        prize: w.prize.toFixed(),
-        rank: w.rank,
-      })),
+      // Winners stay hidden until COMPLETED so an in-progress draw keeps its suspense;
+      // live viewers receive them over the socket for the synchronized reel instead.
+      winners:
+        r.status === 'COMPLETED'
+          ? (r.winners ?? []).map((w: any) => ({
+              username: w.user?.username,
+              accountId: w.user?.accountId,
+              prize: w.prize.toFixed(),
+              rank: w.rank,
+            }))
+          : [],
       createdAt: r.createdAt,
     };
   }
@@ -161,12 +179,12 @@ export class RafflesService {
       }
     }
 
-    // Deposit gate: a qualifying real-money deposit in the raffle currency,
-    // optionally within a recent window and at or above a minimum amount.
+    // Deposit gate: at least one qualifying real-money deposit, optionally within
+    // a recent window. The minimum is denominated in USD, so a deposit in ANY
+    // currency counts once converted to USD via the currency's usdRate.
     if (raffle.requiresDeposit) {
       const where: Prisma.DepositWhereInput = {
         userId,
-        currency: raffle.currency,
         mode: 'REAL',
         status: 'COMPLETED',
       };
@@ -174,16 +192,31 @@ export class RafflesService {
         const since = new Date(Date.now() - raffle.depositWithinDays * 86_400_000);
         where.createdAt = { gte: since };
       }
+      const fail = raffle.depositWithinDays ? 'DEPOSIT_RECENT_REQUIRED' : 'DEPOSIT_REQUIRED';
+      // The largest deposit per currency is the best qualifying candidate.
+      const byCurrency = await this.prisma.deposit.groupBy({
+        by: ['currency'],
+        where,
+        _max: { amount: true },
+      });
+      if (!byCurrency.length) throw new BadRequestException(fail);
       if (raffle.minDeposit) {
-        where.amount = { gte: raffle.minDeposit };
-      }
-      const dep = await this.prisma.deposit.findFirst({ where, select: { id: true } });
-      if (!dep) {
-        throw new BadRequestException(
-          raffle.depositWithinDays ? 'DEPOSIT_RECENT_REQUIRED' : 'DEPOSIT_REQUIRED',
-        );
+        const rates = await this.usdRates();
+        const meetsUsd = byCurrency.some((g) => {
+          const max = g._max.amount;
+          if (!max) return false;
+          const rate = rates.get(g.currency) ?? D(0);
+          return D(max).mul(rate).gte(raffle.minDeposit!); // USD-equivalent
+        });
+        if (!meetsUsd) throw new BadRequestException(fail);
       }
     }
+  }
+
+  /** Map of currency code → USD rate (1 unit = X USD), for cross-currency thresholds. */
+  private async usdRates(): Promise<Map<string, Prisma.Decimal>> {
+    const curs = await this.prisma.currency.findMany({ select: { code: true, usdRate: true } });
+    return new Map(curs.map((c) => [c.code, c.usdRate]));
   }
 
   async join(userId: string, raffleId: string) {
@@ -342,8 +375,10 @@ export class RafflesService {
   }
 
   /**
-   * Auto-draw: every minute, draw any OPEN raffle whose drawAt has passed and
-   * that has at least one entry. The manual draw endpoint stays for debugging.
+   * Auto-draw + recovery, every minute:
+   *  - draw any OPEN raffle whose drawAt has passed and that has ≥1 entry;
+   *  - finalize any raffle stuck in DRAWING whose reveal timer was lost (e.g. a
+   *    process restart mid-reveal), so winners are never left unannounced.
    */
   @Cron(CronExpression.EVERY_MINUTE)
   async autoDraw() {
@@ -360,9 +395,27 @@ export class RafflesService {
         this.log.warn(`auto-draw failed for ${r.id}: ${(e as Error).message}`);
       }
     }
+
+    // Recover draws whose in-memory reveal timer never fired (grace > max reveal).
+    const stuck = await this.prisma.raffle.findMany({
+      where: { status: 'DRAWING', drawAt: { lt: new Date(Date.now() - 90_000) } },
+      select: { id: true },
+      take: 20,
+    });
+    for (const r of stuck) {
+      await this.finalizeDraw(r.id).catch((e) =>
+        this.log.warn(`finalize failed for ${r.id}: ${(e as Error).message}`),
+      );
+    }
   }
 
-  /** Provably-fair draw: pick N distinct winners weighted by tickets, split the pool. */
+  /**
+   * Provably-fair draw. Picks N distinct winners weighted by tickets and credits
+   * their prizes immediately (money is never at risk of being lost), but keeps the
+   * raffle in DRAWING and broadcasts a live "spin" so every viewer watches the same
+   * reel in real time. Winners and win notifications are only revealed once the reel
+   * lands — see finalizeDraw — so the suspense isn't spoiled.
+   */
   async draw(raffleId: string, clientSeed?: string) {
     const raffle = await this.prisma.raffle.findUnique({
       where: { id: raffleId },
@@ -387,6 +440,7 @@ export class RafflesService {
     for (const e of raffle.entries) {
       ticketsByUser.set(e.userId, (ticketsByUser.get(e.userId) ?? 0) + e.tickets);
     }
+    const participantCount = ticketsByUser.size;
     let pool = [...ticketsByUser.entries()].map(([userId, tickets]) => ({ userId, tickets }));
     const winnersCount = Math.min(raffle.winnersCount, pool.length);
     const cseed = clientSeed || genClientSeed();
@@ -423,22 +477,101 @@ export class RafflesService {
           data: { raffleId: raffle.id, userId, prize: prizeEach, rank: rank + 1 },
         });
       }
+      // Stay in DRAWING; finalizeDraw flips to COMPLETED after the reveal window.
       await tx.raffle.update({
         where: { id: raffle.id },
-        data: { status: 'COMPLETED', clientSeed: cseed, drawAt: new Date() },
+        data: { clientSeed: cseed, drawAt: new Date() },
       });
     });
 
-    for (const userId of picked) {
-      await this.notifications.notify(userId, {
+    // Broadcast the live reel: winners + participant handles so every open client
+    // spins the same wheel at the same time. Reveal length mirrors the front-end.
+    const winnerRows = await this.prisma.raffleWinner.findMany({
+      where: { raffleId: raffle.id },
+      include: { user: { select: { username: true, accountId: true } } },
+      orderBy: { rank: 'asc' },
+    });
+    const winnersView = winnerRows.map((w) => ({
+      username: w.user.username,
+      accountId: w.user.accountId,
+      prize: w.prize.toFixed(),
+      rank: w.rank,
+    }));
+    const participants = await this.participants(raffle.id);
+    const revealMs = this.revealMs(winnersCount, participantCount);
+    this.realtime.raffleUpdate({
+      raffleId: raffle.id,
+      status: 'DRAWING',
+      phase: 'draw',
+      startAt: Date.now(),
+      durationMs: revealMs,
+      currency: raffle.currency,
+      winners: winnersView,
+      participants,
+    });
+    this.scheduleFinalize(raffle.id, revealMs);
+
+    return this.get(raffle.id); // DRAWING view — winners stay hidden until the reel lands
+  }
+
+  /** Reveal window, mirroring the front-end reel: one eased spin per winner. */
+  private revealMs(winnersCount: number, participantCount: number): number {
+    const speedTier = 1 + Math.floor(participantCount / 50);
+    const spinSec = Math.min(6, 3 + speedTier * 0.35);
+    return Math.min(60_000, Math.ceil(winnersCount * (spinSec + 0.85) * 1000) + 1500);
+  }
+
+  private scheduleFinalize(raffleId: string, delayMs: number) {
+    const prev = this.finalizeTimers.get(raffleId);
+    if (prev) clearTimeout(prev);
+    const timer = setTimeout(() => {
+      this.finalizeTimers.delete(raffleId);
+      this.finalizeDraw(raffleId).catch((e) =>
+        this.log.warn(`finalize failed for ${raffleId}: ${(e as Error).message}`),
+      );
+    }, delayMs);
+    this.finalizeTimers.set(raffleId, timer);
+  }
+
+  /** Flip DRAWING → COMPLETED, notify winners and prune old raffles. Idempotent. */
+  private async finalizeDraw(raffleId: string) {
+    const claimed = await this.prisma.raffle.updateMany({
+      where: { id: raffleId, status: 'DRAWING' },
+      data: { status: 'COMPLETED' },
+    });
+    if (claimed.count === 0) return; // already finalized by another path
+
+    const r = await this.prisma.raffle.findUnique({
+      where: { id: raffleId },
+      include: { winners: true },
+    });
+    if (!r) return;
+    for (const w of r.winners) {
+      await this.notifications.notify(w.userId, {
         type: 'RAFFLE',
         titleRu: 'Вы выиграли в розыгрыше!',
         titleEn: 'You won a raffle!',
-        bodyRu: `Поздравляем! Приз ${prizeEach.toFixed()} ${raffle.currency} зачислен.`,
-        bodyEn: `Congrats! ${prizeEach.toFixed()} ${raffle.currency} has been credited.`,
+        bodyRu: `Поздравляем! Приз ${w.prize.toFixed()} ${r.currency} зачислен.`,
+        bodyEn: `Congrats! ${w.prize.toFixed()} ${r.currency} has been credited.`,
       });
     }
-    this.realtime.raffleUpdate({ raffleId: raffle.id, status: 'COMPLETED' });
-    return this.get(raffle.id);
+    this.realtime.raffleUpdate({ raffleId, status: 'COMPLETED' });
+    await this.pruneCompleted();
+  }
+
+  /**
+   * Keep only the newest COMPLETED_KEEP completed raffles; hard-delete the rest so
+   * old draws don't pile up in storage. Entries and winners cascade-delete with them.
+   */
+  private async pruneCompleted() {
+    const stale = await this.prisma.raffle.findMany({
+      where: { status: 'COMPLETED' },
+      orderBy: { drawAt: 'desc' },
+      skip: COMPLETED_KEEP,
+      select: { id: true },
+    });
+    if (!stale.length) return;
+    await this.prisma.raffle.deleteMany({ where: { id: { in: stale.map((s) => s.id) } } });
+    this.log.log(`pruned ${stale.length} old completed raffle(s)`);
   }
 }

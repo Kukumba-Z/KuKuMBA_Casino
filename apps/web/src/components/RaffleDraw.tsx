@@ -36,6 +36,10 @@ function shuffle<T>(arr: T[]): T[] {
  * winner from the server draw. The ribbon length (and so the apparent top speed)
  * grows with the participant count — one extra "gear" every 50 participants.
  * For multiple winners it spins once per winner, revealing each in turn.
+ *
+ * `autoPlay` drives the live, synchronized reveal. When false (a raffle that was
+ * already completed before the page opened) the reel renders its final landed
+ * state immediately — no re-spin — so revisiting history doesn't replay the show.
  */
 export default function RaffleDraw({
   participants,
@@ -52,10 +56,10 @@ export default function RaffleDraw({
   const wrapRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
-  const [stage, setStage] = useState(0); // index of the winner being spun to
-  const [revealed, setRevealed] = useState<DrawWinner[]>([]);
+  // Live runs start at the first winner; static (historical) jumps straight to the end.
+  const [stage, setStage] = useState(autoPlay ? 0 : winners.length); // index of the winner being spun to
+  const [revealed, setRevealed] = useState<DrawWinner[]>(autoPlay ? [] : winners);
   const [spinning, setSpinning] = useState(false);
-  const [run, setRun] = useState(0); // bump to replay
   const timers = useRef<number[]>([]);
 
   // More participants → longer ribbon → higher peak speed for the same duration.
@@ -99,9 +103,18 @@ export default function RaffleDraw({
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stageIdx, names, speedTier, run]);
+  }, [stageIdx, names, speedTier]);
 
   const winnerIdx = cells.length ? cells.length - 5 : 0;
+
+  // Static (historical) reveal: snap the ribbon onto the landed winner, no animation.
+  useLayoutEffect(() => {
+    if (autoPlay) return;
+    const strip = stripRef.current;
+    if (!strip || !width || !cells.length) return;
+    strip.style.transition = 'none';
+    strip.style.transform = `translateX(${width / 2 - (winnerIdx * CELL_W + CELL_W / 2)}px)`;
+  }, [autoPlay, width, cells, winnerIdx]);
 
   // Drive one spin per stage: snap to start, then transition to the landing offset.
   useEffect(() => {
@@ -133,41 +146,26 @@ export default function RaffleDraw({
       strip.removeEventListener('transitionend', onEnd);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, width, cells, run]);
+  }, [stage, width, cells]);
 
   useEffect(() => () => timers.current.forEach((id) => clearTimeout(id)), []);
-
-  const replay = () => {
-    timers.current.forEach((id) => clearTimeout(id));
-    timers.current = [];
-    setRevealed([]);
-    setStage(0);
-    setRun((n) => n + 1);
-  };
 
   const done = stage >= winners.length;
 
   return (
     <div className="card overflow-hidden p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 font-bold">
-          <Trophy size={18} className="text-sun" />
-          {done ? t('raffles.winnersTitle') : t('raffles.drawing')}
-        </div>
-        {!spinning && (
-          <button onClick={replay} className="chip text-xs text-white/60 hover:text-white">
-            {t('raffles.replay')}
-          </button>
-        )}
+      <div className="mb-3 flex items-center justify-center gap-2 text-center font-bold">
+        <Trophy size={18} className="text-sun" />
+        {done ? t('raffles.winnersTitle') : t('raffles.drawing')}
       </div>
 
       {/* Reel */}
       <div ref={wrapRef} className="relative h-20 overflow-hidden rounded-2xl bg-black/40">
         {/* fixed centre pointer */}
         <div className="pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2">
-          <div className="h-0 w-0 border-x-8 border-t-[10px] border-x-transparent border-t-sun" />
+          <div className="h-0 w-0 border-x-8 border-t-[10px] border-x-transparent border-t-bubble" />
         </div>
-        <div className="pointer-events-none absolute left-1/2 top-0 z-10 h-full w-[2px] -translate-x-1/2 bg-sun/40" />
+        <div className="pointer-events-none absolute left-1/2 top-0 z-10 h-full w-[2px] -translate-x-1/2 bg-bubble/50" />
         {/* edge fades */}
         <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 bg-gradient-to-r from-black/70 to-transparent" />
         <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-black/70 to-transparent" />
@@ -180,9 +178,9 @@ export default function RaffleDraw({
               className="flex h-14 shrink-0 items-center justify-center px-1.5"
             >
               <div
-                className={`flex h-full w-full items-center justify-center rounded-xl px-2 text-center text-sm font-semibold ${
+                className={`flex h-full w-full items-center justify-center rounded-xl px-2 text-center text-sm font-semibold transition ${
                   c.win && done
-                    ? 'bg-sun/25 text-sun ring-2 ring-sun'
+                    ? 'bg-bubble/25 text-bubble shadow-glow-pink ring-2 ring-bubble'
                     : 'bg-white/5 text-white/70'
                 }`}
               >
@@ -195,21 +193,24 @@ export default function RaffleDraw({
 
       {!done && <div className="mt-2 text-center text-xs text-white/40">{t('raffles.drawingSub')}</div>}
 
-      {/* Winners list, revealed as each spin lands */}
+      {/* Winners list, revealed as each spin lands — every winner highlighted in pink. */}
       {revealed.length > 0 && (
-        <div className="mt-4 space-y-2">
+        <div className="mx-auto mt-4 max-w-md space-y-2">
           {revealed
             .slice()
             .sort((a, b) => a.rank - b.rank)
             .map((w) => (
               <div
                 key={w.rank}
-                className="flex animate-fadeup items-center justify-between rounded-xl bg-holo-soft px-4 py-3"
+                className="flex animate-fadeup items-center justify-between rounded-xl bg-bubble/15 px-4 py-3 ring-1 ring-bubble/40"
               >
-                <span className="font-bold">
-                  #{w.rank} {w.username}
+                <span className="flex items-center gap-2 font-bold">
+                  <span className="grid h-6 w-6 place-items-center rounded-full bg-bubble/25 text-xs text-bubble">
+                    {w.rank}
+                  </span>
+                  {w.username}
                 </span>
-                <span className="font-extrabold text-sun">
+                <span className="font-extrabold text-bubble">
                   +{fmt(w.prize)} {currency}
                 </span>
               </div>

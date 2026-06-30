@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, CheckCheck, LogOut, Menu, MessagesSquare, Shield, User as UserIcon, Wallet } from 'lucide-react';
+import { Bell, CheckCheck, ChevronRight, LogOut, Menu, MessagesSquare, Shield, User as UserIcon, Wallet } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -23,7 +23,8 @@ function useRaffleActive(): boolean {
     queryFn: async () => (await api.get('/raffles')).data,
     refetchInterval: 60_000,
   });
-  return Array.isArray(data) && data.some((r: any) => r.status === 'OPEN');
+  // Keep the tab through the brief DRAWING window so it doesn't vanish mid-reveal.
+  return Array.isArray(data) && data.some((r: any) => r.status === 'OPEN' || r.status === 'DRAWING');
 }
 
 function LangSwitch() {
@@ -343,15 +344,20 @@ function MoreSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
         <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-white/15" />
 
         {authed ? (
-          <div className="mb-4 flex items-center gap-3 rounded-2xl bg-white/5 p-3">
+          <Link
+            to="/profile"
+            onClick={onClose}
+            className="mb-4 flex items-center gap-3 rounded-2xl bg-white/5 p-3 transition hover:bg-white/10"
+          >
             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-holo text-night">
               <Mascot size={26} />
             </span>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="truncate font-bold">{user?.username}</div>
               <div className="text-xs text-white/50">ID #{user?.accountId} · {user?.role}</div>
             </div>
-          </div>
+            <ChevronRight size={18} className="shrink-0 text-white/40" />
+          </Link>
         ) : (
           <div className="mb-4 grid grid-cols-2 gap-2">
             <Link to="/login" onClick={onClose} className="btn-ghost">{t('common.login')}</Link>

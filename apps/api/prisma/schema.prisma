@@ -637,7 +637,7 @@ model Raffle {
 
   // entry conditions (Phase 11)
   requiresDeposit   Boolean        @default(false)
-  minDeposit        Decimal?       @db.Decimal(38, 18) // denominated in this raffle's currency
+  minDeposit        Decimal?       @db.Decimal(38, 18) // USD-equivalent threshold (any deposit currency, via Currency.usdRate)
   depositWithinDays Int?           // qualifying-deposit window: 1 / 7 / 14 / 30
   audience          RaffleAudience @default(ALL)
   partnerId         String?        // audience=PARTNER_REFERRALS: only this partner's referrals may enter

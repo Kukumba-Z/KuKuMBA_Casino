@@ -569,8 +569,8 @@ function RafflesAdmin() {
           <L label="Winners"><input className="input" type="number" min={1} value={form.winnersCount} onChange={(e) => set({ winnersCount: +e.target.value })} /></L>
           <L label="Entry cost"><input className="input" value={form.entryCost} onChange={(e) => set({ entryCost: e.target.value })} /></L>
           <L label="Max entries / user"><input className="input" type="number" min={1} value={form.maxEntriesPerUser} onChange={(e) => set({ maxEntriesPerUser: +e.target.value })} /></L>
-          <L label="Draw at (auto)"><input className="input" type="datetime-local" value={form.drawAt} onChange={(e) => set({ drawAt: e.target.value })} /></L>
-          <L label="Closes at"><input className="input" type="datetime-local" value={form.closesAt} onChange={(e) => set({ closesAt: e.target.value })} /></L>
+          <L label="Draw at (auto-draw time)"><input className="input" type="datetime-local" value={form.drawAt} onChange={(e) => set({ drawAt: e.target.value })} /></L>
+          <L label="Entries close at (no new joins after)"><input className="input" type="datetime-local" value={form.closesAt} onChange={(e) => set({ closesAt: e.target.value })} /></L>
           <L label="Audience">
             <select className="input" value={form.audience} onChange={(e) => set({ audience: e.target.value })}>
               <option value="ALL">Everyone</option>
@@ -592,7 +592,7 @@ function RafflesAdmin() {
           </L>
           {form.requiresDeposit && (
             <>
-              <L label="Min deposit"><input className="input" value={form.minDeposit} onChange={(e) => set({ minDeposit: e.target.value })} placeholder="any" /></L>
+              <L label="Min deposit (USD)"><input className="input" value={form.minDeposit} onChange={(e) => set({ minDeposit: e.target.value })} placeholder="any · USD" /></L>
               <L label="Deposit within">
                 <select className="input" value={form.depositWithinDays} onChange={(e) => set({ depositWithinDays: e.target.value })}>
                   <option value="">any time</option>

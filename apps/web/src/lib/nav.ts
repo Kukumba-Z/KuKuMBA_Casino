@@ -53,13 +53,15 @@ export const BONUS_TABS: BonusTab[] = [
 /**
  * Bottom-bar tabs. Base set is Lobby · Chat · Bonuses · Profile (the catalog is
  * reachable from the lobby's "All games", so there's no separate Games tab).
- * When a raffle is live, the accented Raffles tab is inserted in the centre so
- * players notice it immediately.
+ *
+ * BottomNav always appends a "More" cell, so the rendered grid is tabs.length + 1.
+ * To keep the accented Raffles tab dead-centre, the live layout must stay at an odd
+ * cell count: we return four tabs (Lobby · Chat · Raffles · Bonuses) → five cells
+ * with Raffles in the middle. Profile moves into the More sheet while a raffle runs.
  */
 export function bottomTabs(opts: { raffleActive: boolean }): NavItem[] {
-  const tabs: NavItem[] = [HOME, CHAT, BONUSES, PROFILE];
-  if (opts.raffleActive) tabs.splice(2, 0, RAFFLES); // centre slot
-  return tabs;
+  if (opts.raffleActive) return [HOME, CHAT, RAFFLES, BONUSES];
+  return [HOME, CHAT, BONUSES, PROFILE];
 }
 
 /** Desktop top-bar primary links. */
