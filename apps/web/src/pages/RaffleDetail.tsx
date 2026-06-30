@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarClock, Coins, Dices, ShieldCheck, Ticket, Users } from 'lucide-react';
+import { CalendarClock, CheckCircle2, Coins, Dices, ShieldCheck, Ticket, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
@@ -26,6 +26,17 @@ export default function RaffleDetail() {
     enabled: !!r && r.status === 'COMPLETED',
     queryFn: async () => (await api.get(`/raffles/${id}/participants`)).data,
   });
+  // Whether *I* already joined — persists across reloads (the public raffle view
+  // can't know who's asking, so we ask with the user's token here).
+  const { data: mine } = useQuery({
+    queryKey: ['raffle-mine', id],
+    enabled: authed && !!r && r.status === 'OPEN',
+    queryFn: async () => (await api.get(`/raffles/${id}/mine`)).data,
+  });
+  const [joined, setJoined] = useState(false);
+  const [joining, setJoining] = useState(false);
+  useEffect(() => setJoined(false), [id]); // reset optimistic flag when switching raffles
+  const hasJoined = joined || (mine?.tickets ?? 0) > 0;
 
   // Live, synchronized draw: when the server starts a draw it pushes the winners +
   // participant handles so every open client spins the same reel at the same time.
@@ -51,12 +62,18 @@ export default function RaffleDetail() {
   }, [id, qc]);
 
   const join = async () => {
+    if (joining || hasJoined) return;
+    setJoining(true);
     try {
       await api.post(`/raffles/${id}/join`);
+      setJoined(true);
       toast.success(t('raffles.joined'));
       qc.invalidateQueries({ queryKey: ['raffle', id] });
+      qc.invalidateQueries({ queryKey: ['raffle-mine', id] });
     } catch (e) {
       toast.error(apiError(e));
+    } finally {
+      setJoining(false);
     }
   };
   const draw = async () => {
@@ -126,7 +143,19 @@ export default function RaffleDetail() {
         )}
 
         {r.status === 'OPEN' && authed && (
-          <button onClick={join} className="btn-primary w-full">{t('raffles.join')}</button>
+          hasJoined ? (
+            <button
+              disabled
+              aria-disabled
+              className="flex w-full cursor-default items-center justify-center gap-2 rounded-2xl bg-mint/15 px-4 py-3 font-bold text-mint ring-1 ring-mint/40"
+            >
+              <CheckCircle2 size={18} /> {t('raffles.alreadyIn')}
+            </button>
+          ) : (
+            <button onClick={join} disabled={joining} className="btn-primary w-full disabled:opacity-60">
+              {t('raffles.join')}
+            </button>
+          )
         )}
         {r.status === 'OPEN' && !authed && (
           <div className="rounded-xl bg-black/30 px-4 py-3 text-center text-sm text-white/50">{t('raffles.loginToJoin')}</div>

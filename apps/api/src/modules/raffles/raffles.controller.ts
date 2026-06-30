@@ -91,6 +91,12 @@ export class RafflesController {
     return this.raffles.participants(id);
   }
 
+  /** Authenticated: how many tickets the current user holds in this raffle. */
+  @Get(':id/mine')
+  mine(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.raffles.myEntry(userId, id);
+  }
+
   @Post(':id/join')
   join(@CurrentUser('id') userId: string, @Param('id') id: string) {
     return this.raffles.join(userId, id);

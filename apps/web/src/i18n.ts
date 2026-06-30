@@ -299,7 +299,7 @@ const ru = {
     nextClaim: 'Следующее получение через',
     weeklyNote: 'Кешбэк начисляется раз в неделю — процент от чистых реальных потерь за последние 7 дней.',
   },
-  raffles: { title: 'Розыгрыши', join: 'Участвовать', participants: 'Участников', prize: 'Призовой фонд', winners: 'Победителей', entry: 'Вход', free: 'Бесплатно', drawn: 'Завершён', open: 'Идёт', myTickets: 'Ваши билеты', live: 'Активный розыгрыш', joined: 'Вы участвуете!', drawAdmin: 'Провести розыгрыш', winnersTitle: 'Победители', provablyFair: 'Честность розыгрыша', conditions: 'Условия участия', requiresDeposit: 'Нужен депозит', minDeposit: 'Мин. депозит', depositWindow: 'Депозит за период', days: 'дн.', audience: 'Аудитория', drawAt: 'Розыгрыш в', drawing: 'Идёт розыгрыш…', drawingSub: 'Выбираем честного победителя', loginToJoin: 'Войдите, чтобы участвовать' },
+  raffles: { title: 'Розыгрыши', join: 'Участвовать', participants: 'Участников', prize: 'Призовой фонд', winners: 'Победителей', entry: 'Вход', free: 'Бесплатно', drawn: 'Завершён', open: 'Идёт', myTickets: 'Ваши билеты', live: 'Активный розыгрыш', joined: 'Вы участвуете!', alreadyIn: 'Вы участвуете', drawAdmin: 'Провести розыгрыш', winnersTitle: 'Победители', provablyFair: 'Честность розыгрыша', conditions: 'Условия участия', requiresDeposit: 'Нужен депозит', minDeposit: 'Мин. депозит', depositWindow: 'Депозит за период', days: 'дн.', audience: 'Аудитория', drawAt: 'Розыгрыш в', drawing: 'Идёт розыгрыш…', drawingSub: 'Выбираем честного победителя', loginToJoin: 'Войдите, чтобы участвовать' },
   support: { title: 'Поддержка', faq: 'Частые вопросы', tickets: 'Мои тикеты', newTicket: 'Новый тикет', subject: 'Тема', message: 'Сообщение', reply: 'Ответить', ticketCreated: 'Тикет создан' },
   errors: {
     GENERIC: 'Что-то пошло не так. Попробуйте ещё раз.',
@@ -542,7 +542,7 @@ const en: typeof ru = {
     nextClaim: 'Next claim in',
     weeklyNote: 'Cashback is weekly — a percentage of your net real losses over the last 7 days.',
   },
-  raffles: { title: 'Raffles', join: 'Join', participants: 'Participants', prize: 'Prize pool', winners: 'Winners', entry: 'Entry', free: 'Free', drawn: 'Completed', open: 'Live', myTickets: 'Your tickets', live: 'Live raffle', joined: 'You joined!', drawAdmin: 'Draw winners', winnersTitle: 'Winners', provablyFair: 'Provably-fair draw', conditions: 'Entry conditions', requiresDeposit: 'Deposit required', minDeposit: 'Min deposit', depositWindow: 'Deposit within', days: 'd', audience: 'Audience', drawAt: 'Draws at', drawing: 'Drawing…', drawingSub: 'Picking a provably-fair winner', loginToJoin: 'Log in to enter' },
+  raffles: { title: 'Raffles', join: 'Join', participants: 'Participants', prize: 'Prize pool', winners: 'Winners', entry: 'Entry', free: 'Free', drawn: 'Completed', open: 'Live', myTickets: 'Your tickets', live: 'Live raffle', joined: 'You joined!', alreadyIn: "You're in", drawAdmin: 'Draw winners', winnersTitle: 'Winners', provablyFair: 'Provably-fair draw', conditions: 'Entry conditions', requiresDeposit: 'Deposit required', minDeposit: 'Min deposit', depositWindow: 'Deposit within', days: 'd', audience: 'Audience', drawAt: 'Draws at', drawing: 'Drawing…', drawingSub: 'Picking a provably-fair winner', loginToJoin: 'Log in to enter' },
   support: { title: 'Support', faq: 'FAQ', tickets: 'My tickets', newTicket: 'New ticket', subject: 'Subject', message: 'Message', reply: 'Reply', ticketCreated: 'Ticket created' },
   errors: {
     GENERIC: 'Something went wrong. Please try again.',

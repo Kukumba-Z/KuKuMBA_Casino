@@ -118,6 +118,15 @@ export class RafflesService {
     return rows.map((r) => ({ username: r.user.username, accountId: r.user.accountId }));
   }
 
+  /** The current user's ticket count in a raffle — drives the "you're in" button state. */
+  async myEntry(userId: string, raffleId: string) {
+    const agg = await this.prisma.raffleEntry.aggregate({
+      where: { raffleId, userId },
+      _sum: { tickets: true },
+    });
+    return { tickets: agg._sum.tickets ?? 0 };
+  }
+
   private publicView(r: any) {
     return {
       id: r.id,
