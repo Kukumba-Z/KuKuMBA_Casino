@@ -151,6 +151,11 @@ const ru = {
     allGames: 'Все игры',
     topGames: 'Популярные игры',
     moreSoon: 'Новые игры уже в пути',
+    guestTitle: 'Почему KuKuMBA',
+    guestCta: 'Создать аккаунт',
+    bonusProgram: 'Бонус-программа',
+    bonusProgramDesc: 'Приветственные бонусы, кешбэк и VIP-уровни',
+    fastPayoutsDesc: 'Быстрые депозиты и выводы',
   },
   top: {
     title: 'Зал славы',
@@ -459,6 +464,8 @@ const en: typeof ru = {
     rtpDesc: 'Industry-leading return to player', instant: 'Instant', instantDesc: 'Crypto & fiat deposits and withdrawals',
     games: 'Games', soon: 'Soon',
     allGames: 'All games', topGames: 'Popular games', moreSoon: 'More games on the way',
+    guestTitle: 'Why KuKuMBA', guestCta: 'Create account', bonusProgram: 'Bonus program',
+    bonusProgramDesc: 'Welcome bonuses, cashback and VIP levels', fastPayoutsDesc: 'Fast deposits and withdrawals',
   },
   top: {
     title: 'Hall of fame',
@@ -627,7 +634,15 @@ i18n
     fallbackLng: 'ru',
     supportedLngs: ['ru', 'en'],
     interpolation: { escapeValue: false },
-    detection: { order: ['localStorage', 'navigator'], caches: ['localStorage'] },
+    // Detect from a prior choice (localStorage/cookie) else the browser's
+    // navigator language; persist the resolved language to both stores so it
+    // survives across sessions and is readable server-side if ever needed.
+    detection: {
+      order: ['localStorage', 'cookie', 'navigator'],
+      caches: ['localStorage', 'cookie'],
+      lookupCookie: 'kukumba_lng',
+      lookupLocalStorage: 'i18nextLng',
+    },
   });
 
 export default i18n;

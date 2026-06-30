@@ -31,6 +31,7 @@ export const GAMES: NavItem = { to: '/games', key: 'games', icon: LayoutGrid };
 export const CHAT: NavItem = { to: '/chat', key: 'chat', icon: MessagesSquare };
 export const BONUSES: NavItem = { to: '/bonuses', key: 'bonuses', icon: Gift };
 export const PROFILE: NavItem = { to: '/profile', key: 'profile', icon: User };
+export const SUPPORT: NavItem = { to: '/support', key: 'support', icon: LifeBuoy };
 export const RAFFLES: NavItem = { to: '/raffles', key: 'raffles', icon: PartyPopper, accent: true };
 export const ADMIN: NavItem = { to: '/admin', key: 'admin', icon: Shield };
 
@@ -51,21 +52,28 @@ export const BONUS_TABS: BonusTab[] = [
 ];
 
 /**
- * Bottom-bar tabs. Base set is Lobby · Chat · Bonuses · Profile (the catalog is
- * reachable from the lobby's "All games", so there's no separate Games tab).
+ * Bottom-bar tabs (auth-aware).
  *
- * BottomNav always appends a "More" cell, so the rendered grid is tabs.length + 1.
- * To keep the accented Raffles tab dead-centre, the live layout must stay at an odd
- * cell count: we return four tabs (Lobby · Chat · Raffles · Bonuses) → five cells
- * with Raffles in the middle. Profile moves into the More sheet while a raffle runs.
+ * Guests get a minimal, non-gated set — Lobby · Games · Support — and no "More"
+ * sheet (login/register live in the top bar). Support stays reachable so a
+ * locked-out player can always get help.
+ *
+ * For signed-in players the base set is Lobby · Chat · Bonuses · Profile (the
+ * catalog is reachable from the lobby's "All games"). BottomNav appends a "More"
+ * cell, so the grid is tabs.length + 1. To keep the accented Raffles tab
+ * dead-centre, the live layout must stay at an odd cell count: four tabs
+ * (Lobby · Chat · Raffles · Bonuses) → five cells with Raffles in the middle.
+ * Profile moves into the More sheet while a raffle runs.
  */
-export function bottomTabs(opts: { raffleActive: boolean }): NavItem[] {
+export function bottomTabs(opts: { raffleActive: boolean; authed: boolean }): NavItem[] {
+  if (!opts.authed) return [HOME, GAMES, SUPPORT];
   if (opts.raffleActive) return [HOME, CHAT, RAFFLES, BONUSES];
   return [HOME, CHAT, BONUSES, PROFILE];
 }
 
-/** Desktop top-bar primary links. */
-export function desktopTabs(opts: { raffleActive: boolean }): NavItem[] {
+/** Desktop top-bar primary links (auth-aware; mirrors the guest gating above). */
+export function desktopTabs(opts: { raffleActive: boolean; authed: boolean }): NavItem[] {
+  if (!opts.authed) return [HOME, GAMES, SUPPORT];
   const tabs: NavItem[] = [HOME, CHAT, BONUSES];
   if (opts.raffleActive) tabs.push(RAFFLES);
   return tabs;

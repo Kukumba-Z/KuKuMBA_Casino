@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, LayoutGrid, ShieldCheck, Sparkles, Trophy, Zap } from 'lucide-react';
+import { ArrowRight, Gift, LayoutGrid, ShieldCheck, Sparkles, Trophy, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -11,6 +11,7 @@ import { WinHeader, WinRow } from '../components/WinRow';
 import api from '../lib/api';
 import { fmt, useGames } from '../lib/hooks';
 import { getSocket } from '../lib/socket';
+import { useAuth } from '../store/auth';
 import { useUI } from '../store/ui';
 
 // Shared 5-column template so the header and rows line up: game · player · stake · coeff · win.
@@ -86,8 +87,41 @@ function LiveBets() {
   );
 }
 
+/** Compact, unobtrusive value props for guests — shown in place of the
+ *  members-only bonuses tab, with a single register CTA. */
+function GuestPerks() {
+  const { t } = useTranslation();
+  const perks: { icon: any; accent: string; title: string; desc: string }[] = [
+    { icon: ShieldCheck, accent: 'text-mint', title: t('lobby.fair'), desc: t('lobby.fairDesc') },
+    { icon: Gift, accent: 'text-lav', title: t('lobby.bonusProgram'), desc: t('lobby.bonusProgramDesc') },
+    { icon: Zap, accent: 'text-sun', title: t('lobby.fastPayouts'), desc: t('lobby.fastPayoutsDesc') },
+  ];
+  return (
+    <section className="card p-4 sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-base font-bold">{t('lobby.guestTitle')}</h2>
+        <Link to="/register" className="btn-primary !py-2 text-sm sm:shrink-0">{t('lobby.guestCta')}</Link>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        {perks.map((p) => (
+          <div key={p.title} className="flex items-start gap-3 rounded-2xl bg-white/[0.03] p-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/[0.05]">
+              <p.icon size={18} className={p.accent} />
+            </span>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold">{p.title}</div>
+              <div className="text-xs text-white/50">{p.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function Lobby() {
   const { t } = useTranslation();
+  const authed = !!useAuth((s) => s.accessToken);
   const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: async () => (await api.get('/stats')).data, refetchInterval: 15000 });
   const { data: games } = useGames();
   const topGames = (games ?? []).slice(0, 8);
@@ -118,6 +152,9 @@ export default function Lobby() {
           </div>
         </div>
       </section>
+
+      {/* Guest-only value props (in place of the members-only bonuses tab) */}
+      {!authed && <GuestPerks />}
 
       {/* Popular games */}
       {topGames.length > 0 && (

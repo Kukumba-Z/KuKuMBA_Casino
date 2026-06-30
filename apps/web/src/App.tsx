@@ -56,8 +56,8 @@ export default function App() {
           <Route path="/top" element={<Top />} />
           <Route path="/raffles" element={<Raffles />} />
           <Route path="/raffles/:id" element={<RaffleDetail />} />
-          {/* Bonuses hub holds cashback / promo / vip / referrals as tabs */}
-          <Route path="/bonuses" element={<Bonuses />} />
+          {/* Bonuses hub holds cashback / promo / vip / referrals as tabs (members only) */}
+          <Route path="/bonuses" element={<RequireAuth><Bonuses /></RequireAuth>} />
           <Route path="/cashback" element={<Navigate to="/bonuses?tab=cashback" replace />} />
           <Route path="/promo" element={<Navigate to="/bonuses?tab=promo" replace />} />
           <Route path="/vip" element={<Navigate to="/bonuses?tab=vip" replace />} />

@@ -290,9 +290,20 @@ function ChatTab() {
   );
 }
 
-function BottomNav({ tabs, onMore, moreOpen }: { tabs: NavItem[]; onMore: () => void; moreOpen: boolean }) {
+function BottomNav({
+  tabs,
+  onMore,
+  moreOpen,
+  showMore,
+}: {
+  tabs: NavItem[];
+  onMore: () => void;
+  moreOpen: boolean;
+  showMore: boolean;
+}) {
   const { t } = useTranslation();
-  const cols = tabs.length + 1;
+  // Guests have no "More" sheet, so the grid is just the visible tabs.
+  const cols = tabs.length + (showMore ? 1 : 0);
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-40 glass border-t border-white/10 lg:hidden"
@@ -302,15 +313,17 @@ function BottomNav({ tabs, onMore, moreOpen }: { tabs: NavItem[]; onMore: () => 
         {tabs.map((tb) =>
           tb.key === 'chat' ? <ChatTab key={tb.to} /> : <Tab key={tb.to} item={tb} accent={tb.accent} />,
         )}
-        <button
-          onClick={onMore}
-          className={`flex flex-col items-center gap-0.5 py-2 text-[11px] transition ${moreOpen ? 'text-white' : 'text-white/55'}`}
-        >
-          <span className={`grid h-7 w-7 place-items-center rounded-xl ${moreOpen ? 'bg-white/10' : ''}`}>
-            <Menu size={18} />
-          </span>
-          {t('nav.more')}
-        </button>
+        {showMore && (
+          <button
+            onClick={onMore}
+            className={`flex flex-col items-center gap-0.5 py-2 text-[11px] transition ${moreOpen ? 'text-white' : 'text-white/55'}`}
+          >
+            <span className={`grid h-7 w-7 place-items-center rounded-xl ${moreOpen ? 'bg-white/10' : ''}`}>
+              <Menu size={18} />
+            </span>
+            {t('nav.more')}
+          </button>
+        )}
       </div>
     </nav>
   );
@@ -416,8 +429,8 @@ export default function Layout() {
     useChat.getState().close();
   }, [location.pathname]);
 
-  const dTabs = desktopTabs({ raffleActive });
-  const bTabs = bottomTabs({ raffleActive });
+  const dTabs = desktopTabs({ raffleActive, authed });
+  const bTabs = bottomTabs({ raffleActive, authed });
 
   return (
     <div className="flex min-h-full flex-col">
@@ -496,9 +509,9 @@ export default function Layout() {
 
       <Footer />
 
-      <BottomNav tabs={bTabs} onMore={() => setMoreOpen(true)} moreOpen={moreOpen} />
-      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
-      <ChatDrawer />
+      <BottomNav tabs={bTabs} onMore={() => setMoreOpen(true)} moreOpen={moreOpen} showMore={authed} />
+      {authed && <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />}
+      {authed && <ChatDrawer />}
       <div className="h-16 lg:hidden" />
     </div>
   );
@@ -552,8 +565,10 @@ function Footer() {
         <Link to="/page/terms" className="hover:text-white">{t('nav.terms')}</Link>
       </div>
 
-      <div className="border-t border-white/10 px-4 py-3 text-center text-[11px] text-white/40">
-        © {new Date().getFullYear()} KuKuMBA · {t('footer.copyright')}
+      {/* Language switch available to everyone (incl. guests, who have no More sheet). */}
+      <div className="flex flex-col items-center gap-2 border-t border-white/10 px-4 py-3 text-center text-[11px] text-white/40">
+        <LangSwitch />
+        <span>© {new Date().getFullYear()} KuKuMBA · {t('footer.copyright')}</span>
       </div>
     </footer>
   );
