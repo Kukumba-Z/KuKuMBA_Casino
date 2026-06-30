@@ -50,7 +50,7 @@ export function CurrencyMenu() {
   const balOf = (code: string) =>
     balances?.find((b) => b.mode === mode && b.currency === code)?.amount ?? '0';
   const current = balOf(currency);
-  const list = (currencies ?? []).filter((c) => (mode === 'DEMO' ? c.type === 'DEMO' : c.type !== 'DEMO'));
+  const list = (currencies ?? []).filter((c) => (mode === 'DEMO' ? c.type === 'DEMO' : c.type === 'FIAT'));
 
   return (
     <div className="flex items-center gap-1.5">

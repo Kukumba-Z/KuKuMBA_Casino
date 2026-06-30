@@ -13,7 +13,8 @@ export default function Wallet() {
   const qc = useQueryClient();
   const { data: currencies } = useCurrencies();
   const { data: balances } = useBalances();
-  const realCurrencies = useMemo(() => (currencies ?? []).filter((c) => c.type !== 'DEMO'), [currencies]);
+  // Accounts are fiat-only (USD/EUR/RUB); crypto is a future gateway rail, not a held balance.
+  const realCurrencies = useMemo(() => (currencies ?? []).filter((c) => c.type === 'FIAT'), [currencies]);
 
   return (
     <div className="space-y-6">
@@ -53,21 +54,15 @@ export default function Wallet() {
 function DepositCard({ currencies, onDone }: { currencies: any[]; onDone: () => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [currency, setCurrency] = useState('USDT');
-  const [network, setNetwork] = useState('TRC20');
+  const [currency, setCurrency] = useState('USD');
   const [amount, setAmount] = useState('100');
   const [deposit, setDeposit] = useState<any>(null);
   const [err, setErr] = useState('');
-  const cur = currencies.find((c) => c.code === currency);
 
   const create = async () => {
     setErr('');
     try {
-      const { data } = await api.post('/payments/deposits', {
-        currency,
-        network: cur?.type === 'CRYPTO' ? network : undefined,
-        amount,
-      });
+      const { data } = await api.post('/payments/deposits', { currency, amount });
       setDeposit(data);
     } catch (e) {
       setErr(apiError(e));
@@ -89,25 +84,13 @@ function DepositCard({ currencies, onDone }: { currencies: any[]; onDone: () => 
       <h2 className="flex items-center gap-2 text-lg font-bold">
         <ArrowDownToLine size={18} className="text-mint" /> {t('wallet.newDeposit')}
       </h2>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="label">{t('common.currency')}</label>
-          <select className="input" value={currency} onChange={(e) => { setCurrency(e.target.value); const c = currencies.find((x) => x.code === e.target.value); setNetwork(c?.networks?.[0] || ''); }}>
-            {currencies.map((c) => (
-              <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
-            ))}
-          </select>
-        </div>
-        {cur?.type === 'CRYPTO' && cur.networks.length > 0 && (
-          <div>
-            <label className="label">{t('common.network')}</label>
-            <select className="input" value={network} onChange={(e) => setNetwork(e.target.value)}>
-              {cur.networks.map((n: string) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-          </div>
-        )}
+      <div>
+        <label className="label">{t('common.currency')}</label>
+        <select className="input" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+          {currencies.map((c) => (
+            <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
+          ))}
+        </select>
       </div>
       <div>
         <label className="label">{t('common.amount')}</label>
@@ -117,7 +100,7 @@ function DepositCard({ currencies, onDone }: { currencies: any[]; onDone: () => 
         <button onClick={create} className="btn-primary w-full">{t('common.deposit')}</button>
       ) : (
         <div className="space-y-2 rounded-2xl bg-black/30 p-4">
-          <div className="text-xs text-white/40">{t('wallet.depositAddr')} ({deposit.network || deposit.currency})</div>
+          <div className="text-xs text-white/40">{t('wallet.depositRef')} ({deposit.currency})</div>
           <div className="break-all rounded-lg bg-black/40 p-2 font-mono text-sm">{deposit.address}</div>
           <div className="text-xs text-white/40">{t('wallet.sandboxHint')}</div>
           <button onClick={confirm} className="btn-soft w-full">{t('wallet.confirmSandbox')}</button>
@@ -130,20 +113,13 @@ function DepositCard({ currencies, onDone }: { currencies: any[]; onDone: () => 
 
 function WithdrawCard({ currencies, onDone }: { currencies: any[]; onDone: () => void }) {
   const { t } = useTranslation();
-  const [currency, setCurrency] = useState('USDT');
-  const [network, setNetwork] = useState('TRC20');
+  const [currency, setCurrency] = useState('USD');
   const [amount, setAmount] = useState('10');
   const [address, setAddress] = useState('');
-  const cur = currencies.find((c) => c.code === currency);
 
   const submit = async () => {
     try {
-      await api.post('/payments/withdrawals', {
-        currency,
-        network: cur?.type === 'CRYPTO' ? network : undefined,
-        amount,
-        address,
-      });
+      await api.post('/payments/withdrawals', { currency, amount, address });
       toast.success(t('wallet.withdrawCreated'));
       setAddress('');
       onDone();
@@ -157,33 +133,21 @@ function WithdrawCard({ currencies, onDone }: { currencies: any[]; onDone: () =>
       <h2 className="flex items-center gap-2 text-lg font-bold">
         <ArrowUpFromLine size={18} className="text-sun" /> {t('wallet.requestWithdraw')}
       </h2>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="label">{t('common.currency')}</label>
-          <select className="input" value={currency} onChange={(e) => { setCurrency(e.target.value); const c = currencies.find((x) => x.code === e.target.value); setNetwork(c?.networks?.[0] || ''); }}>
-            {currencies.map((c) => (
-              <option key={c.code} value={c.code}>{c.code}</option>
-            ))}
-          </select>
-        </div>
-        {cur?.type === 'CRYPTO' && cur.networks.length > 0 && (
-          <div>
-            <label className="label">{t('common.network')}</label>
-            <select className="input" value={network} onChange={(e) => setNetwork(e.target.value)}>
-              {cur.networks.map((n: string) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-          </div>
-        )}
+      <div>
+        <label className="label">{t('common.currency')}</label>
+        <select className="input" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+          {currencies.map((c) => (
+            <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
+          ))}
+        </select>
       </div>
       <div>
         <label className="label">{t('common.amount')}</label>
         <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" />
       </div>
       <div>
-        <label className="label">{t('wallet.address')}</label>
-        <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="0x… / T…" />
+        <label className="label">{t('wallet.payoutDetails')}</label>
+        <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder={t('wallet.payoutPlaceholder')} />
       </div>
       <button onClick={submit} className="btn-ghost w-full" disabled={!address}>{t('common.withdraw')}</button>
     </div>

@@ -213,6 +213,14 @@ export class RafflesService {
     }
   }
 
+  /** A raffle prize must be a real, enabled fiat currency — never demo coins. */
+  private async assertRaffleCurrency(code: string) {
+    const cur = await this.prisma.currency.findUnique({ where: { code } });
+    if (!cur || !cur.enabled || cur.type === 'DEMO') {
+      throw new BadRequestException('RAFFLE_CURRENCY_INVALID');
+    }
+  }
+
   /** Map of currency code → USD rate (1 unit = X USD), for cross-currency thresholds. */
   private async usdRates(): Promise<Map<string, Prisma.Decimal>> {
     const curs = await this.prisma.currency.findMany({ select: { code: true, usdRate: true } });
@@ -257,6 +265,7 @@ export class RafflesService {
   }
 
   async create(adminId: string, dto: CreateRaffleDto) {
+    await this.assertRaffleCurrency(dto.currency);
     const serverSeed = genServerSeed();
     const audience = dto.audience ?? 'ALL';
     // A partner raffle for "my referrals" defaults the partner to the creator.
@@ -270,7 +279,7 @@ export class RafflesService {
         creatorName: dto.creatorName,
         createdById: adminId,
         currency: dto.currency,
-        mode: dto.mode ?? 'REAL',
+        mode: 'REAL', // raffles pay out real fiat — no demo-coin giveaways
         prizePool: D(dto.prizePool),
         winnersCount: Math.max(1, dto.winnersCount ?? 1),
         entryCost: D(dto.entryCost ?? 0),
@@ -297,13 +306,16 @@ export class RafflesService {
       throw new BadRequestException('RAFFLE_LOCKED');
     }
 
+    if (dto.currency !== undefined) await this.assertRaffleCurrency(dto.currency);
+
     const data: Prisma.RaffleUpdateInput = {};
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.descriptionRu !== undefined) data.descriptionRu = dto.descriptionRu;
     if (dto.descriptionEn !== undefined) data.descriptionEn = dto.descriptionEn;
     if (dto.creatorName !== undefined) data.creatorName = dto.creatorName;
     if (dto.currency !== undefined) data.currency = dto.currency;
-    if (dto.mode !== undefined) data.mode = dto.mode;
+    // Raffles always pay real fiat; ignore any DEMO mode from older clients.
+    if (dto.mode !== undefined) data.mode = 'REAL';
     if (dto.prizePool !== undefined) data.prizePool = D(dto.prizePool);
     if (dto.winnersCount !== undefined) data.winnersCount = Math.max(1, dto.winnersCount);
     if (dto.entryCost !== undefined) data.entryCost = D(dto.entryCost);

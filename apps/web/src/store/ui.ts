@@ -24,8 +24,8 @@ export const useUI = create<UIState>()(
       setMode: (mode) =>
         set((s) => ({
           mode,
-          // DEMO mode always uses the DEMO currency; switching to REAL keeps a sensible default
-          currency: mode === 'DEMO' ? 'DEMO' : s.currency === 'DEMO' ? 'USDT' : s.currency,
+          // DEMO mode always uses the DEMO currency; switching to REAL defaults to USD
+          currency: mode === 'DEMO' ? 'DEMO' : s.currency === 'DEMO' ? 'USD' : s.currency,
         })),
       setCurrency: (currency) => set({ currency }),
       toggleSound: () => set((s) => ({ sound: !s.sound })),

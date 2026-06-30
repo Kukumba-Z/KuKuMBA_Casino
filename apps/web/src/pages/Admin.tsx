@@ -430,9 +430,9 @@ const RAFFLE_BLANK = {
   title: 'New Giveaway',
   descriptionRu: '',
   descriptionEn: '',
-  currency: 'DEMO',
-  mode: 'DEMO',
-  prizePool: '5000',
+  currency: 'USD',
+  mode: 'REAL',
+  prizePool: '500',
   winnersCount: 3,
   entryCost: '0',
   maxEntriesPerUser: 1,
@@ -461,15 +461,15 @@ function RafflesAdmin() {
   const [editId, setEditId] = useState<string | null>(null);
   const set = (patch: any) => setForm((f: any) => ({ ...f, ...patch }));
 
-  // Only currencies matching the selected mode (DEMO vs real) — no free-text codes.
-  const curOpts = (currencies ?? []).filter((c) => (form.mode === 'DEMO' ? c.type === 'DEMO' : c.type !== 'DEMO'));
+  // Raffles pay real fiat only — never demo coins (no DEMO/crypto options).
+  const curOpts = (currencies ?? []).filter((c) => c.type === 'FIAT');
 
   const payload = () => ({
     title: form.title,
     descriptionRu: form.descriptionRu || undefined,
     descriptionEn: form.descriptionEn || undefined,
     currency: form.currency,
-    mode: form.mode,
+    mode: 'REAL',
     prizePool: String(form.prizePool),
     winnersCount: Number(form.winnersCount) || 1,
     entryCost: String(form.entryCost || '0'),
@@ -551,13 +551,7 @@ function RafflesAdmin() {
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <L label="Title"><input className="input" value={form.title} onChange={(e) => set({ title: e.target.value })} /></L>
-          <L label="Mode">
-            <select className="input" value={form.mode} onChange={(e) => set({ mode: e.target.value, currency: '' })}>
-              <option value="DEMO">DEMO</option>
-              <option value="REAL">REAL</option>
-            </select>
-          </L>
-          <L label="Currency">
+          <L label="Currency (real fiat)">
             <select className="input" value={form.currency} onChange={(e) => set({ currency: e.target.value })}>
               <option value="" disabled>—</option>
               {curOpts.map((c) => (

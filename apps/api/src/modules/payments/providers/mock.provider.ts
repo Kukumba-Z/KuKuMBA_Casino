@@ -18,22 +18,25 @@ export class MockProvider implements PaymentProvider {
   readonly name = 'mock';
 
   async createDeposit(input: CreateDepositInput): Promise<CreateDepositResult> {
-    const prefix =
-      input.network === 'TRC20'
-        ? 'T'
-        : input.network === 'TON'
-          ? 'UQ'
-          : input.network === 'SOL'
-            ? 'So'
-            : input.currency === 'BTC'
-              ? 'bc1'
-              : '0x';
+    // Fiat deposits (no crypto network) get a hosted-invoice reference; a real
+    // gateway would return a checkout link / card form here. Crypto rails — when
+    // the real provider lands — would instead return an on-chain address.
+    const address = input.network
+      ? `${this.cryptoPrefix(input)}${genToken(34)}`
+      : `INV-${genToken(12)}`;
     return {
-      address: `${prefix}${genToken(34)}`,
+      address,
       reference: `DEP-${genToken(8)}`,
       expiresAt: new Date(Date.now() + 60 * 60 * 1000),
       meta: { sandbox: true, network: input.network ?? null },
     };
+  }
+
+  private cryptoPrefix(input: CreateDepositInput): string {
+    if (input.network === 'TRC20') return 'T';
+    if (input.network === 'TON') return 'UQ';
+    if (input.network === 'SOL') return 'So';
+    return input.currency === 'BTC' ? 'bc1' : '0x';
   }
 
   async createWithdrawal(_input: CreateWithdrawalInput): Promise<CreateWithdrawalResult> {

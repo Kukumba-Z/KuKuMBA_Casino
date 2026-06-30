@@ -9,28 +9,27 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding KuKuMBA…');
 
-  // ── Currencies (demo + fiat + crypto, USDT multi-network) ────────────
+  // ── Currencies ───────────────────────────────────────────────────────
+  // Accounts are held in fiat only (USD/EUR/RUB) plus the DEMO play-money coin.
+  // Crypto is just a future deposit rail — the gateway converts it to the chosen
+  // fiat — so no crypto currency rows exist. USD is the base (usdRate = 1).
   const currencies = [
     { code: 'DEMO', name: 'Demo Coins', type: 'DEMO', symbol: 'KMB', decimals: 2, networks: [], usdRate: 0.1, sortOrder: 0 },
     { code: 'USD', name: 'US Dollar', type: 'FIAT', symbol: '$', decimals: 2, networks: [], usdRate: 1, sortOrder: 1 },
     { code: 'EUR', name: 'Euro', type: 'FIAT', symbol: '€', decimals: 2, networks: [], usdRate: 1.08, sortOrder: 2 },
     { code: 'RUB', name: 'Russian Ruble', type: 'FIAT', symbol: '₽', decimals: 2, networks: [], usdRate: 0.011, sortOrder: 3 },
-    { code: 'BTC', name: 'Bitcoin', type: 'CRYPTO', symbol: '₿', decimals: 8, networks: ['BTC'], usdRate: 65000, sortOrder: 4 },
-    { code: 'ETH', name: 'Ethereum', type: 'CRYPTO', symbol: 'Ξ', decimals: 8, networks: ['ERC20'], usdRate: 3200, sortOrder: 5 },
-    { code: 'USDT', name: 'Tether', type: 'CRYPTO', symbol: '₮', decimals: 6, networks: ['ERC20', 'TRC20', 'TON', 'SOL', 'BSC'], usdRate: 1, sortOrder: 6 },
-    { code: 'TON', name: 'Toncoin', type: 'CRYPTO', symbol: 'TON', decimals: 6, networks: ['TON'], usdRate: 6, sortOrder: 7 },
-    { code: 'TRX', name: 'TRON', type: 'CRYPTO', symbol: 'TRX', decimals: 6, networks: ['TRC20'], usdRate: 0.12, sortOrder: 8 },
-    { code: 'SOL', name: 'Solana', type: 'CRYPTO', symbol: 'SOL', decimals: 6, networks: ['SOL'], usdRate: 150, sortOrder: 9 },
-    { code: 'BNB', name: 'BNB', type: 'CRYPTO', symbol: 'BNB', decimals: 8, networks: ['BSC'], usdRate: 600, sortOrder: 10 },
-    { code: 'XMR', name: 'Monero', type: 'CRYPTO', symbol: 'ɱ', decimals: 8, networks: ['XMR'], usdRate: 160, sortOrder: 11 },
   ];
+  const CURRENCY_CODES = currencies.map((c) => c.code);
   for (const c of currencies) {
     await prisma.currency.upsert({
       where: { code: c.code },
-      create: { ...(c as any), minDeposit: 0, minWithdrawal: 0, enabled: true, isDefault: c.code === 'DEMO' },
+      create: { ...(c as any), minDeposit: 0, minWithdrawal: 0, enabled: true, isDefault: c.code === 'USD' },
       update: { ...(c as any) },
     });
   }
+  // Forget any previously-seeded currency (e.g. old crypto) and balances held in it.
+  await prisma.balance.deleteMany({ where: { currency: { notIn: CURRENCY_CODES } } });
+  await prisma.currency.deleteMany({ where: { code: { notIn: CURRENCY_CODES } } });
 
   // ── Games catalog ─────────────────────────────────────────────────────
   // The lobby/games grid is fully data-driven: built-in games (route set) and
@@ -227,8 +226,8 @@ async function main() {
   });
   // give the admin some real funds to exercise admin tooling
   await prisma.balance.upsert({
-    where: { userId_currency_mode: { userId: admin.id, currency: 'USDT', mode: 'REAL' } },
-    create: { userId: admin.id, currency: 'USDT', mode: 'REAL', amount: 5000 },
+    where: { userId_currency_mode: { userId: admin.id, currency: 'USD', mode: 'REAL' } },
+    create: { userId: admin.id, currency: 'USD', mode: 'REAL', amount: 5000 },
     update: {},
   });
 
@@ -239,9 +238,9 @@ async function main() {
   // bonuses exist. The no-deposit/welcome offers are modest real grants (admin
   // can retune amounts or disable them in the panel).
   const bonuses = [
-    { key: 'welcome', name: 'Welcome Bonus', type: 'WELCOME', currency: 'USDT', amount: 5, wagerMultiplier: 10, descriptionRu: 'Приветственный бонус 5 USDT для новых игроков.', descriptionEn: '5 USDT welcome bonus for new players.' },
-    { key: 'nodep', name: 'No-Deposit Spark', type: 'NO_DEPOSIT', currency: 'USDT', amount: 2, wagerMultiplier: 15, descriptionRu: 'Бездепозитный бонус 2 USDT — без пополнения.', descriptionEn: '2 USDT, no deposit needed.' },
-    { key: 'deposit100', name: '100% First Deposit', type: 'DEPOSIT', currency: 'USDT', amount: 0, percent: 100, maxAmount: 500, wagerMultiplier: 3, descriptionRu: '100% к первому депозиту до 500 USDT.', descriptionEn: '100% first deposit match up to 500 USDT.' },
+    { key: 'welcome', name: 'Welcome Bonus', type: 'WELCOME', currency: 'USD', amount: 5, wagerMultiplier: 10, descriptionRu: 'Приветственный бонус 5 USD для новых игроков.', descriptionEn: '5 USD welcome bonus for new players.' },
+    { key: 'nodep', name: 'No-Deposit Spark', type: 'NO_DEPOSIT', currency: 'USD', amount: 2, wagerMultiplier: 15, descriptionRu: 'Бездепозитный бонус 2 USD — без пополнения.', descriptionEn: '2 USD, no deposit needed.' },
+    { key: 'deposit100', name: '100% First Deposit', type: 'DEPOSIT', currency: 'USD', amount: 0, percent: 100, maxAmount: 500, wagerMultiplier: 3, descriptionRu: '100% к первому депозиту до 500 USD.', descriptionEn: '100% first deposit match up to 500 USD.' },
   ];
   for (const b of bonuses) {
     await prisma.bonus.upsert({ where: { key: b.key }, create: b as any, update: b as any });
@@ -325,14 +324,14 @@ async function main() {
     await prisma.raffle.create({
       data: {
         title: 'KuKuMBA Mega Giveaway',
-        descriptionRu: 'Большой розыгрыш от администрации: 10 000 демо-монет на троих победителей!',
-        descriptionEn: 'Big admin giveaway: 10,000 demo coins for three winners!',
+        descriptionRu: 'Большой розыгрыш от администрации: 300 USD на троих победителей!',
+        descriptionEn: 'Big admin giveaway: 300 USD for three winners!',
         creatorType: 'ADMIN',
         creatorName: 'KuKuMBA Team',
         createdById: admin.id,
-        currency: 'DEMO',
-        mode: 'DEMO',
-        prizePool: 10000,
+        currency: 'USD',
+        mode: 'REAL',
+        prizePool: 300,
         winnersCount: 3,
         entryCost: 0,
         maxEntriesPerUser: 1,
