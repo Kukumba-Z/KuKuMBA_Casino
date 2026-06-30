@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Coins, PartyPopper, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { StatusChip } from '../components/StatusChip';
 import api from '../lib/api';
 import { fmt } from '../lib/hooks';
 import { enumLabel } from '../lib/labels';
@@ -21,9 +22,7 @@ export default function Raffles() {
           <Link key={r.id} to={`/raffles/${r.id}`} className="card flex flex-col p-5 transition hover:shadow-glow">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-lg font-bold">{r.title}</span>
-              <span className={`chip ${r.status === 'OPEN' ? 'text-mint' : 'text-white/50'}`}>
-                {enumLabel('raffleStatus', r.status)}
-              </span>
+              <StatusChip category="raffleStatus" value={r.status} />
             </div>
             <p className="flex-1 text-sm text-white/55">{en ? r.descriptionEn : r.descriptionRu}</p>
             <div className="mt-3 grid grid-cols-2 gap-2 text-sm">

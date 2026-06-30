@@ -112,6 +112,12 @@ export class SupportService {
     if (!t) throw new NotFoundException('TICKET_NOT_FOUND');
     const isStaff = STAFF.includes(user.role);
     if (t.userId !== user.id && !isStaff) throw new ForbiddenException();
+    // A resolved/closed ticket is locked for the user — they can't reopen it by
+    // writing. Staff may still reply (which reopens it). To continue, the user
+    // opens a new ticket; staff can reopen via a status change.
+    if (!isStaff && (t.status === 'RESOLVED' || t.status === 'CLOSED')) {
+      throw new BadRequestException('TICKET_LOCKED');
+    }
     if (!body?.trim() && !attachmentUrl) throw new BadRequestException('EMPTY_REPLY');
 
     const msg = await this.prisma.supportMessage.create({

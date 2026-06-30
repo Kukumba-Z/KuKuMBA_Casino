@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { isOriginal } from '../components/GameCard';
 import { HistoryRow } from '../components/HistoryRow';
 import { Mascot } from '../components/Mascot';
+import { StatusChip } from '../components/StatusChip';
 import api, { apiError } from '../lib/api';
 import { AVATAR_PRESETS, avatarBg, avatarPresetKey } from '../lib/avatar';
 import { useGames, useMe } from '../lib/hooks';
@@ -33,7 +34,7 @@ export default function Profile() {
           <div className="mt-2 flex flex-wrap gap-2">
             <span className="chip">{t('common.accountId')} #{me?.accountId}</span>
             <span className="chip">VIP {me?.vip?.level} · {me?.vip?.name}</span>
-            <span className="chip">KYC: {enumLabel('kycStatus', me?.kycStatus)}</span>
+            <StatusChip category="kycStatus" value={me?.kycStatus} prefix="KYC" />
             <span className="chip">{t('profile.betsLabel')}: {me?.stats?.bets ?? 0}</span>
           </div>
         </div>
@@ -257,7 +258,7 @@ function Kyc() {
 
   return (
     <Section title={t('profile.kyc')} icon={IdCard}>
-      <div className="chip mb-1">{t('profile.statusLabel')}: {enumLabel('kycStatus', data?.status ?? 'NONE')}</div>
+      <div className="mb-1"><StatusChip category="kycStatus" value={data?.status ?? 'NONE'} prefix={t('profile.statusLabel')} /></div>
       {data?.status !== 'VERIFIED' && (
         <form onSubmit={submit} className="space-y-2">
           <input className="input" placeholder={t('profile.fullName')} value={fullName} onChange={(e) => setFullName(e.target.value)} />

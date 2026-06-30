@@ -3,9 +3,9 @@ import { ChevronRight, LifeBuoy, Paperclip, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '../components/Modal';
+import { StatusChip } from '../components/StatusChip';
 import { TicketThread } from '../components/TicketThread';
 import api, { apiError } from '../lib/api';
-import { enumLabel } from '../lib/labels';
 import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
 
@@ -106,7 +106,7 @@ export default function Support() {
                 >
                   <span className="truncate">{tk.subject}</span>
                   <span className="flex shrink-0 items-center gap-2">
-                    <span className="chip">{enumLabel('ticketStatus', tk.status)}</span>
+                    <StatusChip category="ticketStatus" value={tk.status} />
                     <ChevronRight size={16} className="text-white/40" />
                   </span>
                 </button>

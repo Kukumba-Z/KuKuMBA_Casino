@@ -25,6 +25,7 @@ import {
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '../components/Modal';
+import { StatusChip } from '../components/StatusChip';
 import { TicketThread } from '../components/TicketThread';
 import i18n from '../i18n';
 import api, { apiError } from '../lib/api';
@@ -147,7 +148,10 @@ function Users({ me }: { me: AdminMe }) {
           {(data?.items ?? []).map((u: any) => (
             <button key={u.id} onClick={() => setSel(u.id)} className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${sel === u.id ? 'bg-white/10' : 'hover:bg-white/5'}`}>
               <span>{u.username} <span className="text-white/40">#{u.accountId}</span></span>
-              <span className="chip">{u.role} · {u.status}</span>
+              <span className="flex shrink-0 items-center gap-1.5">
+                <span className="chip">{u.role}</span>
+                <StatusChip category="userStatus" value={u.status} />
+              </span>
             </button>
           ))}
           {(data?.items ?? []).length === 0 && <div className="py-3 text-center text-white/40">—</div>}
@@ -322,7 +326,7 @@ function Deposits() {
       render={(d: any) => [
         `${d.user?.username} #${d.user?.accountId}`,
         `${fmt(d.amount)} ${d.currency} (${d.network ?? '-'})`,
-        d.status,
+        <StatusChip key="s" category="depositStatus" value={d.status} />,
         <button key="c" onClick={() => confirm(d.id)} className="btn-soft text-xs">Confirm</button>,
       ]}
     />
@@ -343,7 +347,7 @@ function Withdrawals() {
       render={(w: any) => [
         `${w.user?.username} #${w.user?.accountId}`,
         `${fmt(w.amount)} ${w.currency}`,
-        w.status,
+        <StatusChip key="s" category="withdrawalStatus" value={w.status} />,
         w.status === 'PENDING' ? (
           <span key="a" className="flex gap-1">
             <button onClick={() => run(() => api.post(`/admin/withdrawals/${w.id}/approve`), 'Approved')} className="btn-soft inline-flex items-center gap-1 text-xs"><Check size={13} /></button>
@@ -613,7 +617,7 @@ function RafflesAdmin() {
           `${fmt(r.prizePool)} ${r.currency}`,
           enumLabel('raffleAudience', r.audience),
           r.participants,
-          enumLabel('raffleStatus', r.status),
+          <StatusChip key="s" category="raffleStatus" value={r.status} />,
           <div key="act" className="flex gap-1.5">
             {(r.status === 'OPEN' || r.status === 'DRAFT') && <button onClick={() => edit(r)} className="btn-soft text-xs">Edit</button>}
             {r.status === 'OPEN' && <button onClick={() => draw(r.id)} className="btn-soft text-xs">Draw</button>}
@@ -704,7 +708,7 @@ function Tickets() {
         render={(t: any) => [
           `${t.user?.username} #${t.user?.accountId}`,
           t.subject,
-          enumLabel('ticketStatus', t.status),
+          <StatusChip key="s" category="ticketStatus" value={t.status} />,
           new Date(t.updatedAt).toLocaleString(),
           <button key="o" onClick={() => setOpenId(t.id)} className="btn-soft px-3 py-1.5 text-xs">
             {i18n.t('support.open')}
@@ -914,8 +918,8 @@ function GamesAdmin() {
           g.category,
           g.provider,
           `${(g.rtp * 100).toFixed(2)}%`,
-          g.status,
-          <button key="t" onClick={() => toggle(g)} className={`chip ${g.enabled ? 'text-mint' : 'text-white/40'}`}>{g.enabled ? 'on' : 'off'}</button>,
+          <StatusChip key="s" category="gameStatus" value={g.status} />,
+          <button key="t" onClick={() => toggle(g)} className={`chip ${g.enabled ? 'border-mint/30 bg-mint/10 text-mint' : 'text-white/40'}`}>{g.enabled ? 'on' : 'off'}</button>,
           <button key="d" onClick={() => del(g.key)} className="btn-ghost !px-2 !py-1 text-xs text-roul-red"><X size={13} /></button>,
         ]}
       />

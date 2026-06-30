@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Gift, Lock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
+import { StatusChip } from '../components/StatusChip';
 import api, { apiError } from '../lib/api';
 import { fmt } from '../lib/hooks';
 import { enumLabel } from '../lib/labels';
@@ -130,9 +131,12 @@ function BonusCatalog() {
           <h2 className="mb-3 text-lg font-bold">{t('bonuses.mine')}</h2>
           <div className="space-y-2">
             {mine.map((m: any) => (
-              <div key={m.id} className="flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
-                <span>{m.name}</span>
-                <span className="tabular-nums">{fmt(m.amount)} {m.currency} · {enumLabel('bonusStatus', m.status)}</span>
+              <div key={m.id} className="flex items-center justify-between gap-2 rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
+                <span className="truncate">{m.name}</span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <span className="tabular-nums text-white/70">{fmt(m.amount)} {m.currency}</span>
+                  <StatusChip category="bonusStatus" value={m.status} />
+                </span>
               </div>
             ))}
           </div>

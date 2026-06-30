@@ -1,17 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Paperclip, Send, X } from 'lucide-react';
+import { Lock, Paperclip, Send, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api, { apiError } from '../lib/api';
 import { enumLabel } from '../lib/labels';
 import { isStaff } from '../lib/roles';
+import { statusClass } from '../lib/status';
 import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
+import { StatusChip } from './StatusChip';
 
 const isVideo = (url: string) => /\.(mp4|webm|mov)$/i.test(url);
 
-/** Admins can move a ticket through these states from the thread header. */
-const ADMIN_STATUSES = ['OPEN', 'ANSWERED', 'RESOLVED', 'CLOSED'] as const;
+// Meaningful transitions an operator makes by hand. ANSWERED/PENDING are set
+// automatically on reply, so they're not manual buttons. "Open" = reopen.
+const ADMIN_STATUSES = ['OPEN', 'RESOLVED', 'CLOSED'] as const;
+
+// A resolved/closed ticket is locked for the player (they can't reopen by
+// writing) — they open a new ticket instead. Staff can still reply (reopens).
+const LOCKED_FOR_USER = ['RESOLVED', 'CLOSED'];
 
 /**
  * Shared support-ticket conversation: message list + attachments + a reply
@@ -81,8 +88,9 @@ export function TicketThread({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-sm text-white/60">
-        <span className="chip">{enumLabel('ticketStatus', ticket.status)}</span>
-        <span className="chip">{enumLabel('ticketPriority', ticket.priority)}</span>
+        <StatusChip category="ticketStatus" value={ticket.status} />
+        {/* Priority is staff triage — hidden from the player, where it's meaningless. */}
+        {admin && <StatusChip category="ticketPriority" value={ticket.priority} prefix={t('support.priority')} />}
         {admin && ticket.user && (
           <span className="text-white/50">
             {ticket.user.username} #{ticket.user.accountId}
@@ -97,7 +105,7 @@ export function TicketThread({
               key={s}
               onClick={() => setStatus.mutate(s)}
               disabled={setStatus.isPending || ticket.status === s}
-              className={`rounded-xl px-3 py-1.5 text-xs transition disabled:opacity-50 ${ticket.status === s ? 'bg-white/15 text-white' : 'bg-white/5 text-white/60 hover:text-white'}`}
+              className={`rounded-xl border px-3 py-1.5 text-xs transition disabled:opacity-60 ${ticket.status === s ? statusClass('ticketStatus', s) : 'border-white/10 bg-white/5 text-white/60 hover:text-white'}`}
             >
               {enumLabel('ticketStatus', s)}
             </button>
@@ -133,7 +141,12 @@ export function TicketThread({
         })}
       </div>
 
-      <form onSubmit={submit} className="space-y-2">
+      {!admin && LOCKED_FOR_USER.includes(ticket.status) ? (
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-center text-sm text-white/50">
+          <Lock size={15} /> {t('support.lockedNote')}
+        </div>
+      ) : (
+        <form onSubmit={submit} className="space-y-2">
         <textarea
           className="input min-h-20"
           placeholder={t('support.replyPlaceholder')}
@@ -171,7 +184,8 @@ export function TicketThread({
             <Send size={16} /> {t('support.send')}
           </button>
         </div>
-      </form>
+        </form>
+      )}
     </div>
   );
 }
