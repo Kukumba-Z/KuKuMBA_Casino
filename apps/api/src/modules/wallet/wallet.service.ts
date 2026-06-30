@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma, TransactionType, WalletMode } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -109,6 +110,66 @@ export class WalletService {
       });
       return { ok: true, amount: '10000' };
     });
+  }
+
+  /**
+   * Convert one real fiat balance into another at the cross-rate derived from each
+   * currency's USD rate (e.g. deposit in USD, play in RUB). Demo coins and crypto
+   * are not convertible. Both ledger legs share a refId so the pair is auditable.
+   * Amounts are floored to each currency's precision, so conversion never mints money.
+   */
+  async convert(userId: string, fromCode: string, toCode: string, amountInput: string) {
+    if (fromCode === toCode) throw new BadRequestException('CONVERT_SAME_CURRENCY');
+    const [from, to] = await Promise.all([
+      this.prisma.currency.findUnique({ where: { code: fromCode } }),
+      this.prisma.currency.findUnique({ where: { code: toCode } }),
+    ]);
+    const isRealFiat = (c: typeof from): c is NonNullable<typeof from> =>
+      !!c && c.enabled && c.type === 'FIAT';
+    if (!isRealFiat(from) || !isRealFiat(to)) throw new BadRequestException('CONVERT_CURRENCY_INVALID');
+
+    const amount = D(amountInput).toDecimalPlaces(from.decimals, Prisma.Decimal.ROUND_DOWN);
+    if (amount.lte(0)) throw new BadRequestException('BAD_AMOUNT');
+    // 1 `from` = from.usdRate USD; 1 `to` = to.usdRate USD ⇒ toAmount = amount·rateFrom/rateTo.
+    const toAmount = amount
+      .mul(from.usdRate)
+      .div(to.usdRate)
+      .toDecimalPlaces(to.decimals, Prisma.Decimal.ROUND_DOWN);
+    if (toAmount.lte(0)) throw new BadRequestException('CONVERT_TOO_SMALL');
+
+    const ref = randomUUID(); // links the debit + credit legs
+    await this.runInTx(async (tx) => {
+      await this.apply(tx, {
+        userId,
+        type: 'CONVERSION',
+        currency: fromCode,
+        mode: 'REAL',
+        amount: amount.neg(),
+        refType: 'convert',
+        refId: ref,
+        description: `Convert ${fromCode} → ${toCode}`,
+        meta: { to: toCode, toAmount: toAmount.toFixed() },
+      });
+      await this.apply(tx, {
+        userId,
+        type: 'CONVERSION',
+        currency: toCode,
+        mode: 'REAL',
+        amount: toAmount,
+        refType: 'convert',
+        refId: ref,
+        description: `Convert ${fromCode} → ${toCode}`,
+        meta: { from: fromCode, fromAmount: amount.toFixed() },
+      });
+    });
+
+    return {
+      from: fromCode,
+      to: toCode,
+      fromAmount: amount.toFixed(),
+      toAmount: toAmount.toFixed(),
+      rate: D(from.usdRate).div(to.usdRate).toFixed(),
+    };
   }
 
   /** Current balances for a user (one row per currency × mode). */

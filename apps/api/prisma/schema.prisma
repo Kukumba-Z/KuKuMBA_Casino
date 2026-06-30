@@ -62,6 +62,7 @@ enum TransactionType {
   TIP
   ADMIN_ADJUST
   ROLLBACK
+  CONVERSION
 }
 
 enum LedgerDirection {

@@ -1,9 +1,16 @@
-import { Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { TransactionType } from '@prisma/client';
+import { IsNumberString, IsString } from 'class-validator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { WalletService } from './wallet.service';
+
+class ConvertBody {
+  @IsString() from: string;
+  @IsString() to: string;
+  @IsNumberString() amount: string;
+}
 
 @Controller('wallet')
 export class WalletController {
@@ -20,6 +27,12 @@ export class WalletController {
   @Post('demo/topup')
   demoTopup(@CurrentUser('id') userId: string) {
     return this.wallet.demoTopup(userId);
+  }
+
+  /** Convert between real fiat balances (e.g. USD → RUB) at the USD cross-rate. */
+  @Post('convert')
+  convert(@CurrentUser('id') userId: string, @Body() dto: ConvertBody) {
+    return this.wallet.convert(userId, dto.from, dto.to, dto.amount);
   }
 
   @Public()

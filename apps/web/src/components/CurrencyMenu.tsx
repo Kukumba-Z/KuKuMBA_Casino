@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Plus } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ArrowLeftRight, ArrowUpDown, ChevronDown, Plus } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import api, { apiError } from '../lib/api';
@@ -22,6 +22,7 @@ export function CurrencyMenu() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [topupOpen, setTopupOpen] = useState(false);
+  const [convertOpen, setConvertOpen] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -118,13 +119,34 @@ export function CurrencyMenu() {
                 <div className="px-3 py-3 text-center text-xs text-white/40">{t('common.loading')}</div>
               )}
             </div>
-            <Link
-              to="/wallet"
-              onClick={() => setOpen(false)}
-              className="block border-t border-white/10 px-3 py-2.5 text-center text-sm font-semibold text-lav hover:bg-white/5"
-            >
-              {t('nav.wallet')}
-            </Link>
+            {mode === 'REAL' ? (
+              <div className="grid grid-cols-2 border-t border-white/10">
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    setConvertOpen(true);
+                  }}
+                  className="flex items-center justify-center gap-1.5 border-r border-white/10 px-3 py-2.5 text-sm font-semibold text-mint hover:bg-white/5"
+                >
+                  <ArrowLeftRight size={15} /> {t('convert.button')}
+                </button>
+                <Link
+                  to="/wallet"
+                  onClick={() => setOpen(false)}
+                  className="px-3 py-2.5 text-center text-sm font-semibold text-lav hover:bg-white/5"
+                >
+                  {t('nav.wallet')}
+                </Link>
+              </div>
+            ) : (
+              <Link
+                to="/wallet"
+                onClick={() => setOpen(false)}
+                className="block border-t border-white/10 px-3 py-2.5 text-center text-sm font-semibold text-lav hover:bg-white/5"
+              >
+                {t('nav.wallet')}
+              </Link>
+            )}
           </div>
         )}
       </div>
@@ -141,6 +163,147 @@ export function CurrencyMenu() {
           {t('demoTopup.claim')}
         </button>
       </Modal>
+
+      <ConvertModal open={convertOpen} onClose={() => setConvertOpen(false)} />
     </div>
+  );
+}
+
+/**
+ * Convert one real fiat balance into another (e.g. deposit in USD, play in RUB).
+ * The preview uses each currency's USD rate; the server re-checks and floors to
+ * the target currency's precision, so what you see matches what you get.
+ */
+function ConvertModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const { currency, setCurrency } = useUI();
+  const { data: currencies } = useCurrencies();
+  const { data: balances } = useBalances();
+  const fiats = useMemo(() => (currencies ?? []).filter((c) => c.type === 'FIAT'), [currencies]);
+
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Seed sensible defaults each time the dialog opens: from = active currency.
+  useEffect(() => {
+    if (!open || !fiats.length) return;
+    const f = fiats.some((c) => c.code === currency) ? currency : fiats[0].code;
+    const tCode = (fiats.find((c) => c.code !== f) ?? fiats[0]).code;
+    setFrom(f);
+    setTo(tCode);
+    setAmount('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, fiats]);
+
+  const rateOf = (code: string) => Number(fiats.find((c) => c.code === code)?.usdRate ?? 0);
+  const toDecimals = fiats.find((c) => c.code === to)?.decimals ?? 2;
+  const bal = balances?.find((b) => b.mode === 'REAL' && b.currency === from)?.amount ?? '0';
+  const amt = Number(amount);
+  const rFrom = rateOf(from);
+  const rTo = rateOf(to);
+  const preview = amt > 0 && rFrom > 0 && rTo > 0 ? (amt * rFrom) / rTo : 0;
+  const overBalance = amt > Number(bal);
+  const canSubmit = !!from && !!to && from !== to && amt > 0 && !overBalance && preview > 0 && !busy;
+
+  const swap = () => {
+    setFrom(to);
+    setTo(from);
+  };
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      await api.post('/wallet/convert', { from, to, amount });
+      await qc.invalidateQueries({ queryKey: ['balances'] });
+      toast.success(t('convert.done'));
+      setCurrency(to); // switch the active wallet to the currency you just topped up
+      onClose();
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const options = (exclude: string) =>
+    fiats
+      .filter((c) => c.code !== exclude)
+      .map((c) => (
+        <option key={c.code} value={c.code}>
+          {c.code} — {c.name}
+        </option>
+      ));
+
+  return (
+    <Modal open={open} onClose={onClose} title={t('convert.title')}>
+      <div className="space-y-3">
+        <div>
+          <div className="mb-1 flex items-center justify-between">
+            <label className="label !mb-0">{t('convert.from')}</label>
+            <span className="text-xs text-white/45">
+              {t('convert.balance')}: <span className="tabular-nums text-white/70">{fmt(bal, 2)} {from}</span>
+            </span>
+          </div>
+          <select className="input" value={from} onChange={(e) => setFrom(e.target.value)}>
+            {options(to)}
+          </select>
+        </div>
+
+        <div>
+          <label className="label">{t('convert.amount')}</label>
+          <div className="flex gap-2">
+            <input
+              className="input flex-1"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              inputMode="decimal"
+              placeholder="0"
+            />
+            <button type="button" onClick={() => setAmount(String(Number(bal)))} className="btn-soft shrink-0 !px-3">
+              {t('convert.max')}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={swap}
+            className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/5 text-white/70 transition hover:bg-white/10"
+            aria-label={t('convert.swap')}
+          >
+            <ArrowUpDown size={16} />
+          </button>
+        </div>
+
+        <div>
+          <label className="label">{t('convert.to')}</label>
+          <select className="input" value={to} onChange={(e) => setTo(e.target.value)}>
+            {options(from)}
+          </select>
+        </div>
+
+        <div className="rounded-2xl bg-black/30 p-4 text-center">
+          <div className="text-xs uppercase tracking-wide text-white/40">{t('convert.youGet')}</div>
+          <div className="text-2xl font-extrabold tabular-nums text-mint">
+            {fmt(preview, Math.min(toDecimals, 8))} <span className="text-white/50">{to}</span>
+          </div>
+          {rFrom > 0 && rTo > 0 && (
+            <div className="mt-1 text-[11px] text-white/40">
+              1 {from} ≈ {fmt(rFrom / rTo, 6)} {to}
+            </div>
+          )}
+        </div>
+
+        {overBalance && <div className="text-sm text-roul-red">{t('errors.INSUFFICIENT_FUNDS')}</div>}
+
+        <button onClick={submit} disabled={!canSubmit} className="btn-primary w-full disabled:opacity-60">
+          {t('convert.submit')}
+        </button>
+      </div>
+    </Modal>
   );
 }
