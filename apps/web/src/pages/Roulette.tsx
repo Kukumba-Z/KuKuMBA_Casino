@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Shield, Target, Volume2, VolumeX } from 'lucide-react';
+import { Shield, Target, Volume2, VolumeX, Zap } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -26,7 +26,7 @@ export default function Roulette() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const authed = !!useAuth((s) => s.accessToken);
-  const { mode, currency, sound, toggleSound } = useUI();
+  const { mode, currency, sound, toggleSound, quick, toggleQuick } = useUI();
 
   // Keep the sound engine in sync with the persisted preference.
   useEffect(() => setSoundEnabled(sound), [sound]);
@@ -99,12 +99,14 @@ export default function Roulette() {
     setBusy(true);
     try {
       const { data } = await api.post('/games/roulette/play', { currency, mode, bets: apiBets });
+      // Quick play resolves instantly; otherwise the wheel animates for SPIN_MS.
+      const dur = quick ? 0 : SPIN_MS;
       // Start the wheel spinning toward the outcome…
       setResult(data.outcome);
       setSpinId((x) => x + 1);
-      sfx.spin(SPIN_MS);
+      if (!quick) sfx.spin(SPIN_MS);
       clear();
-      // …and only reveal the outcome (toast only) + refresh balances once it lands.
+      // …and only reveal the outcome + refresh balances once it lands.
       revealRef.current = window.setTimeout(() => {
         setBusy(false);
         qc.invalidateQueries({ queryKey: ['balances'] });
@@ -114,7 +116,7 @@ export default function Roulette() {
         // The result is shown in the wheel — games never toast outcomes (only sound).
         if (Number(data.net) > 0) sfx.win();
         else sfx.lose();
-      }, SPIN_MS);
+      }, dur);
     } catch (e) {
       toast.error(apiError(e));
       setBusy(false);
@@ -182,7 +184,7 @@ export default function Roulette() {
         </button>
 
         <div className="w-full max-w-[260px] sm:max-w-[300px]">
-          <RouletteWheel result={result} spinId={spinId} />
+          <RouletteWheel result={result} spinId={spinId} spinMs={quick ? 0 : SPIN_MS} />
         </div>
 
         {/* recent outcomes — this visit only; cleared when leaving the page */}
@@ -236,11 +238,21 @@ export default function Roulette() {
         </div>
 
         {/* controls — above the board so the total/clear/spin stay in reach */}
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm">
             {t('roulette.totalBet')}: <b className="text-lg tabular-nums">{fmt(total, 2)}</b> {currency}
           </div>
           <div className="flex gap-2">
+            {/* Quick play: instant spins (no animation). Persisted across all games. */}
+            <button
+              type="button"
+              onClick={toggleQuick}
+              aria-pressed={quick}
+              title={t('roulette.quickPlay')}
+              className={`inline-flex items-center gap-1.5 rounded-2xl border px-3 py-2.5 text-sm font-semibold transition ${quick ? 'border-sun/40 bg-sun/15 text-sun' : 'border-white/10 bg-white/5 text-white/60 hover:text-white'}`}
+            >
+              <Zap size={16} /> <span className="hidden sm:inline">{t('roulette.quickPlay')}</span>
+            </button>
             <button onClick={clear} className="btn-ghost !px-3" disabled={busy || !total}>
               {t('roulette.clear')}
             </button>

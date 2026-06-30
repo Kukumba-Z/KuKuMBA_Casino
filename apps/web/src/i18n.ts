@@ -219,6 +219,7 @@ const ru = {
     recent: 'Последние',
     soundOn: 'Включить звук',
     soundOff: 'Выключить звук',
+    quickPlay: 'Быстрая игра',
   },
   game: {
     about: 'Об игре',
@@ -491,7 +492,7 @@ const en: typeof ru = {
     needLogin: 'Sign in to place bets', won: 'You won', lost: 'No luck',
     pfHint: 'The hash is published before each spin — the result cannot be forged.',
     bet: 'Bet', maxBtn: 'Max', column: 'Column', info: 'Info & fairness', limits: 'Bet limit', recent: 'Recent',
-    soundOn: 'Sound on', soundOff: 'Sound off',
+    soundOn: 'Sound on', soundOff: 'Sound off', quickPlay: 'Quick play',
   },
   game: {
     about: 'About the game',

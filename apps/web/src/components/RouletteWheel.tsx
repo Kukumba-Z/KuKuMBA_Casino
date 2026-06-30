@@ -31,10 +31,13 @@ export function RouletteWheel({
   result,
   spinId,
   size = 320,
+  spinMs = SPIN_MS,
 }: {
   result: number | null;
   spinId: number;
   size?: number;
+  /** Spin animation duration. 0 = "quick play": snap straight to the result. */
+  spinMs?: number;
 }) {
   const cx = size / 2;
   const cy = size / 2;
@@ -71,9 +74,15 @@ export function RouletteWheel({
     ballRef.current = ballNext;
     setBallRot(ballNext);
 
+    // Quick play (spinMs <= 0): the wheel/ball jump to the final spot with a
+    // zero-length transition, so reveal the number immediately — no waiting.
+    if (spinMs <= 0) {
+      setLanded(true);
+      return;
+    }
     setLanded(false);
     // fallback in case transitionend doesn't fire (reduced motion etc.)
-    const tm = setTimeout(() => setLanded(true), SPIN_MS + 120);
+    const tm = setTimeout(() => setLanded(true), spinMs + 120);
     return () => clearTimeout(tm);
   }, [spinId, result]);
 
@@ -94,7 +103,7 @@ export function RouletteWheel({
           onTransitionEnd={(e) => {
             if ((e as any).propertyName === 'transform') setLanded(true);
           }}
-          style={{ transform: `rotate(${rot}deg)`, transition: `transform ${SPIN_MS}ms cubic-bezier(0.16, 1, 0.3, 1)` }}
+          style={{ transform: `rotate(${rot}deg)`, transition: `transform ${spinMs}ms cubic-bezier(0.16, 1, 0.3, 1)` }}
         >
           <circle cx={cx} cy={cy} r={rO + 3} fill="#0B0817" stroke="rgba(255,255,255,0.12)" strokeWidth="2" />
           {EURO.map((n, i) => {
@@ -127,7 +136,7 @@ export function RouletteWheel({
           Bright with a glow + a soft trailing halo so it's easy to follow. */}
       <div
         className="pointer-events-none absolute inset-0 z-[15]"
-        style={{ transform: `rotate(${ballRot}deg)`, transition: `transform ${SPIN_MS}ms cubic-bezier(0.18, 0.7, 0.12, 1)` }}
+        style={{ transform: `rotate(${ballRot}deg)`, transition: `transform ${spinMs}ms cubic-bezier(0.18, 0.7, 0.12, 1)` }}
       >
         {/* trailing halo (slightly behind the ball along the rim) */}
         <div
