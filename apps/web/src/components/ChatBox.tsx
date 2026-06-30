@@ -1,4 +1,4 @@
-import { MessageCircle, Send } from 'lucide-react';
+import { MessageCircle, Send, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
@@ -22,7 +22,7 @@ interface Msg {
 /** Short HH:MM timestamp so the room reads as alive. */
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
-export function ChatBox({ className = '' }: { className?: string }) {
+export function ChatBox({ className = '', onClose }: { className?: string; onClose?: () => void }) {
   const { t } = useTranslation();
   const authed = !!useAuth((s) => s.accessToken);
   const { data: vipColors } = useVipColors();
@@ -65,6 +65,15 @@ export function ChatBox({ className = '' }: { className?: string }) {
     <div className={`flex min-h-0 flex-col rounded-3xl border border-white/10 bg-surface-2 shadow-card ${className}`}>
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-sm font-bold">
         <MessageCircle size={16} className="text-lav" /> {t('chat.title')}
+        {onClose && (
+          <button
+            onClick={onClose}
+            aria-label={t('common.close')}
+            className="ml-auto grid h-7 w-7 place-items-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white"
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
       <div ref={listRef} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-4 py-3">
         {messages.map((m) => {
