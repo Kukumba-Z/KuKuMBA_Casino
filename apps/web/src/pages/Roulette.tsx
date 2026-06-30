@@ -248,8 +248,9 @@ export default function Roulette() {
               type="button"
               onClick={toggleQuick}
               aria-pressed={quick}
+              disabled={busy}
               title={t('roulette.quickPlay')}
-              className={`inline-flex items-center gap-1.5 rounded-2xl border px-3 py-2.5 text-sm font-semibold transition ${quick ? 'border-sun/40 bg-sun/15 text-sun' : 'border-white/10 bg-white/5 text-white/60 hover:text-white'}`}
+              className={`inline-flex items-center gap-1.5 rounded-2xl border px-3 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${quick ? 'border-sun/40 bg-sun/15 text-sun' : 'border-white/10 bg-white/5 text-white/60 hover:text-white'}`}
             >
               <Zap size={16} /> <span className="hidden sm:inline">{t('roulette.quickPlay')}</span>
             </button>
