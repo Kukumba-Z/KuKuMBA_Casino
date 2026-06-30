@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { ExchangeRatesService } from './exchange-rates.service';
 import { WalletController } from './wallet.controller';
 import { WalletService } from './wallet.service';
 
@@ -9,7 +10,7 @@ import { WalletService } from './wallet.service';
 @Global()
 @Module({
   controllers: [WalletController],
-  providers: [WalletService],
-  exports: [WalletService],
+  providers: [WalletService, ExchangeRatesService],
+  exports: [WalletService, ExchangeRatesService],
 })
 export class WalletModule {}

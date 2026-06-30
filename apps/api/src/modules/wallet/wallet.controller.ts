@@ -3,7 +3,9 @@ import { TransactionType } from '@prisma/client';
 import { IsNumberString, IsString } from 'class-validator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { ExchangeRatesService } from './exchange-rates.service';
 import { WalletService } from './wallet.service';
 
 class ConvertBody {
@@ -17,6 +19,7 @@ export class WalletController {
   constructor(
     private wallet: WalletService,
     private prisma: PrismaService,
+    private rates: ExchangeRatesService,
   ) {}
 
   @Get('balances')
@@ -29,10 +32,24 @@ export class WalletController {
     return this.wallet.demoTopup(userId);
   }
 
-  /** Convert between real fiat balances (e.g. USD → RUB) at the USD cross-rate. */
+  /** Convert between real fiat balances (e.g. USD → RUB) at the live USD cross-rate. */
   @Post('convert')
   convert(@CurrentUser('id') userId: string, @Body() dto: ConvertBody) {
     return this.wallet.convert(userId, dto.from, dto.to, dto.amount);
+  }
+
+  /** Live fiat rates ("1 unit = X USD") with the feed's timestamp — drives the UI. */
+  @Public()
+  @Get('rates')
+  ratesSnapshot() {
+    return this.rates.snapshot();
+  }
+
+  /** Admin: pull fresh rates from the FX feed on demand. */
+  @Roles('ADMIN')
+  @Post('rates/refresh')
+  refreshRates() {
+    return this.rates.refresh();
   }
 
   @Public()

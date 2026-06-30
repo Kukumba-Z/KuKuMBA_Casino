@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeftRight, ArrowUpDown, ChevronDown, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -180,6 +180,13 @@ function ConvertModal({ open, onClose }: { open: boolean; onClose: () => void })
   const { currency, setCurrency } = useUI();
   const { data: currencies } = useCurrencies();
   const { data: balances } = useBalances();
+  // Live FX snapshot ("1 unit = X USD" + when it was refreshed) drives the rate shown.
+  const { data: fx } = useQuery({
+    queryKey: ['fx-rates'],
+    queryFn: async () => (await api.get('/wallet/rates')).data,
+    enabled: open,
+    staleTime: 60_000,
+  });
   const fiats = useMemo(() => (currencies ?? []).filter((c) => c.type === 'FIAT'), [currencies]);
 
   const [from, setFrom] = useState('');
@@ -198,7 +205,8 @@ function ConvertModal({ open, onClose }: { open: boolean; onClose: () => void })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, fiats]);
 
-  const rateOf = (code: string) => Number(fiats.find((c) => c.code === code)?.usdRate ?? 0);
+  // Prefer the live snapshot; fall back to the currency's stored rate.
+  const rateOf = (code: string) => Number(fx?.usd?.[code] ?? fiats.find((c) => c.code === code)?.usdRate ?? 0);
   const toDecimals = fiats.find((c) => c.code === to)?.decimals ?? 2;
   const bal = balances?.find((b) => b.mode === 'REAL' && b.currency === from)?.amount ?? '0';
   const amt = Number(amount);
@@ -292,8 +300,14 @@ function ConvertModal({ open, onClose }: { open: boolean; onClose: () => void })
             {fmt(preview, Math.min(toDecimals, 8))} <span className="text-white/50">{to}</span>
           </div>
           {rFrom > 0 && rTo > 0 && (
-            <div className="mt-1 text-[11px] text-white/40">
-              1 {from} ≈ {fmt(rFrom / rTo, 6)} {to}
+            <div className="mt-1 flex items-center justify-center gap-1.5 text-[11px] text-white/45">
+              <span>1 {from} ≈ {fmt(rFrom / rTo, 6)} {to}</span>
+              {fx?.live && <span className="rounded bg-mint/15 px-1.5 py-0.5 font-semibold text-mint">{t('convert.live')}</span>}
+            </div>
+          )}
+          {fx?.updatedAt && (
+            <div className="mt-0.5 text-[10px] text-white/30">
+              {t('convert.updated')}: {new Date(fx.updatedAt).toLocaleString()}
             </div>
           )}
         </div>

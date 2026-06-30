@@ -107,6 +107,8 @@ const ru = {
     swap: 'Поменять местами',
     submit: 'Конвертировать',
     done: 'Конвертация выполнена',
+    live: 'Живой курс',
+    updated: 'Обновлено',
   },
   chat: {
     title: 'Чат',
@@ -427,6 +429,8 @@ const en: typeof ru = {
     swap: 'Swap',
     submit: 'Convert',
     done: 'Conversion complete',
+    live: 'Live rate',
+    updated: 'Updated',
   },
   chat: {
     title: 'Chat',
