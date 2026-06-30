@@ -61,7 +61,8 @@ export function ChatBox({ className = '' }: { className?: string }) {
   };
 
   return (
-    <div className={`card flex min-h-0 flex-col ${className}`}>
+    // Solid (non-glass) panel — the chat should be fully opaque, not see-through.
+    <div className={`flex min-h-0 flex-col rounded-3xl border border-white/10 bg-surface-2 shadow-card ${className}`}>
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-sm font-bold">
         <MessageCircle size={16} className="text-lav" /> {t('chat.title')}
       </div>
