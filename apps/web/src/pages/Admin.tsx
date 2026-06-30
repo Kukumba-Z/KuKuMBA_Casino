@@ -22,11 +22,12 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
 import api, { apiError } from '../lib/api';
-import { can, fmt, useAdminMe, type AdminMe } from '../lib/hooks';
+import { can, fmt, useAdminMe, useCurrencies, type AdminMe } from '../lib/hooks';
+import { enumLabel } from '../lib/labels';
 import { toast } from '../store/toast';
 
 // Each tab declares the permission that unlocks it (ADMIN sees all).
@@ -424,18 +425,99 @@ function Bonuses() {
   );
 }
 
+const DEPOSIT_WINDOWS = [1, 7, 14, 30];
+const RAFFLE_BLANK = {
+  title: 'New Giveaway',
+  descriptionRu: '',
+  descriptionEn: '',
+  currency: 'DEMO',
+  mode: 'DEMO',
+  prizePool: '5000',
+  winnersCount: 3,
+  entryCost: '0',
+  maxEntriesPerUser: 1,
+  drawAt: '',
+  closesAt: '',
+  requiresDeposit: false,
+  minDeposit: '',
+  depositWithinDays: '',
+  audience: 'ALL',
+  partnerId: '',
+};
+
+/** ISO → value for <input type="datetime-local"> (local time, minute precision). */
+function toLocalInput(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const off = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - off).toISOString().slice(0, 16);
+}
+
 function RafflesAdmin() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['raffles'], queryFn: async () => (await api.get('/raffles')).data });
-  const [form, setForm] = useState({ title: 'New Giveaway', currency: 'DEMO', mode: 'DEMO', prizePool: '5000', winnersCount: 3, entryCost: '0' });
-  const create = async () => {
+  const { data: currencies } = useCurrencies();
+  const [form, setForm] = useState<any>(RAFFLE_BLANK);
+  const [editId, setEditId] = useState<string | null>(null);
+  const set = (patch: any) => setForm((f: any) => ({ ...f, ...patch }));
+
+  // Only currencies matching the selected mode (DEMO vs real) — no free-text codes.
+  const curOpts = (currencies ?? []).filter((c) => (form.mode === 'DEMO' ? c.type === 'DEMO' : c.type !== 'DEMO'));
+
+  const payload = () => ({
+    title: form.title,
+    descriptionRu: form.descriptionRu || undefined,
+    descriptionEn: form.descriptionEn || undefined,
+    currency: form.currency,
+    mode: form.mode,
+    prizePool: String(form.prizePool),
+    winnersCount: Number(form.winnersCount) || 1,
+    entryCost: String(form.entryCost || '0'),
+    maxEntriesPerUser: Number(form.maxEntriesPerUser) || 1,
+    drawAt: form.drawAt ? new Date(form.drawAt).toISOString() : editId ? null : undefined,
+    closesAt: form.closesAt ? new Date(form.closesAt).toISOString() : editId ? null : undefined,
+    requiresDeposit: !!form.requiresDeposit,
+    minDeposit: form.requiresDeposit && form.minDeposit ? String(form.minDeposit) : null,
+    depositWithinDays: form.requiresDeposit && form.depositWithinDays ? Number(form.depositWithinDays) : null,
+    audience: form.audience,
+    partnerId: form.audience === 'PARTNER_REFERRALS' ? form.partnerId || undefined : null,
+  });
+
+  const reset = () => {
+    setEditId(null);
+    setForm(RAFFLE_BLANK);
+  };
+  const submit = async () => {
     try {
-      await api.post('/raffles', form);
+      if (editId) await api.patch(`/raffles/${editId}`, payload());
+      else await api.post('/raffles', payload());
       qc.invalidateQueries({ queryKey: ['raffles'] });
-      toast.success('Raffle created');
+      toast.success(editId ? 'Raffle updated' : 'Raffle created');
+      reset();
     } catch (e) {
       toast.error(apiError(e));
     }
+  };
+  const edit = (r: any) => {
+    setEditId(r.id);
+    setForm({
+      title: r.title,
+      descriptionRu: r.descriptionRu ?? '',
+      descriptionEn: r.descriptionEn ?? '',
+      currency: r.currency,
+      mode: r.mode,
+      prizePool: r.prizePool,
+      winnersCount: r.winnersCount,
+      entryCost: r.entryCost,
+      maxEntriesPerUser: r.maxEntriesPerUser,
+      drawAt: toLocalInput(r.drawAt),
+      closesAt: toLocalInput(r.closesAt),
+      requiresDeposit: !!r.requiresDeposit,
+      minDeposit: r.minDeposit ?? '',
+      depositWithinDays: r.depositWithinDays ?? '',
+      audience: r.audience ?? 'ALL',
+      partnerId: r.partnerId ?? '',
+    });
   };
   const draw = async (id: string) => {
     try {
@@ -446,27 +528,115 @@ function RafflesAdmin() {
       toast.error(apiError(e));
     }
   };
+  const cancel = async (id: string) => {
+    if (!confirm('Cancel this raffle and refund any paid entries?')) return;
+    try {
+      await api.post(`/raffles/${id}/cancel`);
+      qc.invalidateQueries({ queryKey: ['raffles'] });
+      toast.success('Raffle cancelled');
+      if (editId === id) reset();
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+
   return (
     <div className="space-y-3">
-      <div className="card flex flex-wrap items-end gap-2 p-4">
-        <input className="input w-44" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-        <input className="input w-24" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} />
-        <input className="input w-24" value={form.prizePool} onChange={(e) => setForm({ ...form, prizePool: e.target.value })} placeholder="prize" />
-        <input className="input w-20" type="number" value={form.winnersCount} onChange={(e) => setForm({ ...form, winnersCount: +e.target.value })} placeholder="winners" />
-        <button onClick={create} className="btn-primary">Create</button>
+      <div className="card space-y-3 p-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold">{editId ? 'Edit raffle' : 'New raffle'}</h3>
+          {editId && (
+            <button onClick={reset} className="chip text-xs text-white/60">New instead</button>
+          )}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <L label="Title"><input className="input" value={form.title} onChange={(e) => set({ title: e.target.value })} /></L>
+          <L label="Mode">
+            <select className="input" value={form.mode} onChange={(e) => set({ mode: e.target.value, currency: '' })}>
+              <option value="DEMO">DEMO</option>
+              <option value="REAL">REAL</option>
+            </select>
+          </L>
+          <L label="Currency">
+            <select className="input" value={form.currency} onChange={(e) => set({ currency: e.target.value })}>
+              <option value="" disabled>—</option>
+              {curOpts.map((c) => (
+                <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
+              ))}
+            </select>
+          </L>
+          <L label="Prize pool"><input className="input" value={form.prizePool} onChange={(e) => set({ prizePool: e.target.value })} /></L>
+          <L label="Winners"><input className="input" type="number" min={1} value={form.winnersCount} onChange={(e) => set({ winnersCount: +e.target.value })} /></L>
+          <L label="Entry cost"><input className="input" value={form.entryCost} onChange={(e) => set({ entryCost: e.target.value })} /></L>
+          <L label="Max entries / user"><input className="input" type="number" min={1} value={form.maxEntriesPerUser} onChange={(e) => set({ maxEntriesPerUser: +e.target.value })} /></L>
+          <L label="Draw at (auto)"><input className="input" type="datetime-local" value={form.drawAt} onChange={(e) => set({ drawAt: e.target.value })} /></L>
+          <L label="Closes at"><input className="input" type="datetime-local" value={form.closesAt} onChange={(e) => set({ closesAt: e.target.value })} /></L>
+          <L label="Audience">
+            <select className="input" value={form.audience} onChange={(e) => set({ audience: e.target.value })}>
+              <option value="ALL">Everyone</option>
+              <option value="PARTNER_REFERRALS">Partner referrals</option>
+            </select>
+          </L>
+          {form.audience === 'PARTNER_REFERRALS' && (
+            <L label="Partner ID (blank = you)"><input className="input" value={form.partnerId} onChange={(e) => set({ partnerId: e.target.value })} placeholder="user id" /></L>
+          )}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <L label="Description (RU)"><input className="input" value={form.descriptionRu} onChange={(e) => set({ descriptionRu: e.target.value })} /></L>
+          <L label="Description (EN)"><input className="input" value={form.descriptionEn} onChange={(e) => set({ descriptionEn: e.target.value })} /></L>
+          <L label="Requires deposit">
+            <label className="flex h-9 items-center gap-2 text-sm">
+              <input type="checkbox" checked={form.requiresDeposit} onChange={(e) => set({ requiresDeposit: e.target.checked })} />
+              <span className="text-white/60">enable conditions</span>
+            </label>
+          </L>
+          {form.requiresDeposit && (
+            <>
+              <L label="Min deposit"><input className="input" value={form.minDeposit} onChange={(e) => set({ minDeposit: e.target.value })} placeholder="any" /></L>
+              <L label="Deposit within">
+                <select className="input" value={form.depositWithinDays} onChange={(e) => set({ depositWithinDays: e.target.value })}>
+                  <option value="">any time</option>
+                  {DEPOSIT_WINDOWS.map((d) => (
+                    <option key={d} value={d}>{d} days</option>
+                  ))}
+                </select>
+              </L>
+            </>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={submit} className="btn-primary" disabled={!form.currency}>{editId ? 'Save changes' : 'Create'}</button>
+          {editId && <button onClick={() => cancel(editId)} className="btn-soft text-rose-300">Cancel raffle</button>}
+        </div>
       </div>
       <Table
         rows={data ?? []}
-        cols={['title', 'prize', 'participants', 'status', '']}
+        cols={['title', 'prize', 'audience', 'participants', 'status', '']}
         render={(r: any) => [
           r.title,
           `${fmt(r.prizePool)} ${r.currency}`,
+          enumLabel('raffleAudience', r.audience),
           r.participants,
-          r.status,
-          r.status === 'OPEN' ? <button key="d" onClick={() => draw(r.id)} className="btn-soft text-xs">Draw</button> : <span key="-" className="text-white/30">—</span>,
+          enumLabel('raffleStatus', r.status),
+          <div key="act" className="flex gap-1.5">
+            {(r.status === 'OPEN' || r.status === 'DRAFT') && <button onClick={() => edit(r)} className="btn-soft text-xs">Edit</button>}
+            {r.status === 'OPEN' && <button onClick={() => draw(r.id)} className="btn-soft text-xs">Draw</button>}
+            {r.status !== 'COMPLETED' && r.status !== 'CANCELLED' && <button onClick={() => cancel(r.id)} className="btn-soft text-xs text-rose-300">Cancel</button>}
+            {(r.status === 'COMPLETED' || r.status === 'CANCELLED') && <span className="text-white/30">—</span>}
+          </div>,
         ]}
       />
     </div>
+  );
+}
+
+/** Compact labelled field for admin forms. */
+function L({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <div className="mb-1 text-[11px] uppercase tracking-wide text-white/40">{label}</div>
+      {children}
+    </label>
   );
 }
 

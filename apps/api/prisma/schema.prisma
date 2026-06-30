@@ -140,6 +140,11 @@ enum RaffleCreatorType {
   SYSTEM
 }
 
+enum RaffleAudience {
+  ALL
+  PARTNER_REFERRALS
+}
+
 enum TicketStatus {
   OPEN
   PENDING
@@ -629,6 +634,14 @@ model Raffle {
   opensAt        DateTime?
   closesAt       DateTime?
   drawAt         DateTime?
+
+  // entry conditions (Phase 11)
+  requiresDeposit   Boolean        @default(false)
+  minDeposit        Decimal?       @db.Decimal(38, 18) // denominated in this raffle's currency
+  depositWithinDays Int?           // qualifying-deposit window: 1 / 7 / 14 / 30
+  audience          RaffleAudience @default(ALL)
+  partnerId         String?        // audience=PARTNER_REFERRALS: only this partner's referrals may enter
+
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -636,6 +649,7 @@ model Raffle {
   winners RaffleWinner[]
 
   @@index([status])
+  @@index([status, drawAt])
 }
 
 model RaffleEntry {
