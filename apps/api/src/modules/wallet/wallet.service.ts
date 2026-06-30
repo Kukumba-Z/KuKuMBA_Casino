@@ -22,6 +22,36 @@ export interface LedgerInput {
 type Tx = Prisma.TransactionClient;
 
 /**
+ * Gameplay ledger types. These belong to "game history" (see the profile), not
+ * the wallet — the wallet shows money movements only. There is no bet-rollback
+ * type today; ROLLBACK is a withdrawal refund, which is a money operation.
+ */
+const GAME_TYPES: TransactionType[] = [TransactionType.BET, TransactionType.WIN];
+
+/** Everything that isn't gameplay is a wallet ("money") operation. */
+const MONEY_TYPES: TransactionType[] = Object.values(TransactionType).filter(
+  (t) => !GAME_TYPES.includes(t),
+);
+
+/**
+ * Wallet transaction categories — the single source of truth the UI filters by.
+ * Each named group maps to a set of ledger types; "other" is the catch-all of
+ * money types not in any named group (so new types never silently vanish).
+ */
+const TX_GROUPS: Record<string, TransactionType[]> = {
+  deposits: [TransactionType.DEPOSIT],
+  withdrawals: [TransactionType.WITHDRAWAL, TransactionType.ROLLBACK],
+  bonuses: [TransactionType.BONUS, TransactionType.PROMO, TransactionType.REFERRAL],
+  cashback: [TransactionType.CASHBACK],
+  raffles: [TransactionType.RAFFLE_ENTRY, TransactionType.RAFFLE_PRIZE, TransactionType.REFUND],
+};
+
+const NAMED_GROUP_TYPES = new Set(Object.values(TX_GROUPS).flat());
+const OTHER_TYPES = MONEY_TYPES.filter((t) => !NAMED_GROUP_TYPES.has(t));
+
+export type TxKind = 'money' | 'game' | 'all';
+
+/**
  * The wallet is a single-entry, append-only ledger. Every balance mutation is
  * recorded as an immutable Transaction with before/after snapshots, so balances
  * are fully auditable and reconcilable. Rows are locked FOR UPDATE to stay
@@ -191,13 +221,32 @@ export class WalletService {
   }
 
   /** Paginated ledger history. */
-  async transactions(userId: string, opts: { limit?: number; cursor?: string; type?: TransactionType } = {}) {
+  async transactions(
+    userId: string,
+    opts: { limit?: number; cursor?: string; type?: TransactionType; kind?: TxKind; group?: string } = {},
+  ) {
     const limit = Math.min(opts.limit ?? 50, 200);
+    const types = this.resolveTxTypes(opts);
     return this.prisma.transaction.findMany({
-      where: { userId, ...(opts.type ? { type: opts.type } : {}) },
+      where: { userId, ...(types ? { type: { in: types } } : {}) },
       orderBy: { createdAt: 'desc' },
       take: limit,
       ...(opts.cursor ? { skip: 1, cursor: { id: opts.cursor } } : {}),
     });
+  }
+
+  /**
+   * Resolve a transactions query to a concrete type allow-list (or null = no
+   * type filter). Precedence: explicit `type` → category `group` → `kind`.
+   */
+  private resolveTxTypes(opts: { type?: TransactionType; kind?: TxKind; group?: string }): TransactionType[] | null {
+    if (opts.type) return [opts.type];
+    if (opts.group) {
+      if (opts.group === 'other') return OTHER_TYPES;
+      return TX_GROUPS[opts.group] ?? MONEY_TYPES; // unknown group → all money (safe)
+    }
+    if (opts.kind === 'money') return MONEY_TYPES;
+    if (opts.kind === 'game') return GAME_TYPES;
+    return null; // 'all' / unspecified → no filter
   }
 }

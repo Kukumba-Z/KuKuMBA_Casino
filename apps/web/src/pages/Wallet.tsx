@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownToLine, ArrowUpFromLine, Gem, WalletMinimal } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { Mascot } from '../components/Mascot';
 import api, { apiError } from '../lib/api';
 import { fmt, useBalances, useCurrencies } from '../lib/hooks';
@@ -154,12 +155,36 @@ function WithdrawCard({ currencies, onDone }: { currencies: any[]; onDone: () =>
   );
 }
 
+// Category chips for the wallet history. Keys map to server-side groups in
+// wallet.service (TX_GROUPS); 'all' sends no group. Gameplay (BET/WIN) is never
+// shown here — it lives in game history on the profile.
+const TX_GROUPS = ['all', 'deposits', 'withdrawals', 'bonuses', 'cashback', 'raffles', 'other'] as const;
+
 function Transactions() {
   const { t } = useTranslation();
-  const { data } = useQuery({ queryKey: ['txs'], queryFn: async () => (await api.get('/wallet/transactions?limit=30')).data });
+  const [group, setGroup] = useState<(typeof TX_GROUPS)[number]>('all');
+  const { data } = useQuery({
+    queryKey: ['txs', group],
+    queryFn: async () => {
+      const params = new URLSearchParams({ limit: '30', kind: 'money' });
+      if (group !== 'all') params.set('group', group);
+      return (await api.get(`/wallet/transactions?${params.toString()}`)).data;
+    },
+  });
   return (
     <div className="card p-5">
       <h2 className="mb-3 text-lg font-bold">{t('wallet.transactions')}</h2>
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {TX_GROUPS.map((g) => (
+          <button
+            key={g}
+            onClick={() => setGroup(g)}
+            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${group === g ? 'border-lav/40 bg-lav/15 text-lav' : 'border-white/10 bg-white/[0.03] text-white/60 hover:text-white'}`}
+          >
+            {t(`wallet.txGroups.${g}`)}
+          </button>
+        ))}
+      </div>
       <div className="space-y-1.5">
         {(data ?? []).map((x: any) => (
           <div key={x.id} className="flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
@@ -175,6 +200,12 @@ function Transactions() {
         ))}
         {(!data || data.length === 0) && <div className="py-4 text-center text-white/40">{t('common.empty')}</div>}
       </div>
+      <p className="mt-3 text-xs text-white/40">
+        {t('wallet.gameHistoryHint')}{' '}
+        <Link to="/profile" className="text-lav hover:underline">
+          {t('profile.history')}
+        </Link>
+      </p>
     </div>
   );
 }

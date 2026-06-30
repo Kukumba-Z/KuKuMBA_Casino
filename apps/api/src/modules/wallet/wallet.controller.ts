@@ -6,7 +6,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ExchangeRatesService } from './exchange-rates.service';
-import { WalletService } from './wallet.service';
+import { WalletService, type TxKind } from './wallet.service';
 
 class ConvertBody {
   @IsString() from: string;
@@ -61,12 +61,17 @@ export class WalletController {
     });
   }
 
+  // Wallet history. The wallet UI requests kind=money so gameplay (BET/WIN)
+  // stays out — those live in game history (profile). `group` narrows to a
+  // category (deposits, withdrawals, bonuses, cashback, raffles, other).
   @Get('transactions')
   transactions(
     @CurrentUser('id') userId: string,
     @Query('limit') limit?: string,
     @Query('type') type?: TransactionType,
+    @Query('kind') kind?: TxKind,
+    @Query('group') group?: string,
   ) {
-    return this.wallet.transactions(userId, { limit: limit ? +limit : 50, type });
+    return this.wallet.transactions(userId, { limit: limit ? +limit : 50, type, kind, group });
   }
 }
