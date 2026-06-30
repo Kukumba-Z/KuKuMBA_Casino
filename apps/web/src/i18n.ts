@@ -86,6 +86,7 @@ const ru = {
     done: 'Готово',
     close: 'Закрыть',
     remove: 'Убрать',
+    delete: 'Удалить',
     readAll: 'Прочитать всё',
     seeAll: 'Все уведомления',
     noNotifications: 'Уведомлений пока нет',
@@ -420,7 +421,7 @@ const en: typeof ru = {
     real: 'Real', balance: 'Balance', amount: 'Amount', currency: 'Currency', language: 'Language', chooseCurrency: 'Account',
     network: 'Network', deposit: 'Deposit', withdraw: 'Withdraw', history: 'History', loading: 'Loading…',
     empty: 'Empty', copy: 'Copy', copied: 'Copied', accountId: 'Account ID', win: 'Win', bet: 'Bet',
-    all: 'All', done: 'Done', close: 'Close', remove: 'Remove', readAll: 'Mark all read', seeAll: 'All notifications', noNotifications: 'No notifications yet',
+    all: 'All', done: 'Done', close: 'Close', remove: 'Remove', delete: 'Delete', readAll: 'Mark all read', seeAll: 'All notifications', noNotifications: 'No notifications yet',
   },
   demoTopup: {
     title: 'Demo coins',

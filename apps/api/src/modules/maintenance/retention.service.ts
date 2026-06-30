@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { NOTIFICATIONS_KEEP } from '../notifications/notifications.service';
 
 /** How much history we retain so storage stays bounded as the site grows. */
 const CHAT_KEEP_PER_ROOM = 100; // mirrors the 100-message client cap
@@ -49,5 +50,20 @@ export class RetentionService {
       ROUNDS_KEEP_PER_USER,
     );
     if (removed) this.log.log(`pruned ${removed} old game rounds`);
+  }
+
+  /** Keep only the latest N notifications per user (backstop for the per-create trim). */
+  @Cron(CronExpression.EVERY_DAY_AT_4AM)
+  async pruneNotifications() {
+    const removed = await this.prisma.$executeRawUnsafe(
+      `DELETE FROM "Notification" WHERE id IN (
+         SELECT id FROM (
+           SELECT id, ROW_NUMBER() OVER (PARTITION BY "userId" ORDER BY "createdAt" DESC) AS rn
+           FROM "Notification"
+         ) ranked WHERE ranked.rn > $1
+       )`,
+      NOTIFICATIONS_KEEP,
+    );
+    if (removed) this.log.log(`pruned ${removed} old notifications`);
   }
 }

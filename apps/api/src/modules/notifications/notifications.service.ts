@@ -12,6 +12,11 @@ export interface NotifyInput {
   data?: any;
 }
 
+// We keep only the latest N notifications per user — older ones are deleted from
+// the server (not just hidden), so notification storage stays bounded as the site
+// grows. Enforced on every new notification, with a cron backstop in maintenance.
+export const NOTIFICATIONS_KEEP = 20;
+
 @Injectable()
 export class NotificationsService {
   constructor(
@@ -32,7 +37,28 @@ export class NotificationsService {
       },
     });
     this.realtime.toUser(userId, 'notification', n);
+    await this.trim(userId);
     return n;
+  }
+
+  /** Delete this user's notifications beyond the most recent NOTIFICATIONS_KEEP. */
+  async trim(userId: string) {
+    const keep = await this.prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: NOTIFICATIONS_KEEP,
+      select: { id: true },
+    });
+    if (keep.length < NOTIFICATIONS_KEEP) return; // nothing to prune yet
+    await this.prisma.notification.deleteMany({
+      where: { userId, id: { notIn: keep.map((k) => k.id) } },
+    });
+  }
+
+  /** Remove a single notification (scoped to its owner). */
+  async remove(userId: string, id: string) {
+    await this.prisma.notification.deleteMany({ where: { id, userId } });
+    return { ok: true };
   }
 
   list(userId: string, opts: { limit?: number; unreadOnly?: boolean } = {}) {

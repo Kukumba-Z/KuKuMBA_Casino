@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { NotificationsService } from './notifications.service';
 
@@ -31,5 +31,10 @@ export class NotificationsController {
   @Post('read-all')
   readAll(@CurrentUser('id') userId: string) {
     return this.notifications.markAllRead(userId);
+  }
+
+  @Delete(':id')
+  remove(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.notifications.remove(userId, id);
   }
 }
