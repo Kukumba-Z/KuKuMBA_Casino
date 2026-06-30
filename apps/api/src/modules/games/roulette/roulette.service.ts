@@ -5,6 +5,7 @@ import { tableMaxStake } from '../../../common/utils/bet-limits';
 import { isOriginalGame } from '../../../common/utils/games';
 import { D, roundTo } from '../../../common/utils/money';
 import { LeaderboardsService } from '../../leaderboards/leaderboards.service';
+import { StatsService } from '../../stats/stats.service';
 import { SettingsService } from '../../../config/settings.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { rouletteResult } from '../../provably-fair/provably-fair.crypto';
@@ -34,6 +35,7 @@ export class RouletteService implements OnModuleInit {
     private realtime: RealtimeService,
     private notifications: NotificationsService,
     private leaderboards: LeaderboardsService,
+    private stats: StatsService,
   ) {}
 
   /** Seed the live-bet ticker buffer from the DB so it isn't empty after a restart. */
@@ -241,6 +243,8 @@ export class RouletteService implements OnModuleInit {
       coeff: total.gt(0) ? result.totalPayout.div(total).toNumber() : 0,
       at: new Date(),
     });
+    // Per-round bookkeeping: persistent counters, lifetime stats, history prune.
+    void this.stats.recordRound({ userId, bets: dto.bets.length, stake: total.toFixed() });
 
     if (result.vipRes?.leveledUp) {
       this.notifications.notify(userId, {

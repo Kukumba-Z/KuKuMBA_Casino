@@ -10,9 +10,7 @@ export class UsersService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('USER_NOT_FOUND');
 
-    const [betCount, wager, vipLevel, linked] = await Promise.all([
-      this.prisma.bet.count({ where: { userId } }),
-      this.prisma.bet.aggregate({ where: { userId }, _sum: { stake: true } }),
+    const [vipLevel, linked] = await Promise.all([
       this.prisma.vipLevel.findUnique({ where: { level: user.vipLevel } }),
       this.prisma.linkedAccount.findMany({ where: { userId } }),
     ]);
@@ -32,7 +30,8 @@ export class UsersService {
       twoFactorEnabled: user.twoFactorEnabled,
       referralCode: user.referralCode,
       vip: { level: user.vipLevel, xp: user.vipXp, name: vipLevel?.name },
-      stats: { bets: betCount, totalWagered: (wager._sum.stake ?? 0).toString() },
+      // Lifetime, persisted — stays accurate even after old rounds are pruned.
+      stats: { bets: user.lifetimeBets, totalWagered: user.lifetimeWagered.toString() },
       linkedAccounts: linked.map((l) => ({
         id: l.id,
         provider: l.provider,
@@ -40,6 +39,39 @@ export class UsersService {
         createdAt: l.createdAt,
       })),
       createdAt: user.createdAt,
+    };
+  }
+
+  /**
+   * The player's own game history (KuKuMBA Originals rounds), newest first,
+   * optionally filtered by game, cursor-paginated. Backed by GameRound, which
+   * retention keeps to the latest 1000 per user.
+   */
+  async history(userId: string, opts: { game?: string; cursor?: string; take?: number } = {}) {
+    const take = Math.max(1, Math.min(opts.take ?? 50, 50));
+    const rounds = await this.prisma.gameRound.findMany({
+      where: { userId, ...(opts.game ? { game: { key: opts.game } } : {}) },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: take + 1, // peek one ahead to know if there's a next page
+      ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
+      include: { game: { select: { key: true, name: true, category: true } } },
+    });
+    const page = rounds.slice(0, take);
+    return {
+      items: page.map((r) => ({
+        roundId: r.id,
+        gameKey: r.game.key,
+        gameName: r.game.name,
+        category: r.game.category,
+        outcome: r.outcome,
+        color: r.outcomeColor,
+        currency: r.currency,
+        stake: r.totalStake.toFixed(),
+        payout: r.totalPayout.toFixed(),
+        coeff: r.totalStake.gt(0) ? Number(r.totalPayout.div(r.totalStake)) : 0,
+        at: r.createdAt,
+      })),
+      nextCursor: rounds.length > take ? page[page.length - 1]?.id ?? null : null,
     };
   }
 

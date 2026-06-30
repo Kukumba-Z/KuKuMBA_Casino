@@ -45,6 +45,23 @@ async function main() {
     },
   });
   if (nodep.count) console.log(`reconcile: nodep bonus DEMO → USDT (${nodep.count} row)`);
+
+  // One-time backfill of the persistent stat counters + per-user lifetime stats,
+  // so switching the lobby/profile away from count(*) doesn't reset the numbers.
+  // Guarded by a flag counter so it runs exactly once, ever.
+  const already = await prisma.counter.findUnique({ where: { key: 'init:userstats' } });
+  if (!already) {
+    const [rounds, bets] = await Promise.all([prisma.gameRound.count(), prisma.bet.count()]);
+    await prisma.counter.upsert({ where: { key: 'rounds' }, create: { key: 'rounds', value: rounds }, update: { value: rounds } });
+    await prisma.counter.upsert({ where: { key: 'bets' }, create: { key: 'bets', value: bets }, update: { value: bets } });
+    await prisma.$executeRawUnsafe(
+      `UPDATE "User" u SET "lifetimeBets" = b.cnt, "lifetimeWagered" = b.sum
+       FROM (SELECT "userId", COUNT(*)::int AS cnt, COALESCE(SUM("stake"), 0) AS sum FROM "Bet" GROUP BY "userId") b
+       WHERE u."id" = b."userId"`,
+    );
+    await prisma.counter.create({ data: { key: 'init:userstats', value: 1 } });
+    console.log(`reconcile: backfilled stats (rounds=${rounds}, bets=${bets})`);
+  }
 }
 
 main()

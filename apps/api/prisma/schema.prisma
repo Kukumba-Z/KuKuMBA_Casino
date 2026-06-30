@@ -206,6 +206,11 @@ model User {
   vipLevel Int   @default(0)
   vipXp    Float @default(0)
 
+  // Lifetime play stats — persisted counters so the profile numbers survive
+  // GameRound/Bet pruning (they're incremented per round, never recomputed).
+  lifetimeBets    Int     @default(0)
+  lifetimeWagered Decimal @default(0) @db.Decimal(38, 18)
+
   lastSeenAt DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt

@@ -8,7 +8,7 @@ import { GameIcon } from './GameIcon';
 export const WIN_GRID = 'grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_auto_auto_auto_auto]';
 
 /** Short "DD.MM HH:MM" timestamp (accepts a ms number or an ISO string). */
-function fmtWhen(at: string | number): string {
+export function fmtWhen(at: string | number): string {
   const d = new Date(at);
   const p = (n: number) => String(n).padStart(2, '0');
   return `${p(d.getDate())}.${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;

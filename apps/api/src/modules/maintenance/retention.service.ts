@@ -4,7 +4,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 
 /** How much history we retain so storage stays bounded as the site grows. */
 const CHAT_KEEP_PER_ROOM = 100; // mirrors the 100-message client cap
-const ROUNDS_KEEP_PER_USER = 500;
+const ROUNDS_KEEP_PER_USER = 1000; // daily backstop; rounds are also pruned per-round in StatsService
 
 /**
  * Background retention. Chat and game history grow without bound otherwise, so

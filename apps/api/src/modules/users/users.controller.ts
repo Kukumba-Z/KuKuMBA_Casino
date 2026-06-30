@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
@@ -33,6 +33,15 @@ export class UsersController {
   @Get('me')
   me(@CurrentUser('id') userId: string) {
     return this.users.profile(userId);
+  }
+
+  @Get('me/history')
+  history(
+    @CurrentUser('id') userId: string,
+    @Query('game') game?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    return this.users.history(userId, { game: game || undefined, cursor: cursor || undefined });
   }
 
   @Patch('me')

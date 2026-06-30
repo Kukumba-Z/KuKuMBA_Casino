@@ -1,11 +1,13 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, IdCard, Link2, Lock, Plus, ShieldAlert, UserCog, X, type LucideIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Check, History, IdCard, Link2, Lock, Plus, ShieldAlert, UserCog, X, type LucideIcon } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isOriginal } from '../components/GameCard';
+import { HistoryHeader, HistoryRow } from '../components/HistoryRow';
 import { Mascot } from '../components/Mascot';
 import api, { apiError } from '../lib/api';
 import { AVATAR_PRESETS, avatarBg, avatarPresetKey } from '../lib/avatar';
-import { useMe } from '../lib/hooks';
+import { useGames, useMe } from '../lib/hooks';
 import { enumLabel } from '../lib/labels';
 import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
@@ -44,7 +46,79 @@ export default function Profile() {
         <Limits />
         <Linked />
       </div>
+
+      <GameHistory />
     </div>
+  );
+}
+
+/** The player's own game history (KuKuMBA Originals), filterable by game, up to
+ *  1000 rounds, loaded a page at a time. */
+function GameHistory() {
+  const { t } = useTranslation();
+  const { data: games } = useGames();
+  const originGames = useMemo(() => (games ?? []).filter(isOriginal), [games]);
+  const [game, setGame] = useState('');
+
+  const q = useInfiniteQuery({
+    queryKey: ['my-history', game],
+    initialPageParam: '',
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams();
+      if (game) params.set('game', game);
+      if (pageParam) params.set('cursor', pageParam as string);
+      return (await api.get(`/users/me/history?${params.toString()}`)).data as { items: any[]; nextCursor: string | null };
+    },
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
+  const rows = (q.data?.pages ?? []).flatMap((p) => p.items);
+
+  return (
+    <Section title={t('profile.history')} icon={History}>
+      {originGames.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          <Chip active={game === ''} onClick={() => setGame('')} label={t('top.all')} />
+          {originGames.map((g) => (
+            <Chip key={g.key} active={game === g.key} onClick={() => setGame(g.key)} label={g.name} />
+          ))}
+        </div>
+      )}
+      {rows.length === 0 ? (
+        <div className="py-8 text-center text-sm text-white/40">{t('common.empty')}</div>
+      ) : (
+        <>
+          <HistoryHeader />
+          <div className="space-y-1.5">
+            {rows.map((r) => (
+              <HistoryRow key={r.roundId} f={r} />
+            ))}
+          </div>
+          {q.hasNextPage && (
+            <button
+              onClick={() => q.fetchNextPage()}
+              disabled={q.isFetchingNextPage}
+              className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm font-semibold text-lav transition hover:bg-white/[0.06] disabled:opacity-50"
+            >
+              {t('profile.loadMore')}
+            </button>
+          )}
+        </>
+      )}
+    </Section>
+  );
+}
+
+function Chip({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+        active ? 'border-mint/40 bg-mint/15 text-white' : 'border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.06]'
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
