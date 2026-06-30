@@ -25,15 +25,14 @@
   ::selection {
     @apply bg-lav/40 text-white;
   }
+  /* Scrollbars are hidden site-wide: the gutter offset centred content and left
+     empty space that looked off. Scrolling still works via touch/wheel/keyboard. */
+  * {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* legacy Edge/IE */
+  }
   *::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-  *::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-white/10;
-  }
-  *::-webkit-scrollbar-thumb:hover {
-    @apply bg-white/20;
+    display: none; /* Chrome / Safari / WebKit */
   }
   h1,
   h2,
