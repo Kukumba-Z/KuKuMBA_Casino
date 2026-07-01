@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownToLine, ArrowUpFromLine, Gem, WalletMinimal } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Mascot } from '../components/Mascot';
@@ -58,12 +58,27 @@ function DepositCard({ currencies, onDone }: { currencies: any[]; onDone: () => 
   const [currency, setCurrency] = useState('USD');
   const [amount, setAmount] = useState('100');
   const [deposit, setDeposit] = useState<any>(null);
+  const [applyBonus, setApplyBonus] = useState(true);
   const [err, setErr] = useState('');
+
+  // Debounce the amount so we don't hammer the offer endpoint on each keystroke.
+  const [debAmount, setDebAmount] = useState(amount);
+  useEffect(() => {
+    const id = setTimeout(() => setDebAmount(amount), 350);
+    return () => clearTimeout(id);
+  }, [amount]);
+
+  // What deposit-match bonus (if any) will apply to this currency + amount.
+  const { data: offer } = useQuery({
+    queryKey: ['deposit-offer', currency, debAmount],
+    enabled: !deposit && Number(debAmount) > 0,
+    queryFn: async () => (await api.get(`/bonuses/deposit-offer?currency=${currency}&amount=${debAmount}`)).data,
+  });
 
   const create = async () => {
     setErr('');
     try {
-      const { data } = await api.post('/payments/deposits', { currency, amount });
+      const { data } = await api.post('/payments/deposits', { currency, amount, applyBonus });
       setDeposit(data);
     } catch (e) {
       setErr(apiError(e));
@@ -97,6 +112,31 @@ function DepositCard({ currencies, onDone }: { currencies: any[]; onDone: () => 
         <label className="label">{t('common.amount')}</label>
         <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" />
       </div>
+
+      {/* Deposit-bonus offer: shown before depositing so there are no surprises. */}
+      {!deposit && offer && (
+        offer.blockedByWager ? (
+          <div className="rounded-2xl border border-white/10 bg-black/30 p-3 text-xs text-white/45">
+            {t('wallet.bonusBlocked')}
+          </div>
+        ) : (
+          <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-sun/30 bg-sun/[0.06] p-3">
+            <input type="checkbox" className="mt-1" checked={applyBonus} onChange={(e) => setApplyBonus(e.target.checked)} />
+            <span className="text-sm">
+              <span className="font-semibold text-sun">🎁 {t('wallet.bonusOffer')}</span>
+              <span className="mt-0.5 block text-white/75">
+                {offer.percent ? `+${offer.percent}%` : `+${fmt(offer.bonusAmount)} ${offer.currency}`} · +{fmt(offer.bonusAmount)} {offer.currency} · {t('wallet.bonusTotal')} {fmt(offer.total)} {offer.currency}
+              </span>
+              <span className="mt-0.5 block text-[11px] text-white/45">
+                {offer.wagerMultiplier ? `${t('bonuses.wagerTitle')} ×${offer.wagerMultiplier}` : t('bonuses.autoApplied')}
+                {offer.sticky ? ` · ${t('bonuses.sticky')}` : ''}
+                {offer.maxCashout ? ` · ${t('bonuses.maxCashout')} ${fmt(offer.maxCashout)} ${offer.currency}` : ''}
+              </span>
+            </span>
+          </label>
+        )
+      )}
+
       {!deposit ? (
         <button onClick={create} className="btn-primary w-full">{t('common.deposit')}</button>
       ) : (

@@ -346,6 +346,7 @@ model Deposit {
   txHash    String?
   provider  String        @default("mock")
   status    DepositStatus @default(PENDING)
+  applyBonus Boolean      @default(true) // player opted in to the deposit-match bonus
   meta      Json?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt

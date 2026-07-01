@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { BonusesService } from './bonuses.service';
@@ -16,6 +16,12 @@ export class BonusesController {
   @Get('me')
   mine(@CurrentUser('id') userId: string) {
     return this.bonuses.myBonuses(userId);
+  }
+
+  /** Preview the deposit-match bonus for a currency+amount, before depositing. */
+  @Get('deposit-offer')
+  depositOffer(@CurrentUser('id') userId: string, @Query('currency') currency: string, @Query('amount') amount: string) {
+    return this.bonuses.depositOffer(userId, currency, amount);
   }
 
   @Post(':key/claim')

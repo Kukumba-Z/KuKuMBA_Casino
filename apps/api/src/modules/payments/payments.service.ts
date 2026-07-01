@@ -27,7 +27,7 @@ export class PaymentsService {
   }
 
   // ── Deposits ──────────────────────────────────────────────────────────────
-  async createDeposit(userId: string, dto: { currency: string; network?: string; amount: string }) {
+  async createDeposit(userId: string, dto: { currency: string; network?: string; amount: string; applyBonus?: boolean }) {
     const cur = await this.realCurrency(dto.currency);
     if (cur.type === 'CRYPTO' && (!dto.network || !cur.networks.includes(dto.network))) {
       throw new BadRequestException('INVALID_NETWORK');
@@ -52,6 +52,7 @@ export class PaymentsService {
         address: res.address,
         provider: this.provider.name,
         status: 'PENDING',
+        applyBonus: dto.applyBonus !== false, // opt-out of the deposit bonus
         meta: { reference: res.reference, expiresAt: res.expiresAt, ...res.meta },
       },
     });
@@ -73,6 +74,7 @@ export class PaymentsService {
     if (!opts.byAdmin && dep.provider !== 'mock') throw new BadRequestException('CANNOT_SELF_CONFIRM');
     if (dep.status === 'COMPLETED') return dep;
 
+    let granted: { name: string; amount: string; currency: string; wagerMultiplier: number; sticky: boolean } | null = null;
     await this.prisma.$transaction(async (tx) => {
       await tx.deposit.update({ where: { id: dep.id }, data: { status: 'COMPLETED' } });
       await this.wallet.apply(tx, {
@@ -85,8 +87,11 @@ export class PaymentsService {
         refId: dep.id,
         description: `Deposit ${dep.currency}`,
       });
-      // Auto-apply any matching deposit/reload bonus (with wagering).
-      await this.bonuses.applyDepositBonuses(tx, dep.userId, dep.currency, D(dep.amount));
+      // Auto-apply any matching deposit/reload bonus (with wagering) — unless the
+      // player opted out of it on the deposit form.
+      if (dep.applyBonus) {
+        granted = await this.bonuses.applyDepositBonuses(tx, dep.userId, dep.currency, D(dep.amount));
+      }
     });
 
     await this.notifications.notify(dep.userId, {
@@ -96,6 +101,16 @@ export class PaymentsService {
       bodyRu: `${dep.amount.toFixed()} ${dep.currency} зачислено на ваш баланс.`,
       bodyEn: `${dep.amount.toFixed()} ${dep.currency} has been credited.`,
     });
+    if (granted) {
+      const g = granted as { name: string; amount: string; currency: string; wagerMultiplier: number; sticky: boolean };
+      await this.notifications.notify(dep.userId, {
+        type: 'BONUS',
+        titleRu: 'Бонус на депозит начислен',
+        titleEn: 'Deposit bonus credited',
+        bodyRu: `Бонус «${g.name}»: +${g.amount} ${g.currency}${g.wagerMultiplier ? `, вейджер ×${g.wagerMultiplier}` : ''}${g.sticky ? ', липкий' : ''}. Вывод — после отыгрыша.`,
+        bodyEn: `Bonus "${g.name}": +${g.amount} ${g.currency}${g.wagerMultiplier ? `, wager ×${g.wagerMultiplier}` : ''}${g.sticky ? ', sticky' : ''}. Withdrawable after wagering.`,
+      });
+    }
     return this.prisma.deposit.findUnique({ where: { id: dep.id } });
   }
 

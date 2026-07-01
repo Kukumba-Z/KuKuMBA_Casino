@@ -253,6 +253,9 @@ const ru = {
     txGroups: { all: 'Все', deposits: 'Пополнения', withdrawals: 'Выводы', bonuses: 'Бонусы и промо', cashback: 'Кешбэк', raffles: 'Розыгрыши', other: 'Прочее' },
     gameHistoryHint: 'Ставки и выигрыши в играх — в разделе',
     sandboxHint: 'Песочница: реальные деньги не двигаются. Нажмите, чтобы сымитировать поступление.',
+    bonusOffer: 'Бонус на депозит',
+    bonusTotal: 'всего',
+    bonusBlocked: 'Бонус на депозит не применится, пока не отыгран текущий бонус.',
     withdrawCreated: 'Заявка создана и ожидает проверки.',
   },
   auth: {
@@ -523,6 +526,9 @@ const en: typeof ru = {
     txGroups: { all: 'All', deposits: 'Deposits', withdrawals: 'Withdrawals', bonuses: 'Bonuses & promo', cashback: 'Cashback', raffles: 'Raffles', other: 'Other' },
     gameHistoryHint: 'Game bets and wins live in',
     sandboxHint: 'Sandbox: no real money moves. Tap to simulate a deposit.',
+    bonusOffer: 'Deposit bonus',
+    bonusTotal: 'total',
+    bonusBlocked: 'The deposit bonus won’t apply until your current bonus is wagered.',
     withdrawCreated: 'Request created, pending review.',
   },
   auth: {

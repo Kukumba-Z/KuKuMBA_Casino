@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { BonusStatus, Prisma, WalletMode } from '@prisma/client';
+import { Bonus, BonusStatus, Prisma, WalletMode } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { D, ZERO } from '../../common/utils/money';
 import { SettingsService } from '../../config/settings.service';
@@ -229,7 +229,7 @@ export class BonusesService {
     }
     await tx.userBonus.update({ where: { id: ub.id }, data: { wagerProgress: progress, status } });
     if (status === 'COMPLETED') {
-      await this.settleBonus(tx, ub);
+      await this.settle(tx, ub, { forfeit: false });
       events.completed.push(ub.name);
     }
 
@@ -251,26 +251,33 @@ export class BonusesService {
   }
 
   /**
-   * Settle a bonus the moment its wager clears: shield the player's own funds
-   * (`baseline`), remove the principal if the bonus is sticky, and cap kept
-   * winnings at `maxCashout`. The excess is debited from the bonus-currency
-   * balance. Own money is never touched.
+   * Terminal settlement under the "real money spent first" model: the bonus
+   * principal is the last money standing, so losses eat the player's own funds
+   * before the bonus. When the principal is removed (always on cancel/`forfeit`;
+   * on a sticky clear) the player keeps `current − principal`; winnings above
+   * their own funds are then capped at `maxCashout`. The excess is debited from
+   * the bonus-currency balance. Returns the removed amount (for notifications).
    */
-  private async settleBonus(tx: Tx, ub: { id: string; userId: string; currency: string; amount: Dec; baseline: Dec; sticky: boolean; maxCashout: Dec | null; name: string }) {
+  private async settle(tx: Tx, ub: { id: string; userId: string; currency: string; amount: Dec; baseline: Dec; sticky: boolean; maxCashout: Dec | null; name: string }, opts: { forfeit: boolean }): Promise<Dec> {
     const bal = await tx.balance.findUnique({
       where: { userId_currency_mode: { userId: ub.userId, currency: ub.currency, mode: 'REAL' } },
     });
     const current = bal ? D(bal.amount) : ZERO;
+    if (current.lte(0)) return ZERO;
+
     const baseline = D(ub.baseline);
-    if (current.lte(baseline)) return; // nothing above own funds to trim
+    const principal = D(ub.amount);
+    const removePrincipal = opts.forfeit || ub.sticky;
 
-    let keptWin = current.minus(baseline); // winnings above own money
-    if (ub.sticky) keptWin = keptWin.minus(D(ub.amount)); // sticky removes the principal
-    if (keptWin.lt(0)) keptWin = ZERO;
-    if (ub.maxCashout != null) keptWin = min(keptWin, D(ub.maxCashout));
+    // Real money first: the bonus principal is the last money spent.
+    let keep = removePrincipal ? max(current.minus(principal), ZERO) : current;
+    // Cap winnings above the player's own funds (+ the bonus if it's cashable).
+    if (ub.maxCashout != null) {
+      const ceiling = baseline.plus(removePrincipal ? ZERO : principal).plus(D(ub.maxCashout));
+      keep = min(keep, ceiling);
+    }
 
-    const target = baseline.plus(keptWin);
-    const debit = current.minus(target);
+    const debit = current.minus(keep);
     if (debit.gt(0)) {
       await this.wallet.apply(tx, {
         userId: ub.userId,
@@ -279,17 +286,20 @@ export class BonusesService {
         mode: 'REAL',
         amount: debit.negated(),
         allowNegative: true,
-        refType: 'bonus-settle',
+        refType: opts.forfeit ? 'bonus-cancel' : 'bonus-settle',
         refId: ub.id,
-        description: `Bonus settled ${ub.name}`,
+        description: `Bonus ${opts.forfeit ? 'cancelled' : 'settled'} ${ub.name}`,
       });
     }
+    return debit.gt(0) ? debit : ZERO;
   }
 
   /**
-   * Player cancels a live bonus: forfeit it. The still-present bonus money (up to
-   * the principal, never dipping into own `baseline` funds) is removed and the
-   * bonus marked FORFEITED so it stops locking withdrawals.
+   * Player cancels a live bonus: forfeit it. Under "real money first" the bonus
+   * principal is the last money standing, so the whole bonus is removed and the
+   * player keeps their remaining real funds (e.g. deposit 1000 + 1000 bonus, lose
+   * 500 → 1500, cancel → keep 500). The bonus is marked FORFEITED so it stops
+   * locking withdrawals.
    */
   async cancelBonus(userId: string, id: string) {
     const ub = await this.prisma.userBonus.findFirst({ where: { id, userId } });
@@ -297,25 +307,7 @@ export class BonusesService {
     if (!WAGERING_STATUSES.includes(ub.status)) throw new BadRequestException('BONUS_NOT_CANCELLABLE');
 
     await this.prisma.$transaction(async (tx) => {
-      const bal = await tx.balance.findUnique({
-        where: { userId_currency_mode: { userId, currency: ub.currency, mode: 'REAL' } },
-      });
-      const current = bal ? D(bal.amount) : ZERO;
-      const overOwn = max(current.minus(D(ub.baseline)), ZERO); // funds above own money
-      const debit = min(D(ub.amount), overOwn); // forfeit up to the bonus principal
-      if (debit.gt(0)) {
-        await this.wallet.apply(tx, {
-          userId,
-          type: 'BONUS',
-          currency: ub.currency,
-          mode: 'REAL',
-          amount: debit.negated(),
-          allowNegative: true,
-          refType: 'bonus-cancel',
-          refId: ub.id,
-          description: `Bonus cancelled ${ub.name}`,
-        });
-      }
+      await this.settle(tx, ub, { forfeit: true });
       await tx.userBonus.update({ where: { id: ub.id }, data: { status: 'FORFEITED' } });
     });
 
@@ -330,48 +322,95 @@ export class BonusesService {
   }
 
   /**
-   * Auto-apply deposit-match bonuses when a deposit is credited. Called inside the
-   * confirm-deposit transaction. DEPOSIT (welcome) bonuses apply once per user;
-   * RELOAD bonuses apply on every qualifying deposit. Respects the per-user block,
-   * no-stacking and minDeposit. amount = min(deposit × percent%, maxAmount).
-   * The deposit itself becomes the `baseline` so cashout caps never eat own money.
+   * The single deposit-match bonus that would apply to `deposit` in `currency`,
+   * with its computed amount, or null. DEPOSIT (welcome) applies once per user;
+   * RELOAD applies each qualifying deposit; both respect minDeposit.
+   * amount = min(deposit × percent%, maxAmount) (or the flat amount).
    */
-  async applyDepositBonuses(tx: Tx, userId: string, currency: string, deposit: Dec) {
-    const u = await tx.user.findUnique({ where: { id: userId }, select: { bonusAccess: true } });
-    if (u && u.bonusAccess === false) return;
-    // No stacking: skip auto-apply while another bonus is still being wagered.
-    const active = await tx.userBonus.count({ where: { userId, status: { in: WAGERING_STATUSES } } });
-    if (active > 0) return;
-    const bonuses = await tx.bonus.findMany({
+  private async pickDepositBonus(client: Tx | PrismaService, userId: string, currency: string, deposit: Dec): Promise<{ bonus: Bonus; amount: Dec } | null> {
+    const bonuses = await client.bonus.findMany({
       where: { enabled: true, currency, type: { in: ['DEPOSIT', 'RELOAD'] } },
+      orderBy: { createdAt: 'asc' },
     });
     for (const b of bonuses) {
       if (b.minDeposit && deposit.lt(D(b.minDeposit))) continue;
       if (b.type === 'DEPOSIT') {
-        const already = await tx.userBonus.count({ where: { userId, bonusId: b.id } });
+        const already = await client.userBonus.count({ where: { userId, bonusId: b.id } });
         if (already > 0) continue; // first-deposit match applies once
       }
       let amount = b.percent ? deposit.mul(b.percent).div(100) : D(b.amount);
       if (b.maxAmount && amount.gt(D(b.maxAmount))) amount = D(b.maxAmount);
       if (amount.lte(0)) continue;
-      await this.grantBonus(tx, {
-        userId,
-        bonusId: b.id,
-        name: b.name,
-        amount,
-        currency,
-        mode: 'REAL',
-        wagerMultiplier: b.wagerMultiplier,
-        sticky: b.sticky,
-        maxCashout: b.maxCashout,
-        maxCashoutMultiplier: b.maxCashoutMultiplier,
-        baseline: deposit, // own deposit is shielded from sticky/cashout
-        refType: 'deposit-bonus',
-        refId: b.id,
-        description: `Deposit bonus ${b.name}`,
-      });
-      return; // one deposit bonus per deposit (no stacking)
+      return { bonus: b, amount };
     }
+    return null;
+  }
+
+  /**
+   * Preview shown before a deposit so the player knows exactly what they'll get
+   * (percent/amount, total, wager, sticky, cashout cap) and can opt out. Returns
+   * null when nothing applies; `blockedByWager` flags that it won't apply until
+   * the current bonus is cleared (no stacking).
+   */
+  async depositOffer(userId: string, currency: string, amount: string) {
+    const deposit = D(amount || 0);
+    if (!currency || currency === 'DEMO' || deposit.lte(0)) return null;
+    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { bonusAccess: true } });
+    if (u && u.bonusAccess === false) return null;
+    const pick = await this.pickDepositBonus(this.prisma, userId, currency, deposit);
+    if (!pick) return null;
+    const { bonus: b, amount: bonusAmount } = pick;
+    let cap = b.maxCashout ? D(b.maxCashout) : null;
+    if (b.maxCashoutMultiplier && b.maxCashoutMultiplier > 0) {
+      const m = bonusAmount.mul(b.maxCashoutMultiplier);
+      cap = cap == null ? m : min(cap, m);
+    }
+    const active = await this.prisma.userBonus.count({ where: { userId, status: { in: WAGERING_STATUSES } } });
+    return {
+      name: b.name,
+      percent: b.percent ?? null,
+      currency,
+      bonusAmount: bonusAmount.toFixed(),
+      total: deposit.plus(bonusAmount).toFixed(),
+      wagerMultiplier: b.wagerMultiplier,
+      sticky: b.sticky,
+      maxCashout: cap ? cap.toFixed() : null,
+      blockedByWager: active > 0,
+    };
+  }
+
+  /**
+   * Auto-apply a deposit-match bonus when a deposit is credited. Called inside the
+   * confirm-deposit transaction. Respects the per-user block, no-stacking and
+   * minDeposit. The deposit itself becomes the `baseline` so cashout caps never
+   * eat own money. Returns the granted bonus (for a notification), or null.
+   */
+  async applyDepositBonuses(tx: Tx, userId: string, currency: string, deposit: Dec) {
+    const u = await tx.user.findUnique({ where: { id: userId }, select: { bonusAccess: true } });
+    if (u && u.bonusAccess === false) return null;
+    // No stacking: skip auto-apply while another bonus is still being wagered.
+    const active = await tx.userBonus.count({ where: { userId, status: { in: WAGERING_STATUSES } } });
+    if (active > 0) return null;
+    const pick = await this.pickDepositBonus(tx, userId, currency, deposit);
+    if (!pick) return null;
+    const { bonus: b, amount } = pick;
+    await this.grantBonus(tx, {
+      userId,
+      bonusId: b.id,
+      name: b.name,
+      amount,
+      currency,
+      mode: 'REAL',
+      wagerMultiplier: b.wagerMultiplier,
+      sticky: b.sticky,
+      maxCashout: b.maxCashout,
+      maxCashoutMultiplier: b.maxCashoutMultiplier,
+      baseline: deposit, // own deposit is shielded from sticky/cashout
+      refType: 'deposit-bonus',
+      refId: b.id,
+      description: `Deposit bonus ${b.name}`,
+    });
+    return { name: b.name, amount: amount.toFixed(), currency, wagerMultiplier: b.wagerMultiplier, sticky: b.sticky };
   }
 
   /** Fire user notifications for bonuses that just cleared / were lost (post-commit). */
