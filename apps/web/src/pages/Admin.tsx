@@ -163,6 +163,45 @@ function Users({ me }: { me: AdminMe }) {
   );
 }
 
+/** Grant a one-off personal bonus to this user (routes through the wagering engine). */
+function GrantBonusPanel({ id, act }: { id: string; act: (fn: () => Promise<any>, ok?: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ name: 'Personal bonus', amount: '10', currency: 'USD', wagerMultiplier: '0', sticky: true, maxCashoutMultiplier: '', maxCashout: '' });
+  const set = (patch: any) => setF((s) => ({ ...s, ...patch }));
+  const grant = () =>
+    act(() => api.post(`/admin/users/${id}/grant-bonus`, {
+      name: f.name, amount: f.amount, currency: f.currency,
+      wagerMultiplier: Number(f.wagerMultiplier) || 0, sticky: f.sticky,
+      maxCashoutMultiplier: f.maxCashoutMultiplier ? Number(f.maxCashoutMultiplier) : null,
+      maxCashout: f.maxCashout || null,
+    }), 'Bonus granted');
+  return (
+    <div className="space-y-2 rounded-xl bg-black/30 p-3">
+      <button onClick={() => setOpen((o) => !o)} className="text-xs font-semibold uppercase tracking-wide text-white/50 hover:text-white">
+        {open ? '▾' : '▸'} Персональный бонус
+      </button>
+      {open && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <input className="input flex-1 !py-1.5" placeholder="Название" value={f.name} onChange={(e) => set({ name: e.target.value })} />
+            <input className="input w-24 !py-1.5" placeholder="Сумма" value={f.amount} onChange={(e) => set({ amount: e.target.value })} />
+            <input className="input w-20 !py-1.5" placeholder="Валюта" value={f.currency} onChange={(e) => set({ currency: e.target.value })} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input className="input w-20 !py-1.5" title="вейджер ×" placeholder="wager×" value={f.wagerMultiplier} onChange={(e) => set({ wagerMultiplier: e.target.value })} />
+            <input className="input w-24 !py-1.5" title="макс. вывод ×бонус" placeholder="cashout×" value={f.maxCashoutMultiplier} onChange={(e) => set({ maxCashoutMultiplier: e.target.value })} />
+            <input className="input w-28 !py-1.5" title="макс. вывод сумма" placeholder="cashout сумма" value={f.maxCashout} onChange={(e) => set({ maxCashout: e.target.value })} />
+            <label className="flex items-center gap-1.5 text-sm text-white/70">
+              <input type="checkbox" checked={f.sticky} onChange={(e) => set({ sticky: e.target.checked })} /> липкий
+            </label>
+            <button onClick={grant} className="btn-soft ml-auto text-sm">Начислить</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function UserDetail({ user, me, refresh }: { user: any; me: AdminMe; refresh: () => void }) {
   const id = user.id;
   const [amount, setAmount] = useState('100');
@@ -258,6 +297,8 @@ function UserDetail({ user, me, refresh }: { user: any; me: AdminMe; refresh: ()
           )}
         </div>
       )}
+
+      {can(me, 'bonuses.manage') && <GrantBonusPanel id={id} act={act} />}
 
       {can(me, 'users.edit') && (
         <div className="space-y-2 rounded-xl bg-black/30 p-3">
@@ -368,59 +409,130 @@ function Withdrawals() {
   );
 }
 
+const PROMO_BLANK = {
+  code: '', type: 'BALANCE', currency: 'USD', amount: '0', bonusKey: '',
+  perUserLimit: '1', maxRedemptions: '', wagerMultiplier: '', sticky: true,
+  maxCashoutMultiplier: '', maxCashout: '', requiresDeposit: false, minDeposit: '', depositWithinDays: '',
+};
+
 function Promo() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['adm-promo'], queryFn: async () => (await api.get('/admin/promocodes')).data });
-  const [form, setForm] = useState({ code: '', type: 'BALANCE', currency: 'DEMO', amount: '500', bonusKey: '', perUserLimit: '1', maxRedemptions: '', requiresDeposit: false });
+  const [form, setForm] = useState<any>(PROMO_BLANK);
+  const set = (patch: any) => setForm((f: any) => ({ ...f, ...patch }));
+  const isBonus = form.type === 'BONUS' || form.type === 'FREEBET';
   const create = async () => {
     try {
       await api.post('/admin/promocodes', {
         ...form,
         perUserLimit: Number(form.perUserLimit) || 1,
         maxRedemptions: form.maxRedemptions ? Number(form.maxRedemptions) : null,
+        wagerMultiplier: form.wagerMultiplier ? Number(form.wagerMultiplier) : 0,
+        maxCashoutMultiplier: form.maxCashoutMultiplier ? Number(form.maxCashoutMultiplier) : null,
+        maxCashout: form.maxCashout || null,
+        minDeposit: form.minDeposit || null,
+        depositWithinDays: form.depositWithinDays ? Number(form.depositWithinDays) : null,
         bonusKey: form.bonusKey || undefined,
       });
       qc.invalidateQueries({ queryKey: ['adm-promo'] });
       toast.success('Promo created');
+      setForm(PROMO_BLANK);
     } catch (e) {
       toast.error(apiError(e));
     }
   };
   return (
     <div className="space-y-3">
-      <div className="card flex flex-wrap items-end gap-2 p-4">
-        <input className="input w-32" placeholder="CODE (auto)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
-        <select className="input w-28" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-          <option>BALANCE</option>
-          <option>BONUS</option>
-          <option>FREEBET</option>
-          <option>VIP_XP</option>
-        </select>
-        <input className="input w-20" placeholder="cur" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} />
-        <input className="input w-20" placeholder="amount" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-        {(form.type === 'BONUS' || form.type === 'FREEBET') && (
-          <input className="input w-28" placeholder="bonus key" value={form.bonusKey} onChange={(e) => setForm({ ...form, bonusKey: e.target.value })} />
+      <div className="card space-y-4 p-4">
+        {/* Basics */}
+        <div>
+          <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-white/40">Основное</div>
+          <div className="flex flex-wrap gap-3">
+            <Labeled label="Код (пусто = авто)"><input className="input w-40" value={form.code} onChange={(e) => set({ code: e.target.value })} /></Labeled>
+            <Labeled label="Тип">
+              <select className="input w-32" value={form.type} onChange={(e) => set({ type: e.target.value })}>
+                <option value="BALANCE">BALANCE — на баланс</option>
+                <option value="BONUS">BONUS — бонус с вейджером</option>
+                <option value="FREEBET">FREEBET — фрибет</option>
+                <option value="VIP_XP">VIP_XP — опыт VIP</option>
+              </select>
+            </Labeled>
+            <Labeled label="Валюта"><input className="input w-24" value={form.currency} onChange={(e) => set({ currency: e.target.value })} /></Labeled>
+            <Labeled label="Сумма"><input className="input w-28" value={form.amount} onChange={(e) => set({ amount: e.target.value })} /></Labeled>
+            {isBonus && <Labeled label="Ключ бонуса (опц.)" hint="берёт условия из бонуса"><input className="input w-36" value={form.bonusKey} onChange={(e) => set({ bonusKey: e.target.value })} /></Labeled>}
+          </div>
+        </div>
+        {/* Limits */}
+        <div>
+          <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-white/40">Лимиты активаций</div>
+          <div className="flex flex-wrap gap-3">
+            <Labeled label="На игрока"><input className="input w-24" value={form.perUserLimit} onChange={(e) => set({ perUserLimit: e.target.value })} /></Labeled>
+            <Labeled label="Всего (пусто = ∞)"><input className="input w-28" value={form.maxRedemptions} onChange={(e) => set({ maxRedemptions: e.target.value })} /></Labeled>
+          </div>
+        </div>
+        {/* Wager + cashout (only meaningful for granted bonuses) */}
+        {isBonus && (
+          <div>
+            <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-white/40">Отыгрыш и вывод</div>
+            <div className="flex flex-wrap items-end gap-3">
+              <Labeled label="Вейджер ×" hint="0 = сразу отыгран"><input className="input w-20" value={form.wagerMultiplier} onChange={(e) => set({ wagerMultiplier: e.target.value })} /></Labeled>
+              <Labeled label="Макс. вывод ×бонус" hint="напр. 5"><input className="input w-24" value={form.maxCashoutMultiplier} onChange={(e) => set({ maxCashoutMultiplier: e.target.value })} /></Labeled>
+              <Labeled label="Макс. вывод (сумма)"><input className="input w-28" value={form.maxCashout} onChange={(e) => set({ maxCashout: e.target.value })} /></Labeled>
+              <label className="flex items-center gap-1.5 pb-2 text-sm text-white/70">
+                <input type="checkbox" checked={form.sticky} onChange={(e) => set({ sticky: e.target.checked })} /> Липкий (тело списывается)
+              </label>
+            </div>
+          </div>
         )}
-        <input className="input w-20" title="per-user limit" placeholder="per user" value={form.perUserLimit} onChange={(e) => setForm({ ...form, perUserLimit: e.target.value })} />
-        <input className="input w-20" title="max total redemptions" placeholder="max total" value={form.maxRedemptions} onChange={(e) => setForm({ ...form, maxRedemptions: e.target.value })} />
-        <label className="flex items-center gap-1.5 text-xs text-white/70">
-          <input type="checkbox" checked={form.requiresDeposit} onChange={(e) => setForm({ ...form, requiresDeposit: e.target.checked })} /> needs deposit
-        </label>
-        <button onClick={create} className="btn-primary">Create</button>
+        {/* Deposit gating */}
+        <div>
+          <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-white/40">Требование депозита</div>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex items-center gap-1.5 pb-2 text-sm text-white/70">
+              <input type="checkbox" checked={form.requiresDeposit} onChange={(e) => set({ requiresDeposit: e.target.checked })} /> Нужен депозит
+            </label>
+            {form.requiresDeposit && <>
+              <Labeled label="Мин. сумма (USD-экв.)"><input className="input w-32" value={form.minDeposit} onChange={(e) => set({ minDeposit: e.target.value })} /></Labeled>
+              <Labeled label="За период" hint="депозит в последние N дней">
+                <select className="input w-32" value={form.depositWithinDays} onChange={(e) => set({ depositWithinDays: e.target.value })}>
+                  <option value="">за всё время</option>
+                  {DEPOSIT_WINDOWS.map((d) => <option key={d} value={d}>{d} дн.</option>)}
+                </select>
+              </Labeled>
+            </>}
+          </div>
+        </div>
+        <button onClick={create} className="btn-primary">Создать промокод</button>
       </div>
       <Table
         rows={data ?? []}
-        cols={['code', 'type', 'amount', 'per user', 'dep?', 'used']}
-        render={(p: any) => [p.code, p.type, `${fmt(p.amount)} ${p.currency ?? ''}`, p.perUserLimit, p.requiresDeposit ? '✓' : '—', `${p.redeemedCount}`]}
+        cols={['code', 'type', 'amount', 'wager', 'per user', 'dep?', 'used']}
+        render={(p: any) => [p.code, p.type, `${fmt(p.amount)} ${p.currency ?? ''}`, p.wagerMultiplier ? `×${p.wagerMultiplier}` : '—', p.perUserLimit, p.requiresDeposit ? (p.depositWithinDays ? `✓ ${p.depositWithinDays}д` : '✓') : '—', `${p.redeemedCount}`]}
       />
     </div>
   );
 }
 
+const BONUS_BLANK = {
+  key: '', name: '', type: 'NO_DEPOSIT', currency: 'USD', amount: '0', percent: '',
+  wagerMultiplier: '0', minDeposit: '', maxAmount: '', requiresDeposit: false, depositWithinDays: '',
+  sticky: true, maxCashoutMultiplier: '', maxCashout: '', descriptionRu: '', descriptionEn: '',
+};
+const BONUS_TYPES = ['NO_DEPOSIT', 'WELCOME', 'DEPOSIT', 'RELOAD', 'FREEBET', 'CASHBACK'];
+
 function Bonuses() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['adm-bonuses'], queryFn: async () => (await api.get('/admin/bonuses')).data });
-  const [form, setForm] = useState({ key: '', name: '', type: 'NO_DEPOSIT', currency: 'DEMO', amount: '0', percent: '', wagerMultiplier: '0', minDeposit: '', maxAmount: '', requiresDeposit: false });
+  const [form, setForm] = useState<any>(BONUS_BLANK);
+  const set = (patch: any) => setForm((f: any) => ({ ...f, ...patch }));
+  const isDeposit = form.type === 'DEPOSIT' || form.type === 'RELOAD';
+  const edit = (b: any) => setForm({
+    key: b.key, name: b.name, type: b.type, currency: b.currency ?? 'USD', amount: fmt(b.amount),
+    percent: b.percent ?? '', wagerMultiplier: String(b.wagerMultiplier ?? 0), minDeposit: b.minDeposit ? fmt(b.minDeposit) : '',
+    maxAmount: b.maxAmount ? fmt(b.maxAmount) : '', requiresDeposit: !!b.requiresDeposit, depositWithinDays: b.depositWithinDays ?? '',
+    sticky: b.sticky ?? true, maxCashoutMultiplier: b.maxCashoutMultiplier ?? '', maxCashout: b.maxCashout ? fmt(b.maxCashout) : '',
+    descriptionRu: b.descriptionRu ?? '', descriptionEn: b.descriptionEn ?? '',
+  });
   const save = async () => {
     try {
       await api.post('/admin/bonuses', {
@@ -429,42 +541,90 @@ function Bonuses() {
         wagerMultiplier: Number(form.wagerMultiplier) || 0,
         minDeposit: form.minDeposit || null,
         maxAmount: form.maxAmount || null,
-        requiresDeposit: form.requiresDeposit,
+        depositWithinDays: form.depositWithinDays ? Number(form.depositWithinDays) : null,
+        maxCashoutMultiplier: form.maxCashoutMultiplier ? Number(form.maxCashoutMultiplier) : null,
+        maxCashout: form.maxCashout || null,
       });
       qc.invalidateQueries({ queryKey: ['adm-bonuses'] });
       toast.success('Bonus saved');
+      setForm(BONUS_BLANK);
     } catch (e) {
       toast.error(apiError(e));
     }
   };
   return (
     <div className="space-y-3">
-      <div className="card flex flex-wrap items-end gap-2 p-4">
-        <input className="input w-32" placeholder="key" value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} />
-        <input className="input w-36" placeholder="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <select className="input w-32" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-          <option>NO_DEPOSIT</option>
-          <option>WELCOME</option>
-          <option>DEPOSIT</option>
-          <option>RELOAD</option>
-          <option>FREEBET</option>
-          <option>CASHBACK</option>
-        </select>
-        <input className="input w-16" placeholder="cur" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} />
-        <input className="input w-20" placeholder="amount" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-        <input className="input w-16" title="deposit-match %" placeholder="%" value={form.percent} onChange={(e) => setForm({ ...form, percent: e.target.value })} />
-        <input className="input w-20" title="max bonus" placeholder="max" value={form.maxAmount} onChange={(e) => setForm({ ...form, maxAmount: e.target.value })} />
-        <input className="input w-20" title="min deposit" placeholder="min dep" value={form.minDeposit} onChange={(e) => setForm({ ...form, minDeposit: e.target.value })} />
-        <input className="input w-16" title="wagering multiplier" placeholder="wager×" value={form.wagerMultiplier} onChange={(e) => setForm({ ...form, wagerMultiplier: e.target.value })} />
-        <label className="flex items-center gap-1.5 text-xs text-white/70">
-          <input type="checkbox" checked={form.requiresDeposit} onChange={(e) => setForm({ ...form, requiresDeposit: e.target.checked })} /> needs deposit
-        </label>
-        <button onClick={save} className="btn-primary" disabled={!form.key || !form.name}>Save</button>
+      <div className="card space-y-4 p-4">
+        <p className="text-xs text-white/45">
+          NO_DEPOSIT / WELCOME — берутся вручную во вкладке «Бонусы». DEPOSIT (раз на игрока) и RELOAD (каждый деп) —
+          применяются автоматически при пополнении. Сумма = процент × депозит (или фиксированная), не больше «макс. бонуса».
+        </p>
+        {/* Basics */}
+        <div className="flex flex-wrap gap-3">
+          <Labeled label="Ключ (уникальный)"><input className="input w-36" value={form.key} onChange={(e) => set({ key: e.target.value })} /></Labeled>
+          <Labeled label="Название"><input className="input w-44" value={form.name} onChange={(e) => set({ name: e.target.value })} /></Labeled>
+          <Labeled label="Тип">
+            <select className="input w-36" value={form.type} onChange={(e) => set({ type: e.target.value })}>
+              {BONUS_TYPES.map((tp) => <option key={tp}>{tp}</option>)}
+            </select>
+          </Labeled>
+          <Labeled label="Валюта"><input className="input w-24" value={form.currency} onChange={(e) => set({ currency: e.target.value })} /></Labeled>
+        </div>
+        {/* Amount */}
+        <div className="flex flex-wrap gap-3">
+          <Labeled label="Сумма (фикс.)" hint={isDeposit ? 'если без процента' : 'начисляется игроку'}><input className="input w-28" value={form.amount} onChange={(e) => set({ amount: e.target.value })} /></Labeled>
+          {isDeposit && <Labeled label="Процент депозита %" hint="напр. 100 = ×2"><input className="input w-28" value={form.percent} onChange={(e) => set({ percent: e.target.value })} /></Labeled>}
+          {isDeposit && <Labeled label="Макс. бонус"><input className="input w-28" value={form.maxAmount} onChange={(e) => set({ maxAmount: e.target.value })} /></Labeled>}
+          {isDeposit && <Labeled label="Мин. депозит"><input className="input w-28" value={form.minDeposit} onChange={(e) => set({ minDeposit: e.target.value })} /></Labeled>}
+        </div>
+        {/* Wager + cashout */}
+        <div>
+          <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-white/40">Отыгрыш и вывод</div>
+          <div className="flex flex-wrap items-end gap-3">
+            <Labeled label="Вейджер ×" hint="0 = сразу отыгран"><input className="input w-20" value={form.wagerMultiplier} onChange={(e) => set({ wagerMultiplier: e.target.value })} /></Labeled>
+            <Labeled label="Макс. вывод ×бонус"><input className="input w-24" value={form.maxCashoutMultiplier} onChange={(e) => set({ maxCashoutMultiplier: e.target.value })} /></Labeled>
+            <Labeled label="Макс. вывод (сумма)"><input className="input w-28" value={form.maxCashout} onChange={(e) => set({ maxCashout: e.target.value })} /></Labeled>
+            <label className="flex items-center gap-1.5 pb-2 text-sm text-white/70">
+              <input type="checkbox" checked={form.sticky} onChange={(e) => set({ sticky: e.target.checked })} /> Липкий
+            </label>
+          </div>
+        </div>
+        {/* Deposit gating (claimable bonuses) */}
+        {!isDeposit && (
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex items-center gap-1.5 pb-2 text-sm text-white/70">
+              <input type="checkbox" checked={form.requiresDeposit} onChange={(e) => set({ requiresDeposit: e.target.checked })} /> Нужен депозит
+            </label>
+            {form.requiresDeposit && <>
+              <Labeled label="Мин. депозит (USD-экв.)"><input className="input w-32" value={form.minDeposit} onChange={(e) => set({ minDeposit: e.target.value })} /></Labeled>
+              <Labeled label="За период">
+                <select className="input w-32" value={form.depositWithinDays} onChange={(e) => set({ depositWithinDays: e.target.value })}>
+                  <option value="">за всё время</option>
+                  {DEPOSIT_WINDOWS.map((d) => <option key={d} value={d}>{d} дн.</option>)}
+                </select>
+              </Labeled>
+            </>}
+          </div>
+        )}
+        <div className="flex flex-wrap gap-3">
+          <Labeled label="Описание (RU)"><input className="input w-64" value={form.descriptionRu} onChange={(e) => set({ descriptionRu: e.target.value })} /></Labeled>
+          <Labeled label="Description (EN)"><input className="input w-64" value={form.descriptionEn} onChange={(e) => set({ descriptionEn: e.target.value })} /></Labeled>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={save} className="btn-primary" disabled={!form.key || !form.name}>Сохранить бонус</button>
+          {form.key && <button onClick={() => setForm(BONUS_BLANK)} className="btn-ghost text-sm">Очистить</button>}
+        </div>
       </div>
       <Table
         rows={data ?? []}
-        cols={['key', 'name', 'type', 'amount', 'enabled']}
-        render={(b: any) => [b.key, b.name, b.type, `${fmt(b.amount)} ${b.currency ?? ''}${b.percent ? ` / ${b.percent}%` : ''}`, b.enabled ? 'yes' : 'no']}
+        cols={['key', 'name', 'type', 'amount', 'wager', 'enabled', '']}
+        render={(b: any) => [
+          b.key, b.name, b.type,
+          `${fmt(b.amount)} ${b.currency ?? ''}${b.percent ? ` / ${b.percent}%` : ''}`,
+          b.wagerMultiplier ? `×${b.wagerMultiplier}${b.sticky ? ' 🔒' : ''}` : '—',
+          b.enabled ? 'yes' : 'no',
+          <button key="e" onClick={() => edit(b)} className="text-xs text-lav hover:underline">edit</button>,
+        ]}
       />
     </div>
   );
@@ -1088,6 +1248,17 @@ function Roles() {
         </table>
       </div>
     </div>
+  );
+}
+
+/** A labeled form field with an optional hint line — keeps admin forms legible. */
+function Labeled({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-white/60">{label}</span>
+      {children}
+      {hint && <span className="text-[10px] text-white/35">{hint}</span>}
+    </label>
   );
 }
 

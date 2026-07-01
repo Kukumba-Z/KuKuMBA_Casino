@@ -136,6 +136,8 @@ export interface UserBonus {
   wagerRequired: string;
   wagerProgress: string;
   status: string;
+  sticky?: boolean;
+  maxCashout?: string | null;
 }
 
 /** The player's granted bonuses (incl. live wagering progress). */
@@ -145,6 +147,10 @@ export function useMyBonuses() {
     queryKey: ['my-bonuses'],
     enabled: authed,
     queryFn: async () => (await api.get('/bonuses/me')).data,
+    // Keep the wagering bar/detail fresh: never serve stale on open, poll while idle
+    // (bet flows also invalidate this key for instant roulette-time updates).
+    staleTime: 0,
+    refetchInterval: 20_000,
   });
 }
 

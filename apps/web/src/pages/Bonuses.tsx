@@ -83,11 +83,28 @@ function BonusCatalog() {
   const en = i18n.language?.startsWith('en');
   const { data: catalog } = useQuery({ queryKey: ['bonuses'], queryFn: async () => (await api.get('/bonuses')).data });
   const { data: mine } = useQuery({ queryKey: ['my-bonuses'], enabled: authed, queryFn: async () => (await api.get('/bonuses/me')).data });
-  const claimedIds = new Set((mine ?? []).map((m: any) => m.bonusId));
+  // Bonuses that ended badly (lost/cancelled/expired) no longer "hold" the card —
+  // the block is dropped and the terminal status is shown instead. A still-held
+  // bonus (active/wagering/cleared) keeps the "claimed" block (once per account).
+  const DEAD = new Set(['LOST', 'CANCELLED', 'FORFEITED', 'EXPIRED']);
+  const mineByBonus = new Map<string, any>();
+  for (const m of mine ?? []) if (m.bonusId && !mineByBonus.has(m.bonusId)) mineByBonus.set(m.bonusId, m); // newest first
 
   const claim = async (key: string, name: string) => {
     try {
       await api.post(`/bonuses/${key}/claim`);
+      toast.success(`${name}: ${t('common.done')}`);
+      qc.invalidateQueries({ queryKey: ['balances'] });
+      qc.invalidateQueries({ queryKey: ['my-bonuses'] });
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+
+  const cancel = async (id: string, name: string) => {
+    if (!window.confirm(t('bonuses.cancelConfirm'))) return;
+    try {
+      await api.post(`/bonuses/mine/${id}/cancel`);
       toast.success(`${name}: ${t('common.done')}`);
       qc.invalidateQueries({ queryKey: ['balances'] });
       qc.invalidateQueries({ queryKey: ['my-bonuses'] });
@@ -112,13 +129,19 @@ function BonusCatalog() {
             </div>
             {b.requiresDeposit && <div className="mt-1 text-xs text-sun/80">{t('bonuses.needsDeposit')}</div>}
             {['WELCOME', 'NO_DEPOSIT'].includes(b.type) ? (
-              claimedIds.has(b.id) ? (
-                <div className="mt-3 text-center text-xs font-semibold text-mint">{t('bonuses.claimed')}</div>
-              ) : authed ? (
-                <button onClick={() => claim(b.key, b.name)} className="btn-primary mt-3">{t('common.claim')}</button>
-              ) : (
-                <Link to="/login" className="btn-ghost mt-3 text-center">{t('common.login')}</Link>
-              )
+              (() => {
+                const prior = mineByBonus.get(b.id);
+                if (prior && DEAD.has(prior.status)) {
+                  // Ended badly → drop the block, show the terminal status (not re-claimable).
+                  return <div className="mt-3 flex justify-center"><StatusChip category="bonusStatus" value={prior.status} /></div>;
+                }
+                if (prior) return <div className="mt-3 text-center text-xs font-semibold text-mint">{t('bonuses.claimed')}</div>;
+                return authed ? (
+                  <button onClick={() => claim(b.key, b.name)} className="btn-primary mt-3">{t('common.claim')}</button>
+                ) : (
+                  <Link to="/login" className="btn-ghost mt-3 text-center">{t('common.login')}</Link>
+                );
+              })()
             ) : (
               <div className="mt-3 text-center text-xs text-white/40">{t('bonuses.autoApplied')}</div>
             )}
@@ -156,6 +179,14 @@ function BonusCatalog() {
                       <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
                         <span className="block h-full rounded-full bg-sun" style={{ width: `${pct}%` }} />
                       </div>
+                    </div>
+                  )}
+                  {wagering && (
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      {m.sticky && <span className="text-[11px] text-white/35">{t('bonuses.sticky')}{m.maxCashout ? ` · ${t('bonuses.maxCashout')} ${fmt(m.maxCashout)} ${m.currency}` : ''}</span>}
+                      <button onClick={() => cancel(m.id, m.name)} className="ml-auto text-[11px] font-semibold text-roul-red hover:underline">
+                        {t('bonuses.cancel')}
+                      </button>
                     </div>
                   )}
                 </div>

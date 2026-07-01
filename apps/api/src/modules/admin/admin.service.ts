@@ -11,6 +11,7 @@ import { PaymentsService } from '../payments/payments.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { WalletService } from '../wallet/wallet.service';
+import { BonusesService } from '../bonuses/bonuses.service';
 
 /**
  * Accept RTP as a fraction (0.973) or a percentage (97.3) — both are common —
@@ -39,6 +40,7 @@ export class AdminService {
     private notifications: NotificationsService,
     private realtime: RealtimeService,
     private permissions: PermissionsService,
+    private bonuses: BonusesService,
   ) {}
 
   private audit(actorId: string, action: string, targetType?: string, targetId?: string, meta?: any) {
@@ -351,6 +353,12 @@ export class AdminService {
         maxRedemptions: dto.maxRedemptions ?? null,
         perUserLimit: dto.perUserLimit ?? 1,
         requiresDeposit: !!dto.requiresDeposit,
+        depositWithinDays: dto.depositWithinDays ? Number(dto.depositWithinDays) : null,
+        minDeposit: dto.minDeposit ? D(dto.minDeposit) : null,
+        wagerMultiplier: dto.wagerMultiplier ? Number(dto.wagerMultiplier) : 0,
+        sticky: dto.sticky ?? true,
+        maxCashoutMultiplier: dto.maxCashoutMultiplier ? Number(dto.maxCashoutMultiplier) : null,
+        maxCashout: dto.maxCashout ? D(dto.maxCashout) : null,
         expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
         enabled: dto.enabled ?? true,
       },
@@ -361,8 +369,10 @@ export class AdminService {
 
   async updatePromocode(adminId: string, id: string, dto: any) {
     const data: any = {};
-    for (const k of ['enabled', 'maxRedemptions', 'perUserLimit', 'vipXp', 'requiresDeposit']) if (dto[k] !== undefined) data[k] = dto[k];
+    for (const k of ['enabled', 'maxRedemptions', 'perUserLimit', 'vipXp', 'requiresDeposit', 'depositWithinDays', 'wagerMultiplier', 'sticky', 'maxCashoutMultiplier']) if (dto[k] !== undefined) data[k] = dto[k];
     if (dto.amount !== undefined) data.amount = D(dto.amount);
+    if (dto.minDeposit !== undefined) data.minDeposit = dto.minDeposit ? D(dto.minDeposit) : null;
+    if (dto.maxCashout !== undefined) data.maxCashout = dto.maxCashout ? D(dto.maxCashout) : null;
     if (dto.expiresAt !== undefined) data.expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null;
     const promo = await this.prisma.promoCode.update({ where: { id }, data });
     await this.audit(adminId, 'promo.update', 'promo', id, dto);
@@ -385,6 +395,10 @@ export class AdminService {
       wagerMultiplier: dto.wagerMultiplier ?? 0,
       minDeposit: dto.minDeposit ? D(dto.minDeposit) : null,
       requiresDeposit: !!dto.requiresDeposit,
+      depositWithinDays: dto.depositWithinDays ? Number(dto.depositWithinDays) : null,
+      sticky: dto.sticky ?? true,
+      maxCashoutMultiplier: dto.maxCashoutMultiplier ? Number(dto.maxCashoutMultiplier) : null,
+      maxCashout: dto.maxCashout ? D(dto.maxCashout) : null,
       enabled: dto.enabled ?? true,
       descriptionRu: dto.descriptionRu,
       descriptionEn: dto.descriptionEn,
@@ -396,6 +410,42 @@ export class AdminService {
     });
     await this.audit(adminId, 'bonus.upsert', 'bonus', bonus.id, { key: dto.key });
     return bonus;
+  }
+
+  /**
+   * Grant a one-off personal bonus to a single user (no catalog row needed).
+   * Routes through the shared wagering engine so sticky/cashout/wager all apply.
+   */
+  async grantUserBonus(adminId: string, userId: string, dto: any) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!user) throw new NotFoundException('USER_NOT_FOUND');
+    const currency = dto.currency || 'USD';
+    const amount = D(dto.amount ?? 0);
+    if (amount.lte(0)) throw new BadRequestException('BAD_AMOUNT');
+    await this.wallet.runInTx((tx) =>
+      this.bonuses.grantBonus(tx, {
+        userId,
+        name: dto.name || 'Personal bonus',
+        amount,
+        currency,
+        mode: currency === 'DEMO' ? 'DEMO' : 'REAL',
+        wagerMultiplier: Number(dto.wagerMultiplier) || 0,
+        sticky: dto.sticky ?? true,
+        maxCashout: dto.maxCashout ? D(dto.maxCashout) : null,
+        maxCashoutMultiplier: dto.maxCashoutMultiplier ? Number(dto.maxCashoutMultiplier) : null,
+        refType: 'admin-grant',
+        description: dto.name || 'Personal bonus',
+      }),
+    );
+    await this.audit(adminId, 'bonus.grant', 'user', userId, { name: dto.name, amount: amount.toFixed(), currency });
+    await this.notifications.notify(userId, {
+      type: 'BONUS',
+      titleRu: 'Начислен бонус',
+      titleEn: 'Bonus granted',
+      bodyRu: `Вам начислен бонус «${dto.name || 'Personal bonus'}».`,
+      bodyEn: `You received the "${dto.name || 'Personal bonus'}" bonus.`,
+    });
+    return { ok: true };
   }
 
   // ── Games (catalog CRUD) ──────────────────────────────────────────────

@@ -27,10 +27,16 @@ export class PromocodesService {
     });
     if (used >= promo.perUserLimit) throw new BadRequestException('PROMO_ALREADY_USED');
 
-    // Anti-abuse: per-user block, monthly cap, and optional deposit requirement.
+    // Anti-abuse: per-user block, monthly cap, deposit requirement (amount +
+    // recent window), and — for wagered bonuses — no stacking.
     await this.bonuses.assertBonusAccess(userId);
     await this.bonuses.assertPromoMonthlyLimit(userId);
-    if (promo.requiresDeposit) await this.bonuses.assertHasDeposit(userId);
+    await this.bonuses.assertDepositEligible(userId, {
+      requiresDeposit: promo.requiresDeposit,
+      minDeposit: promo.minDeposit,
+      depositWithinDays: promo.depositWithinDays,
+    });
+    if (promo.type === 'BONUS' || promo.type === 'FREEBET') await this.bonuses.assertNoActiveWager(userId);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.promoRedemption.create({ data: { promoCodeId: promo.id, userId } });
@@ -58,7 +64,8 @@ export class PromocodesService {
           : null;
         const amount = D(promo.amount.gt(0) ? promo.amount : (bonus?.amount ?? 0));
         // Grant through the shared engine so wagering is tracked and a zero-wager
-        // promo is marked COMPLETED (never locks a withdrawal).
+        // promo is marked COMPLETED (never locks a withdrawal). The promo's own
+        // wager/sticky/cashout terms win, falling back to the linked bonus.
         await this.bonuses.grantBonus(tx, {
           userId,
           bonusId: bonus?.id,
@@ -66,7 +73,10 @@ export class PromocodesService {
           amount,
           currency: promo.currency ?? bonus?.currency ?? 'DEMO',
           mode: promo.mode,
-          wagerMultiplier: bonus?.wagerMultiplier ?? 0,
+          wagerMultiplier: promo.wagerMultiplier || bonus?.wagerMultiplier || 0,
+          sticky: promo.sticky,
+          maxCashout: promo.maxCashout ?? bonus?.maxCashout ?? null,
+          maxCashoutMultiplier: promo.maxCashoutMultiplier ?? bonus?.maxCashoutMultiplier ?? null,
           refType: 'promo',
           refId: promo.id,
           description: `Promo bonus ${promo.code}`,

@@ -46,6 +46,15 @@ async function main() {
   });
   if (nodep.count) console.log(`reconcile: nodep bonus DEMO → USDT (${nodep.count} row)`);
 
+  // Legacy bonuses from before the wagering engine can hang in ACTIVE with no
+  // wager to clear — mark those COMPLETED so they stop locking withdrawals and
+  // showing "active" forever. Only rows with wagerRequired <= 0 are touched.
+  const staleActive = await prisma.userBonus.updateMany({
+    where: { status: { in: ['ACTIVE', 'WAGERING'] }, wagerRequired: { lte: 0 } },
+    data: { status: 'COMPLETED' },
+  });
+  if (staleActive.count) console.log(`reconcile: zero-wager bonuses ACTIVE → COMPLETED (${staleActive.count} rows)`);
+
   // One-time backfill of the persistent stat counters + per-user lifetime stats,
   // so switching the lobby/profile away from count(*) doesn't reset the numbers.
   // Guarded by a flag counter so it runs exactly once, ever.

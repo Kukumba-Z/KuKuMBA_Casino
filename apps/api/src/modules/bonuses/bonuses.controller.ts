@@ -22,4 +22,10 @@ export class BonusesController {
   claim(@CurrentUser('id') userId: string, @Param('key') key: string) {
     return this.bonuses.claim(userId, key);
   }
+
+  /** Player forfeits a live bonus (removes the bonus money, unlocks withdrawals). */
+  @Post('mine/:id/cancel')
+  cancel(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.bonuses.cancelBonus(userId, id);
+  }
 }

@@ -96,6 +96,14 @@ export class CashbackService {
     if (onCooldown) throw new BadRequestException('CASHBACK_ON_COOLDOWN');
     if (!items.length) throw new BadRequestException('NOTHING_TO_CLAIM');
 
+    // Optional cashback wager: an enabled CASHBACK bonus config sets the terms
+    // (multiplier / sticky / cashout). Absent or ×0 → cashback is instant cash.
+    const cfg = await this.prisma.bonus.findFirst({
+      where: { type: 'CASHBACK', enabled: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const wager = cfg?.wagerMultiplier ?? 0;
+
     const credited: any[] = [];
     await this.prisma.$transaction(async (tx) => {
       for (const it of items) {
@@ -108,6 +116,25 @@ export class CashbackService {
           refType: 'cashback',
           description: 'Cashback',
         });
+        if (wager > 0) {
+          // Attach a wager obligation without re-crediting (money added above).
+          await this.bonuses.grantBonus(tx, {
+            userId,
+            bonusId: cfg!.id,
+            name: cfg!.name,
+            amount: it.cashback,
+            currency: it.currency,
+            mode: 'REAL',
+            wagerMultiplier: wager,
+            sticky: cfg!.sticky,
+            maxCashout: cfg!.maxCashout,
+            maxCashoutMultiplier: cfg!.maxCashoutMultiplier,
+            credit: false,
+            refType: 'cashback',
+            refId: cfg!.id,
+            description: `Cashback wager ${cfg!.name}`,
+          });
+        }
         await tx.cashbackClaim.create({
           data: {
             userId,

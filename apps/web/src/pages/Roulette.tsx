@@ -110,6 +110,7 @@ export default function Roulette() {
       revealRef.current = window.setTimeout(() => {
         setBusy(false);
         qc.invalidateQueries({ queryKey: ['balances'] });
+        qc.invalidateQueries({ queryKey: ['my-bonuses'] }); // live wagering progress
         qc.invalidateQueries({ queryKey: ['pf-seed'] });
         // Session-only history: prepend this spin's outcome (capped at 10, newest first).
         setRecent((r) => [data.outcome, ...r].slice(0, 10));

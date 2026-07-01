@@ -199,7 +199,7 @@ export class RouletteService implements OnModuleInit {
       const refRes = await this.referrals.onWager(tx, userId, total, currency, mode);
       // Advance any active bonus wagering with this stake (REAL only). Runs after
       // the win is paid so the balance-wipeout check sees the settled balance.
-      const bonusRes = await this.bonuses.onWager(tx, userId, currency, mode, total);
+      const bonusRes = await this.bonuses.onWager(tx, userId, currency, mode, total, cur.usdRate);
 
       const balRow = await tx.balance.findUnique({
         where: { userId_currency_mode: { userId, currency, mode } },

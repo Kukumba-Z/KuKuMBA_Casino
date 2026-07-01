@@ -511,6 +511,10 @@ model Bonus {
   wagerMultiplier Float     @default(0)
   minDeposit      Decimal?  @db.Decimal(38, 18)
   requiresDeposit Boolean   @default(false) // claimable only after a completed deposit
+  depositWithinDays Int? // require a qualifying deposit within N days (null = ever)
+  sticky          Boolean   @default(true) // principal removed on clearing (only winnings cash out)
+  maxCashoutMultiplier Float? // cap kept winnings at N× the bonus (null = uncapped)
+  maxCashout      Decimal?  @db.Decimal(38, 18) // absolute winnings cap in the bonus currency
   enabled         Boolean   @default(true)
   descriptionRu   String?
   descriptionEn   String?
@@ -532,6 +536,9 @@ model UserBonus {
   wagerRequired Decimal     @default(0) @db.Decimal(38, 18)
   wagerProgress Decimal     @default(0) @db.Decimal(38, 18)
   status        BonusStatus @default(ACTIVE)
+  sticky        Boolean     @default(false) // principal removed on clearing (only winnings cash out)
+  maxCashout    Decimal?    @db.Decimal(38, 18) // resolved absolute winnings cap (bonus currency)
+  baseline      Decimal     @default(0) @db.Decimal(38, 18) // player's own funds at grant (deposit); shielded from caps
   expiresAt     DateTime?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -551,6 +558,12 @@ model PromoCode {
   maxRedemptions Int? // null = unlimited
   perUserLimit   Int       @default(1)
   requiresDeposit Boolean  @default(false) // redeemable only after a completed deposit
+  depositWithinDays Int? // require a qualifying deposit within N days (null = ever)
+  minDeposit     Decimal?  @db.Decimal(38, 18) // min qualifying deposit (USD-equiv)
+  wagerMultiplier Float    @default(0) // wager on a granted BONUS/FREEBET (0 = instantly cleared)
+  sticky         Boolean   @default(true) // granted bonus is sticky (principal removed on clearing)
+  maxCashoutMultiplier Float? // cap kept winnings at N× the granted amount
+  maxCashout     Decimal?  @db.Decimal(38, 18) // absolute winnings cap in the promo currency
   redeemedCount  Int       @default(0)
   enabled        Boolean   @default(true)
   expiresAt      DateTime?
