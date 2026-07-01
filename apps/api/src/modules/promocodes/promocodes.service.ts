@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { D } from '../../common/utils/money';
+import { BonusesService } from '../bonuses/bonuses.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WalletService } from '../wallet/wallet.service';
 
@@ -10,6 +11,7 @@ export class PromocodesService {
     private prisma: PrismaService,
     private wallet: WalletService,
     private notifications: NotificationsService,
+    private bonuses: BonusesService,
   ) {}
 
   async redeem(userId: string, rawCode: string) {
@@ -24,6 +26,11 @@ export class PromocodesService {
       where: { promoCodeId: promo.id, userId },
     });
     if (used >= promo.perUserLimit) throw new BadRequestException('PROMO_ALREADY_USED');
+
+    // Anti-abuse: per-user block, monthly cap, and optional deposit requirement.
+    await this.bonuses.assertBonusAccess(userId);
+    await this.bonuses.assertPromoMonthlyLimit(userId);
+    if (promo.requiresDeposit) await this.bonuses.assertHasDeposit(userId);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.promoRedemption.create({ data: { promoCodeId: promo.id, userId } });
@@ -50,24 +57,16 @@ export class PromocodesService {
           ? await tx.bonus.findUnique({ where: { key: promo.bonusKey } })
           : null;
         const amount = D(promo.amount.gt(0) ? promo.amount : (bonus?.amount ?? 0));
-        await tx.userBonus.create({
-          data: {
-            userId,
-            bonusId: bonus?.id,
-            name: bonus?.name ?? `Promo ${promo.code}`,
-            amount,
-            currency: promo.currency ?? bonus?.currency ?? 'DEMO',
-            mode: promo.mode,
-            wagerRequired: amount.mul(bonus?.wagerMultiplier ?? 0),
-            status: 'ACTIVE',
-          },
-        });
-        await this.wallet.apply(tx, {
+        // Grant through the shared engine so wagering is tracked and a zero-wager
+        // promo is marked COMPLETED (never locks a withdrawal).
+        await this.bonuses.grantBonus(tx, {
           userId,
-          type: 'BONUS',
+          bonusId: bonus?.id,
+          name: bonus?.name ?? `Promo ${promo.code}`,
+          amount,
           currency: promo.currency ?? bonus?.currency ?? 'DEMO',
           mode: promo.mode,
-          amount,
+          wagerMultiplier: bonus?.wagerMultiplier ?? 0,
           refType: 'promo',
           refId: promo.id,
           description: `Promo bonus ${promo.code}`,

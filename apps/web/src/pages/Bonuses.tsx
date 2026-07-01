@@ -108,8 +108,9 @@ function BonusCatalog() {
             <p className="flex-1 text-sm text-white/55">{en ? b.descriptionEn : b.descriptionRu}</p>
             <div className="mt-3 text-sm text-white/70">
               {b.percent ? `${b.percent}%` : `${fmt(b.amount)} ${b.currency}`}
-              {b.wagerMultiplier ? ` · wager x${b.wagerMultiplier}` : ''}
+              {b.wagerMultiplier ? ` · ${t('bonuses.wagerTitle')} ×${b.wagerMultiplier}` : ''}
             </div>
+            {b.requiresDeposit && <div className="mt-1 text-xs text-sun/80">{t('bonuses.needsDeposit')}</div>}
             {['WELCOME', 'NO_DEPOSIT'].includes(b.type) ? (
               claimedIds.has(b.id) ? (
                 <div className="mt-3 text-center text-xs font-semibold text-mint">{t('bonuses.claimed')}</div>
@@ -130,15 +131,36 @@ function BonusCatalog() {
         <div className="card p-5">
           <h2 className="mb-3 text-lg font-bold">{t('bonuses.mine')}</h2>
           <div className="space-y-2">
-            {mine.map((m: any) => (
-              <div key={m.id} className="flex items-center justify-between gap-2 rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
-                <span className="truncate">{m.name}</span>
-                <span className="flex shrink-0 items-center gap-2">
-                  <span className="tabular-nums text-white/70">{fmt(m.amount)} {m.currency}</span>
-                  <StatusChip category="bonusStatus" value={m.status} />
-                </span>
-              </div>
-            ))}
+            {mine.map((m: any) => {
+              const req = Number(m.wagerRequired);
+              const done = Math.min(Number(m.wagerProgress), req);
+              const pct = req > 0 ? Math.min(100, Math.round((done / req) * 100)) : null;
+              const wagering = m.status === 'ACTIVE' || m.status === 'WAGERING';
+              return (
+                <div key={m.id} className="rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate">{m.name}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="tabular-nums text-white/70">{fmt(m.amount)} {m.currency}</span>
+                      <StatusChip category="bonusStatus" value={m.status} />
+                    </span>
+                  </div>
+                  {wagering && pct != null && (
+                    <div className="mt-2">
+                      <div className="mb-1 flex justify-between text-[11px] text-white/45">
+                        <span>{t('bonuses.wagered')}</span>
+                        <span className="tabular-nums">
+                          {fmt(done, 2)} {t('bonuses.ofWager')} {fmt(req, 2)} {m.currency} · {pct}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                        <span className="block h-full rounded-full bg-sun" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

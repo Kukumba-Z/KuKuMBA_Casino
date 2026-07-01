@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import api, { apiError } from '../lib/api';
-import { fmt, useBalances, useCurrencies } from '../lib/hooks';
+import { fmt, useBalances, useCurrencies, useMyBonuses } from '../lib/hooks';
 import { currencyLabel } from '../lib/labels';
 import { useUI } from '../store/ui';
 import { toast } from '../store/toast';
@@ -19,6 +19,7 @@ export function CurrencyMenu() {
   const { mode, setMode, currency, setCurrency } = useUI();
   const { data: currencies } = useCurrencies();
   const { data: balances } = useBalances();
+  const { data: myBonuses } = useMyBonuses();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [topupOpen, setTopupOpen] = useState(false);
@@ -53,17 +54,32 @@ export function CurrencyMenu() {
   const current = balOf(currency);
   const list = (currencies ?? []).filter((c) => (mode === 'DEMO' ? c.type === 'DEMO' : c.type === 'FIAT'));
 
+  // Wagering progress for the active mode+currency: sum of any bonuses still
+  // being wagered. Drives the thin bar under the balance + the dropdown detail.
+  const wagerBonuses = (myBonuses ?? []).filter(
+    (b) => (b.status === 'ACTIVE' || b.status === 'WAGERING') && b.mode === mode && b.currency === currency,
+  );
+  const wagerReq = wagerBonuses.reduce((s, b) => s + Number(b.wagerRequired), 0);
+  const wagerDone = wagerBonuses.reduce((s, b) => s + Math.min(Number(b.wagerProgress), Number(b.wagerRequired)), 0);
+  const wagerPct = wagerReq > 0 ? Math.min(100, Math.round((wagerDone / wagerReq) * 100)) : null;
+
   return (
     <div className="flex items-center gap-1.5">
       <div className="relative" ref={ref}>
         <button
           onClick={() => setOpen((o) => !o)}
-          className="flex items-center gap-1.5 rounded-2xl border border-white/10 bg-black/30 py-1.5 pl-2.5 pr-2 transition hover:bg-black/40"
+          className="relative flex items-center gap-1.5 overflow-hidden rounded-2xl border border-white/10 bg-black/30 py-1.5 pl-2.5 pr-2 transition hover:bg-black/40"
         >
           <span className={`h-2 w-2 rounded-full ${mode === 'DEMO' ? 'bg-lav' : 'bg-mint'}`} />
           <span className="text-sm font-bold tabular-nums">{fmt(current, 2)}</span>
           <span className="text-xs text-white/45">{currency}</span>
           <ChevronDown size={14} className={`text-white/40 transition ${open ? 'rotate-180' : ''}`} />
+          {/* Wagering progress — a simple bar when collapsed; details in the dropdown. */}
+          {wagerPct != null && (
+            <span className="absolute inset-x-0 bottom-0 h-[3px] bg-white/10" aria-label={`${t('bonuses.wagerTitle')} ${wagerPct}%`}>
+              <span className="block h-full bg-sun" style={{ width: `${wagerPct}%` }} />
+            </span>
+          )}
         </button>
 
         {open && (
@@ -81,6 +97,19 @@ export function CurrencyMenu() {
                 </button>
               ))}
             </div>
+            {wagerPct != null && (
+              <div className="border-t border-white/10 px-3 py-2.5">
+                <div className="mb-1 flex items-center justify-between text-xs">
+                  <span className="font-semibold text-sun">{t('bonuses.wagerTitle')}</span>
+                  <span className="tabular-nums text-white/60">
+                    {fmt(wagerDone, 2)} / {fmt(wagerReq, 2)} {currency} · {wagerPct}%
+                  </span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <span className="block h-full rounded-full bg-sun" style={{ width: `${wagerPct}%` }} />
+                </div>
+              </div>
+            )}
             <div className="max-h-64 overflow-y-auto border-t border-white/10 py-1">
               {list.map((c) => (
                 <div

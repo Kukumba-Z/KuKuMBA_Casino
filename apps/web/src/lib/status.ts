@@ -27,7 +27,7 @@ const TONES: Record<string, Record<string, Tone>> = {
     PENDING: 'warning', APPROVED: 'info', PROCESSING: 'info', COMPLETED: 'positive', REJECTED: 'danger', FAILED: 'danger',
   },
   bonusStatus: {
-    ACTIVE: 'positive', WAGERING: 'warning', COMPLETED: 'positive', EXPIRED: 'neutral', CANCELLED: 'danger', FORFEITED: 'danger',
+    ACTIVE: 'warning', WAGERING: 'warning', COMPLETED: 'positive', LOST: 'danger', EXPIRED: 'neutral', CANCELLED: 'danger', FORFEITED: 'danger',
   },
   kycStatus: { NONE: 'neutral', PENDING: 'warning', VERIFIED: 'positive', REJECTED: 'danger' },
   raffleStatus: { DRAFT: 'neutral', OPEN: 'positive', DRAWING: 'warning', COMPLETED: 'info', CANCELLED: 'danger' },

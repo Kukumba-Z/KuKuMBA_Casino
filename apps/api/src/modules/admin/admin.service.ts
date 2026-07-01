@@ -122,6 +122,13 @@ export class AdminService {
     return { ok: true };
   }
 
+  /** Grant or revoke a user's access to bonuses, promocodes and cashback. */
+  async setBonusAccess(adminId: string, id: string, allowed: boolean) {
+    const user = await this.prisma.user.update({ where: { id }, data: { bonusAccess: allowed } });
+    await this.audit(adminId, 'user.bonusAccess', 'user', id, { allowed });
+    return { ok: true, bonusAccess: user.bonusAccess };
+  }
+
   // ── Expanded user tools ───────────────────────────────────────────────
   async notifyUser(adminId: string, userId: string, dto: { titleRu: string; titleEn: string; bodyRu?: string; bodyEn?: string }) {
     if (!dto.titleRu || !dto.titleEn) throw new BadRequestException('TITLE_REQUIRED');
@@ -343,6 +350,7 @@ export class AdminService {
         mode: dto.mode ?? (dto.currency && dto.currency !== 'DEMO' ? 'REAL' : 'DEMO'),
         maxRedemptions: dto.maxRedemptions ?? null,
         perUserLimit: dto.perUserLimit ?? 1,
+        requiresDeposit: !!dto.requiresDeposit,
         expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
         enabled: dto.enabled ?? true,
       },
@@ -353,7 +361,7 @@ export class AdminService {
 
   async updatePromocode(adminId: string, id: string, dto: any) {
     const data: any = {};
-    for (const k of ['enabled', 'maxRedemptions', 'perUserLimit', 'vipXp']) if (dto[k] !== undefined) data[k] = dto[k];
+    for (const k of ['enabled', 'maxRedemptions', 'perUserLimit', 'vipXp', 'requiresDeposit']) if (dto[k] !== undefined) data[k] = dto[k];
     if (dto.amount !== undefined) data.amount = D(dto.amount);
     if (dto.expiresAt !== undefined) data.expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null;
     const promo = await this.prisma.promoCode.update({ where: { id }, data });
@@ -376,6 +384,7 @@ export class AdminService {
       maxAmount: dto.maxAmount ? D(dto.maxAmount) : null,
       wagerMultiplier: dto.wagerMultiplier ?? 0,
       minDeposit: dto.minDeposit ? D(dto.minDeposit) : null,
+      requiresDeposit: !!dto.requiresDeposit,
       enabled: dto.enabled ?? true,
       descriptionRu: dto.descriptionRu,
       descriptionEn: dto.descriptionEn,

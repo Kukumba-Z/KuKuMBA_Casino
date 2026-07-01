@@ -85,6 +85,12 @@ export class AdminController {
     return this.admin.notifyUser(adminId, id, body);
   }
 
+  @Post('users/:id/bonus-access')
+  @RequirePermission('bonuses.manage')
+  bonusAccess(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: any) {
+    return this.admin.setBonusAccess(adminId, id, !!body?.allowed);
+  }
+
   @Post('users/:id/reset-password')
   @RequirePermission('users.edit')
   resetPassword(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: any) {

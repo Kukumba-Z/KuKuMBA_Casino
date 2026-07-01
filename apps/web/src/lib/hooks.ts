@@ -127,6 +127,27 @@ export function useMe() {
   });
 }
 
+export interface UserBonus {
+  id: string;
+  name: string;
+  amount: string;
+  currency: string;
+  mode: 'DEMO' | 'REAL';
+  wagerRequired: string;
+  wagerProgress: string;
+  status: string;
+}
+
+/** The player's granted bonuses (incl. live wagering progress). */
+export function useMyBonuses() {
+  const authed = !!useAuth((s) => s.accessToken);
+  return useQuery<UserBonus[]>({
+    queryKey: ['my-bonuses'],
+    enabled: authed,
+    queryFn: async () => (await api.get('/bonuses/me')).data,
+  });
+}
+
 export function useOnline() {
   const [online, setOnline] = useState<{ sockets: number; users: number }>({ sockets: 0, users: 0 });
   useEffect(() => {

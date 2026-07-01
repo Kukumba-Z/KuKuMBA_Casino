@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { D, ZERO } from '../../common/utils/money';
+import { BonusesService } from '../bonuses/bonuses.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WalletService } from '../wallet/wallet.service';
 
@@ -19,6 +20,7 @@ export class CashbackService {
     private prisma: PrismaService,
     private wallet: WalletService,
     private notifications: NotificationsService,
+    private bonuses: BonusesService,
   ) {}
 
   private async compute(userId: string) {
@@ -89,6 +91,7 @@ export class CashbackService {
   }
 
   async claim(userId: string) {
+    await this.bonuses.assertBonusAccess(userId);
     const { percent, since, items, now, onCooldown } = await this.compute(userId);
     if (onCooldown) throw new BadRequestException('CASHBACK_ON_COOLDOWN');
     if (!items.length) throw new BadRequestException('NOTHING_TO_CLAIM');

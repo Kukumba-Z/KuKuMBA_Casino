@@ -115,6 +115,7 @@ enum BonusStatus {
   ACTIVE
   WAGERING
   COMPLETED
+  LOST
   EXPIRED
   CANCELLED
   FORFEITED
@@ -194,6 +195,7 @@ model User {
   passwordHash    String
   role            UserRole   @default(USER)
   status          UserStatus @default(ACTIVE)
+  bonusAccess     Boolean    @default(true) // admin can revoke access to bonuses/promocodes
   avatarUrl       String?
   countryCode     String?
   locale          String     @default("ru")
@@ -508,6 +510,7 @@ model Bonus {
   maxAmount       Decimal?  @db.Decimal(38, 18)
   wagerMultiplier Float     @default(0)
   minDeposit      Decimal?  @db.Decimal(38, 18)
+  requiresDeposit Boolean   @default(false) // claimable only after a completed deposit
   enabled         Boolean   @default(true)
   descriptionRu   String?
   descriptionEn   String?
@@ -547,6 +550,7 @@ model PromoCode {
   mode           WalletMode @default(REAL)
   maxRedemptions Int? // null = unlimited
   perUserLimit   Int       @default(1)
+  requiresDeposit Boolean  @default(false) // redeemable only after a completed deposit
   redeemedCount  Int       @default(0)
   enabled        Boolean   @default(true)
   expiresAt      DateTime?

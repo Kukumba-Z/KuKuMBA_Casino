@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundEx
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { D } from '../../common/utils/money';
 import { SettingsService } from '../../config/settings.service';
+import { BonusesService, WAGERING_STATUSES } from '../bonuses/bonuses.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WalletService } from '../wallet/wallet.service';
 import { PAYMENT_PROVIDER, PaymentProvider } from './providers/provider.interface';
@@ -13,6 +14,7 @@ export class PaymentsService {
     private wallet: WalletService,
     private settings: SettingsService,
     private notifications: NotificationsService,
+    private bonuses: BonusesService,
     @Inject(PAYMENT_PROVIDER) private provider: PaymentProvider,
   ) {}
 
@@ -83,6 +85,8 @@ export class PaymentsService {
         refId: dep.id,
         description: `Deposit ${dep.currency}`,
       });
+      // Auto-apply any matching deposit/reload bonus (with wagering).
+      await this.bonuses.applyDepositBonuses(tx, dep.userId, dep.currency, D(dep.amount));
     });
 
     await this.notifications.notify(dep.userId, {
@@ -116,6 +120,12 @@ export class PaymentsService {
       const u = await this.prisma.user.findUnique({ where: { id: userId } });
       if (u?.kycStatus !== 'VERIFIED') throw new ForbiddenException('KYC_REQUIRED');
     }
+
+    // Anti-abuse: block withdrawals while any bonus is still being wagered.
+    const wagering = await this.prisma.userBonus.count({
+      where: { userId, status: { in: WAGERING_STATUSES } },
+    });
+    if (wagering > 0) throw new BadRequestException('WITHDRAWAL_WAGERING_REQUIRED');
 
     const fee = D(await this.settings.get(`payments.withdrawalFee.${dto.currency}`, 0));
     const total = amount.plus(fee);

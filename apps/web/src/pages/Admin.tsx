@@ -237,15 +237,24 @@ function UserDetail({ user, me, refresh }: { user: any; me: AdminMe; refresh: ()
         )}
       </div>
 
-      {can(me, 'users.ban') && (
+      {(can(me, 'users.ban') || can(me, 'bonuses.manage')) && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl bg-black/30 p-3">
-          {user.status === 'BANNED' ? (
-            <button onClick={() => act(() => api.post(`/admin/users/${id}/status`, { status: 'ACTIVE' }), 'Unbanned')} className="btn-ghost text-sm text-mint">Unban</button>
-          ) : (
-            <>
-              <input className="input flex-1 !py-1.5" placeholder="Ban reason (optional)" value={banReason} onChange={(e) => setBanReason(e.target.value)} />
-              <button onClick={() => act(() => api.post(`/admin/users/${id}/status`, { status: 'BANNED', reason: banReason }), 'Banned')} className="btn-ghost text-sm text-roul-red">Ban</button>
-            </>
+          {can(me, 'users.ban') && (
+            user.status === 'BANNED' ? (
+              <button onClick={() => act(() => api.post(`/admin/users/${id}/status`, { status: 'ACTIVE' }), 'Unbanned')} className="btn-ghost text-sm text-mint">Unban</button>
+            ) : (
+              <>
+                <input className="input flex-1 !py-1.5" placeholder="Ban reason (optional)" value={banReason} onChange={(e) => setBanReason(e.target.value)} />
+                <button onClick={() => act(() => api.post(`/admin/users/${id}/status`, { status: 'BANNED', reason: banReason }), 'Banned')} className="btn-ghost text-sm text-roul-red">Ban</button>
+              </>
+            )
+          )}
+          {can(me, 'bonuses.manage') && (
+            user.bonusAccess === false ? (
+              <button onClick={() => act(() => api.post(`/admin/users/${id}/bonus-access`, { allowed: true }), 'Bonuses unblocked')} className="btn-ghost text-sm text-mint">Unblock bonuses</button>
+            ) : (
+              <button onClick={() => act(() => api.post(`/admin/users/${id}/bonus-access`, { allowed: false }), 'Bonuses blocked')} className="btn-ghost text-sm text-roul-red">Block bonuses</button>
+            )
           )}
         </div>
       )}
@@ -362,10 +371,15 @@ function Withdrawals() {
 function Promo() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['adm-promo'], queryFn: async () => (await api.get('/admin/promocodes')).data });
-  const [form, setForm] = useState({ code: '', type: 'BALANCE', currency: 'DEMO', amount: '500' });
+  const [form, setForm] = useState({ code: '', type: 'BALANCE', currency: 'DEMO', amount: '500', bonusKey: '', perUserLimit: '1', maxRedemptions: '', requiresDeposit: false });
   const create = async () => {
     try {
-      await api.post('/admin/promocodes', form);
+      await api.post('/admin/promocodes', {
+        ...form,
+        perUserLimit: Number(form.perUserLimit) || 1,
+        maxRedemptions: form.maxRedemptions ? Number(form.maxRedemptions) : null,
+        bonusKey: form.bonusKey || undefined,
+      });
       qc.invalidateQueries({ queryKey: ['adm-promo'] });
       toast.success('Promo created');
     } catch (e) {
@@ -376,15 +390,29 @@ function Promo() {
     <div className="space-y-3">
       <div className="card flex flex-wrap items-end gap-2 p-4">
         <input className="input w-32" placeholder="CODE (auto)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
-        <select className="input w-32" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+        <select className="input w-28" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
           <option>BALANCE</option>
+          <option>BONUS</option>
+          <option>FREEBET</option>
           <option>VIP_XP</option>
         </select>
-        <input className="input w-24" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} />
-        <input className="input w-24" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+        <input className="input w-20" placeholder="cur" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} />
+        <input className="input w-20" placeholder="amount" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+        {(form.type === 'BONUS' || form.type === 'FREEBET') && (
+          <input className="input w-28" placeholder="bonus key" value={form.bonusKey} onChange={(e) => setForm({ ...form, bonusKey: e.target.value })} />
+        )}
+        <input className="input w-20" title="per-user limit" placeholder="per user" value={form.perUserLimit} onChange={(e) => setForm({ ...form, perUserLimit: e.target.value })} />
+        <input className="input w-20" title="max total redemptions" placeholder="max total" value={form.maxRedemptions} onChange={(e) => setForm({ ...form, maxRedemptions: e.target.value })} />
+        <label className="flex items-center gap-1.5 text-xs text-white/70">
+          <input type="checkbox" checked={form.requiresDeposit} onChange={(e) => setForm({ ...form, requiresDeposit: e.target.checked })} /> needs deposit
+        </label>
         <button onClick={create} className="btn-primary">Create</button>
       </div>
-      <Table rows={data ?? []} cols={['code', 'type', 'amount', 'used']} render={(p: any) => [p.code, p.type, `${fmt(p.amount)} ${p.currency ?? ''}`, `${p.redeemedCount}`]} />
+      <Table
+        rows={data ?? []}
+        cols={['code', 'type', 'amount', 'per user', 'dep?', 'used']}
+        render={(p: any) => [p.code, p.type, `${fmt(p.amount)} ${p.currency ?? ''}`, p.perUserLimit, p.requiresDeposit ? '✓' : '—', `${p.redeemedCount}`]}
+      />
     </div>
   );
 }
@@ -392,13 +420,16 @@ function Promo() {
 function Bonuses() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['adm-bonuses'], queryFn: async () => (await api.get('/admin/bonuses')).data });
-  const [form, setForm] = useState({ key: '', name: '', type: 'NO_DEPOSIT', currency: 'DEMO', amount: '0', percent: '', wagerMultiplier: '0' });
+  const [form, setForm] = useState({ key: '', name: '', type: 'NO_DEPOSIT', currency: 'DEMO', amount: '0', percent: '', wagerMultiplier: '0', minDeposit: '', maxAmount: '', requiresDeposit: false });
   const save = async () => {
     try {
       await api.post('/admin/bonuses', {
         ...form,
         percent: form.percent ? Number(form.percent) : null,
         wagerMultiplier: Number(form.wagerMultiplier) || 0,
+        minDeposit: form.minDeposit || null,
+        maxAmount: form.maxAmount || null,
+        requiresDeposit: form.requiresDeposit,
       });
       qc.invalidateQueries({ queryKey: ['adm-bonuses'] });
       toast.success('Bonus saved');
@@ -410,16 +441,24 @@ function Bonuses() {
     <div className="space-y-3">
       <div className="card flex flex-wrap items-end gap-2 p-4">
         <input className="input w-32" placeholder="key" value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} />
-        <input className="input w-40" placeholder="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <select className="input w-40" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+        <input className="input w-36" placeholder="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <select className="input w-32" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
           <option>NO_DEPOSIT</option>
-          <option>DEPOSIT_MATCH</option>
-          <option>FREE_SPINS</option>
+          <option>WELCOME</option>
+          <option>DEPOSIT</option>
+          <option>RELOAD</option>
+          <option>FREEBET</option>
+          <option>CASHBACK</option>
         </select>
-        <input className="input w-20" placeholder="cur" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} />
+        <input className="input w-16" placeholder="cur" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} />
         <input className="input w-20" placeholder="amount" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-        <input className="input w-20" placeholder="%" value={form.percent} onChange={(e) => setForm({ ...form, percent: e.target.value })} />
-        <input className="input w-20" placeholder="wager×" value={form.wagerMultiplier} onChange={(e) => setForm({ ...form, wagerMultiplier: e.target.value })} />
+        <input className="input w-16" title="deposit-match %" placeholder="%" value={form.percent} onChange={(e) => setForm({ ...form, percent: e.target.value })} />
+        <input className="input w-20" title="max bonus" placeholder="max" value={form.maxAmount} onChange={(e) => setForm({ ...form, maxAmount: e.target.value })} />
+        <input className="input w-20" title="min deposit" placeholder="min dep" value={form.minDeposit} onChange={(e) => setForm({ ...form, minDeposit: e.target.value })} />
+        <input className="input w-16" title="wagering multiplier" placeholder="wager×" value={form.wagerMultiplier} onChange={(e) => setForm({ ...form, wagerMultiplier: e.target.value })} />
+        <label className="flex items-center gap-1.5 text-xs text-white/70">
+          <input type="checkbox" checked={form.requiresDeposit} onChange={(e) => setForm({ ...form, requiresDeposit: e.target.checked })} /> needs deposit
+        </label>
         <button onClick={save} className="btn-primary" disabled={!form.key || !form.name}>Save</button>
       </div>
       <Table
@@ -827,6 +866,19 @@ function Settings() {
             onBlur={(e) => saveRtp(e.target.value)}
           />
           <p className="mt-1 text-xs text-white/40">Доля 0–1 или % (напр. 97.3). Применяется к игре сразу.</p>
+        </div>
+        <div>
+          <label className="label">Промокодов в месяц / игрок</label>
+          <input
+            key={data?.find?.((s: any) => s.key === 'promo.monthlyLimitPerUser')?.value ?? 'promo-lim'}
+            className="input w-40"
+            type="number"
+            step="1"
+            min="0"
+            defaultValue={Number(data?.find?.((s: any) => s.key === 'promo.monthlyLimitPerUser')?.value ?? 5)}
+            onBlur={(e) => save('promo.monthlyLimitPerUser', String(Math.max(0, Math.floor(Number(e.target.value) || 0))))}
+          />
+          <p className="mt-1 text-xs text-white/40">Лимит активаций промокодов на игрока за 30 дней (анти-абуз).</p>
         </div>
         <p className="text-xs text-white/40">Edit any setting below; values are parsed as JSON when possible.</p>
       </div>

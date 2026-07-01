@@ -4,6 +4,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { tableMaxStake } from '../../../common/utils/bet-limits';
 import { isOriginalGame } from '../../../common/utils/games';
 import { D, roundTo } from '../../../common/utils/money';
+import { BonusesService } from '../../bonuses/bonuses.service';
 import { LeaderboardsService } from '../../leaderboards/leaderboards.service';
 import { StatsService } from '../../stats/stats.service';
 import { SettingsService } from '../../../config/settings.service';
@@ -36,6 +37,7 @@ export class RouletteService implements OnModuleInit {
     private notifications: NotificationsService,
     private leaderboards: LeaderboardsService,
     private stats: StatsService,
+    private bonuses: BonusesService,
   ) {}
 
   /** Seed the live-bet ticker buffer from the DB so it isn't empty after a restart. */
@@ -195,12 +197,15 @@ export class RouletteService implements OnModuleInit {
       const usd = total.mul(cur.usdRate).toNumber();
       const vipRes = await this.vip.addWager(tx, userId, usd);
       const refRes = await this.referrals.onWager(tx, userId, total, currency, mode);
+      // Advance any active bonus wagering with this stake (REAL only). Runs after
+      // the win is paid so the balance-wipeout check sees the settled balance.
+      const bonusRes = await this.bonuses.onWager(tx, userId, currency, mode, total);
 
       const balRow = await tx.balance.findUnique({
         where: { userId_currency_mode: { userId, currency, mode } },
       });
 
-      return { round, bets: betRows, outcome, outcomeColor, totalPayout, balRow, vipRes, refRes, seed };
+      return { round, bets: betRows, outcome, outcomeColor, totalPayout, balRow, vipRes, refRes, bonusRes, seed };
     });
 
     // post-commit broadcasts & notifications (never block the bet)
@@ -268,6 +273,7 @@ export class RouletteService implements OnModuleInit {
         bodyEn: `You earned ${result.refRes.amount.toFixed()} ${currency} from a referral.`,
       });
     }
+    if (result.bonusRes) this.bonuses.notifyWagerEvents(userId, result.bonusRes);
 
     return {
       roundId: result.round.id,
