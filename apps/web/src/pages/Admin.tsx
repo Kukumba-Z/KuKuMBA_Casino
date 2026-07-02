@@ -933,10 +933,11 @@ function Tickets() {
     <>
       <Table
         rows={data ?? []}
-        cols={['user', 'subject', 'status', 'updated', '']}
+        cols={['user', 'subject', 'category', 'status', 'updated', '']}
         render={(t: any) => [
           `${t.user?.username} #${t.user?.accountId}`,
           t.subject,
+          i18n.t(`support.categories.${t.category}`, { defaultValue: t.category }),
           <StatusChip key="s" category="ticketStatus" value={t.status} />,
           new Date(t.updatedAt).toLocaleString(),
           <button key="o" onClick={() => setOpenId(t.id)} className="btn-soft px-3 py-1.5 text-xs">

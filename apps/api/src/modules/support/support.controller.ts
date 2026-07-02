@@ -3,9 +3,9 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
-import { multerOptionsFor, type UploadedFileLike } from '../uploads/uploads.config';
+import { displayName, multerOptionsFor, type UploadedFileLike } from '../uploads/uploads.config';
 import { UploadsService } from '../uploads/uploads.service';
-import { SupportService } from './support.service';
+import { SupportService, type AttachmentMeta } from './support.service';
 
 const SCOPE = 'support';
 
@@ -38,6 +38,15 @@ export class SupportController {
     return this.support.myTickets(userId);
   }
 
+  private meta(file?: UploadedFileLike): AttachmentMeta | undefined {
+    if (!file) return undefined;
+    return {
+      url: this.uploads.publicUrl(SCOPE, file.filename),
+      name: displayName(file.originalname),
+      size: file.size,
+    };
+  }
+
   @Post('tickets')
   @UseInterceptors(FileInterceptor('file', multerOptionsFor(SCOPE)))
   create(
@@ -45,8 +54,7 @@ export class SupportController {
     @Body() dto: CreateTicketDto,
     @UploadedFile() file?: UploadedFileLike,
   ) {
-    const url = file ? this.uploads.publicUrl(SCOPE, file.filename) : undefined;
-    return this.support.createTicket(userId, dto, url);
+    return this.support.createTicket(userId, dto, this.meta(file));
   }
 
   @Get('tickets/:id')
@@ -62,7 +70,6 @@ export class SupportController {
     @Body() dto: ReplyDto,
     @UploadedFile() file?: UploadedFileLike,
   ) {
-    const url = file ? this.uploads.publicUrl(SCOPE, file.filename) : undefined;
-    return this.support.reply(user, id, dto.body, url);
+    return this.support.reply(user, id, dto.body, this.meta(file));
   }
 }

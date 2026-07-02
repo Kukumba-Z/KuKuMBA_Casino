@@ -792,6 +792,8 @@ model SupportMessage {
   authorRole    UserRole
   body          String
   attachmentUrl String?
+  attachmentName String? // uploader's original filename (shown in the thread / on download)
+  attachmentSize Int? // bytes, for the file chip in the UI
   createdAt     DateTime      @default(now())
 
   @@index([ticketId])

@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import { diskStorage } from 'multer';
 import { nanoid } from 'nanoid';
 import * as fs from 'fs';
@@ -39,40 +38,55 @@ export function scopeDir(scope: string): string {
   return dir;
 }
 
-/** Per-file size cap in bytes (UPLOADS_MAX_FILE_MB, default 25 MB). */
+/** Per-file size cap in bytes (UPLOADS_MAX_FILE_MB, default 50 MB). */
 export function maxFileBytes(): number {
   const mb = Number(process.env.UPLOADS_MAX_FILE_MB);
-  return (Number.isFinite(mb) && mb > 0 ? mb : 25) * 1024 * 1024;
+  return (Number.isFinite(mb) && mb > 0 ? mb : 50) * 1024 * 1024;
 }
 
-// Attachments are user-submitted evidence: photos and short clips. Keep the
-// allow-list tight so the disk only ever holds renderable media. The extension
-// is derived from the mime type (never trusted from the original filename).
-const MIME_EXT: Record<string, string> = {
-  'image/jpeg': '.jpg',
-  'image/png': '.png',
-  'image/webp': '.webp',
-  'image/gif': '.gif',
-  'video/mp4': '.mp4',
-  'video/webm': '.webm',
-  'video/quicktime': '.mov',
-};
+// Extensions the file-serving route may render inline (media previews). Anything
+// else is forced to download — an .html/.svg rendered on the API origin could
+// run scripts (XSS), so only inert media ever displays in the browser.
+export const INLINE_EXT = new Set([
+  '.jpg', '.jpeg', '.png', '.webp', '.gif',
+  '.mp4', '.webm', '.mov',
+  '.mp3', '.wav', '.ogg', '.m4a',
+]);
 
-export const ALLOWED_MIME = Object.keys(MIME_EXT);
+/**
+ * Stored-file extension, derived from the client's filename but never trusted:
+ * short alphanumeric extensions pass through (lowercased), anything odd becomes
+ * ".bin". The stored basename is always a fresh nanoid.
+ */
+export function safeExt(originalname: string): string {
+  const ext = path.extname(originalname || '').toLowerCase();
+  return /^\.[a-z0-9]{1,8}$/.test(ext) ? ext : '.bin';
+}
 
-/** Multer options for a scope: disk storage, size limit and a mime allow-list. */
+/**
+ * Human filename to show players / send in Content-Disposition. Multer decodes
+ * originalname as latin1, so Cyrillic (any UTF-8) names arrive mangled — re-decode
+ * first, then strip path separators and control characters.
+ */
+export function displayName(originalname: string): string {
+  const utf8 = Buffer.from(originalname || '', 'latin1').toString('utf8');
+  const clean = utf8.replace(/[/\\]/g, '_').replace(/[\x00-\x1f"';]/g, '').trim();
+  return (clean || 'file').slice(0, 140);
+}
+
+/**
+ * Multer options for a scope: disk storage under the scope dir and the size cap.
+ * Any file type is accepted — support attachments can be logs, archives, docs.
+ * Safety lives at serving time (inline whitelist + forced download), not here.
+ */
 export function multerOptionsFor(scope: string) {
   return {
     storage: diskStorage({
       destination: (_req: unknown, _file: unknown, cb: (e: Error | null, dir: string) => void) =>
         cb(null, scopeDir(scope)),
-      filename: (_req: unknown, file: { mimetype: string }, cb: (e: Error | null, name: string) => void) =>
-        cb(null, `${nanoid()}${MIME_EXT[file.mimetype] ?? ''}`),
+      filename: (_req: unknown, file: { originalname: string }, cb: (e: Error | null, name: string) => void) =>
+        cb(null, `${nanoid()}${safeExt(file.originalname)}`),
     }),
     limits: { fileSize: maxFileBytes() },
-    fileFilter: (_req: unknown, file: { mimetype: string }, cb: (e: Error | null, ok: boolean) => void) => {
-      if (!ALLOWED_MIME.includes(file.mimetype)) return cb(new BadRequestException('UPLOAD_TYPE_NOT_ALLOWED'), false);
-      cb(null, true);
-    },
   };
 }

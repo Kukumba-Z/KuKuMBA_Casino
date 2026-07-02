@@ -16,7 +16,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { SupportService } from '../support/support.service';
-import { multerOptionsFor, type UploadedFileLike } from '../uploads/uploads.config';
+import { displayName, multerOptionsFor, type UploadedFileLike } from '../uploads/uploads.config';
 import { UploadsService } from '../uploads/uploads.service';
 import { AdminService } from './admin.service';
 
@@ -298,8 +298,10 @@ export class AdminController {
     @Body() body: { body?: string },
     @UploadedFile() file?: UploadedFileLike,
   ) {
-    const url = file ? this.uploads.publicUrl('support', file.filename) : undefined;
-    return this.support.reply(user, id, body?.body, url);
+    const attachment = file
+      ? { url: this.uploads.publicUrl('support', file.filename), name: displayName(file.originalname), size: file.size }
+      : undefined;
+    return this.support.reply(user, id, body?.body, attachment);
   }
 
   @Patch('tickets/:id/status')

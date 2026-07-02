@@ -43,6 +43,13 @@ const FAQ = [
   },
 ];
 
+/** Attachment descriptor persisted with a message (any file type, ≤ size cap). */
+export interface AttachmentMeta {
+  url: string;
+  name: string;
+  size: number;
+}
+
 @Injectable()
 export class SupportService {
   constructor(
@@ -57,7 +64,7 @@ export class SupportService {
   createTicket(
     userId: string,
     dto: { subject: string; category?: string; message: string; priority?: TicketPriority },
-    attachmentUrl?: string,
+    attachment?: AttachmentMeta,
   ) {
     return this.prisma.supportTicket.create({
       data: {
@@ -67,7 +74,14 @@ export class SupportService {
         priority: dto.priority ?? 'NORMAL',
         status: 'OPEN',
         messages: {
-          create: { authorId: userId, authorRole: 'USER', body: dto.message, attachmentUrl: attachmentUrl ?? null },
+          create: {
+            authorId: userId,
+            authorRole: 'USER',
+            body: dto.message,
+            attachmentUrl: attachment?.url ?? null,
+            attachmentName: attachment?.name ?? null,
+            attachmentSize: attachment?.size ?? null,
+          },
         },
       },
       include: { messages: true },
@@ -107,7 +121,7 @@ export class SupportService {
     });
   }
 
-  async reply(user: { id: string; role: string }, id: string, body?: string, attachmentUrl?: string) {
+  async reply(user: { id: string; role: string }, id: string, body?: string, attachment?: AttachmentMeta) {
     const t = await this.prisma.supportTicket.findUnique({ where: { id } });
     if (!t) throw new NotFoundException('TICKET_NOT_FOUND');
     const isStaff = STAFF.includes(user.role);
@@ -118,7 +132,7 @@ export class SupportService {
     if (!isStaff && (t.status === 'RESOLVED' || t.status === 'CLOSED')) {
       throw new BadRequestException('TICKET_LOCKED');
     }
-    if (!body?.trim() && !attachmentUrl) throw new BadRequestException('EMPTY_REPLY');
+    if (!body?.trim() && !attachment) throw new BadRequestException('EMPTY_REPLY');
 
     const msg = await this.prisma.supportMessage.create({
       data: {
@@ -126,7 +140,9 @@ export class SupportService {
         authorId: user.id,
         authorRole: user.role as any,
         body: body?.trim() ?? '',
-        attachmentUrl: attachmentUrl ?? null,
+        attachmentUrl: attachment?.url ?? null,
+        attachmentName: attachment?.name ?? null,
+        attachmentSize: attachment?.size ?? null,
       },
     });
     // A reply is activity, so the ticket is no longer "closed": clear closedAt

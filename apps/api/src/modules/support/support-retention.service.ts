@@ -38,7 +38,10 @@ export class SupportRetentionService {
     let removed = 0;
     for (const m of messages) {
       this.uploads.removeByPublicUrl(m.attachmentUrl);
-      await this.prisma.supportMessage.update({ where: { id: m.id }, data: { attachmentUrl: null } });
+      await this.prisma.supportMessage.update({
+        where: { id: m.id },
+        data: { attachmentUrl: null, attachmentName: null, attachmentSize: null },
+      });
       removed++;
     }
     if (removed) this.log.log(`pruned ${removed} support attachment(s) from closed tickets`);

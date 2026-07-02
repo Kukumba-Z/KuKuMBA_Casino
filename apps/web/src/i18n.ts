@@ -316,7 +316,14 @@ const ru = {
     weeklyNote: 'Кешбэк начисляется раз в неделю — процент от чистых реальных потерь за последние 7 дней.',
   },
   raffles: { title: 'Розыгрыши', join: 'Участвовать', participants: 'Участников', prize: 'Призовой фонд', winners: 'Победителей', entry: 'Вход', free: 'Бесплатно', drawn: 'Завершён', open: 'Идёт', myTickets: 'Ваши билеты', live: 'Активный розыгрыш', joined: 'Вы участвуете!', alreadyIn: 'Вы участвуете', drawAdmin: 'Провести розыгрыш', winnersTitle: 'Победители', provablyFair: 'Честность розыгрыша', conditions: 'Условия участия', requiresDeposit: 'Нужен депозит', minDeposit: 'Мин. депозит', depositWindow: 'Депозит за период', days: 'дн.', audience: 'Аудитория', drawAt: 'Розыгрыш в', drawing: 'Идёт розыгрыш…', drawingSub: 'Выбираем честного победителя', loginToJoin: 'Войдите, чтобы участвовать' },
-  support: { title: 'Поддержка', faq: 'Частые вопросы', tickets: 'Мои тикеты', newTicket: 'Новый тикет', subject: 'Тема', message: 'Сообщение', reply: 'Ответить', ticketCreated: 'Тикет создан', open: 'Открыть', send: 'Отправить', attach: 'Прикрепить', replyPlaceholder: 'Напишите сообщение…', statusUpdated: 'Статус обновлён', attachPhotoVideo: 'Фото или видео', priority: 'Приоритет', lockedNote: 'Тикет закрыт. Если вопрос остался — создайте новый.' },
+  support: {
+    title: 'Поддержка', faq: 'Частые вопросы', tickets: 'Мои тикеты', newTicket: 'Новый тикет', subject: 'Тема',
+    message: 'Сообщение', reply: 'Ответить', ticketCreated: 'Тикет создан', open: 'Открыть', send: 'Отправить',
+    attach: 'Прикрепить', replyPlaceholder: 'Напишите сообщение…', statusUpdated: 'Статус обновлён',
+    attachFile: 'Прикрепить файл', anyFileNote: 'Любой файл до {{mb}} МБ', fileTooLarge: 'Файл больше {{mb}} МБ',
+    priority: 'Приоритет', lockedNote: 'Тикет закрыт. Если вопрос остался — создайте новый.',
+    categories: { general: 'Общий вопрос', payments: 'Платежи', game: 'Игра', bonus: 'Бонусы', account: 'Аккаунт', other: 'Другое' },
+  },
   errors: {
     GENERIC: 'Что-то пошло не так. Попробуйте ещё раз.',
     NETWORK: 'Нет связи с сервером.',
@@ -576,7 +583,14 @@ const en: typeof ru = {
     weeklyNote: 'Cashback is weekly — a percentage of your net real losses over the last 7 days.',
   },
   raffles: { title: 'Raffles', join: 'Join', participants: 'Participants', prize: 'Prize pool', winners: 'Winners', entry: 'Entry', free: 'Free', drawn: 'Completed', open: 'Live', myTickets: 'Your tickets', live: 'Live raffle', joined: 'You joined!', alreadyIn: "You're in", drawAdmin: 'Draw winners', winnersTitle: 'Winners', provablyFair: 'Provably-fair draw', conditions: 'Entry conditions', requiresDeposit: 'Deposit required', minDeposit: 'Min deposit', depositWindow: 'Deposit within', days: 'd', audience: 'Audience', drawAt: 'Draws at', drawing: 'Drawing…', drawingSub: 'Picking a provably-fair winner', loginToJoin: 'Log in to enter' },
-  support: { title: 'Support', faq: 'FAQ', tickets: 'My tickets', newTicket: 'New ticket', subject: 'Subject', message: 'Message', reply: 'Reply', ticketCreated: 'Ticket created', open: 'Open', send: 'Send', attach: 'Attach', replyPlaceholder: 'Write a message…', statusUpdated: 'Status updated', attachPhotoVideo: 'Photo or video', priority: 'Priority', lockedNote: 'This ticket is closed. Open a new one if you still need help.' },
+  support: {
+    title: 'Support', faq: 'FAQ', tickets: 'My tickets', newTicket: 'New ticket', subject: 'Subject',
+    message: 'Message', reply: 'Reply', ticketCreated: 'Ticket created', open: 'Open', send: 'Send',
+    attach: 'Attach', replyPlaceholder: 'Write a message…', statusUpdated: 'Status updated',
+    attachFile: 'Attach a file', anyFileNote: 'Any file up to {{mb}} MB', fileTooLarge: 'File is larger than {{mb}} MB',
+    priority: 'Priority', lockedNote: 'This ticket is closed. Open a new one if you still need help.',
+    categories: { general: 'General', payments: 'Payments', game: 'Game', bonus: 'Bonuses', account: 'Account', other: 'Other' },
+  },
   errors: {
     GENERIC: 'Something went wrong. Please try again.',
     NETWORK: 'No connection to the server.',
