@@ -38,3 +38,4 @@ coverage/
 # uploads (KYC docs, support-ticket attachments — local dev)
 apps/api/uploads/
 /uploads/
+/.devuploads/
