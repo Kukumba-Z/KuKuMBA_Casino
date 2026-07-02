@@ -1,11 +1,12 @@
 import { MessageCircle, Send, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import api from '../lib/api';
+import api, { apiError } from '../lib/api';
 import { useVipColors } from '../lib/hooks';
 import { ROLE_TAGS, nameColor } from '../lib/roles';
 import { getSocket } from '../lib/socket';
 import { useAuth } from '../store/auth';
+import { toast } from '../store/toast';
 import { ChatUserPopover } from './ChatUserPopover';
 
 interface Msg {
@@ -55,8 +56,10 @@ export function ChatBox({ className = '', onClose }: { className?: string; onClo
     setText('');
     try {
       await api.post('/chat', { body });
-    } catch {
-      /* ignore */
+    } catch (err) {
+      // Muted/rejected messages must not vanish silently: explain and keep the text.
+      toast.error(apiError(err));
+      setText(body);
     }
   };
 

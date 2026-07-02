@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import api, { apiError } from '../lib/api';
 import { can, useAdminMe } from '../lib/hooks';
 import { enumLabel } from '../lib/labels';
+import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
 import { Modal } from './Modal';
 
@@ -13,7 +14,9 @@ import { Modal } from './Modal';
 export function ChatUserPopover({ user, onClose }: { user: any; onClose: () => void }) {
   const { t } = useTranslation();
   const { data: me } = useAdminMe();
-  const staff = can(me, 'chat.moderate');
+  const myId = useAuth((s) => s.user?.id);
+  // Moderation needs the permission, a known target, and never applies to yourself.
+  const staff = can(me, 'chat.moderate') && !!user.userId && user.userId !== myId;
 
   const { data: card } = useQuery({
     queryKey: ['user-card', user.accountId],
