@@ -129,6 +129,7 @@ export class CashbackService {
             sticky: cfg!.sticky,
             maxCashout: cfg!.maxCashout,
             maxCashoutMultiplier: cfg!.maxCashoutMultiplier,
+            wagerPeriodHours: cfg!.wagerPeriodHours,
             credit: false,
             refType: 'cashback',
             refId: cfg!.id,

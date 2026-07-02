@@ -346,7 +346,7 @@ model Deposit {
   txHash    String?
   provider  String        @default("mock")
   status    DepositStatus @default(PENDING)
-  applyBonus Boolean      @default(true) // player opted in to the deposit-match bonus
+  bonusKey  String? // the deposit bonus the player explicitly chose (null = no bonus)
   meta      Json?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
@@ -516,6 +516,8 @@ model Bonus {
   sticky          Boolean   @default(true) // principal removed on clearing (only winnings cash out)
   maxCashoutMultiplier Float? // cap kept winnings at N× the bonus (null = uncapped)
   maxCashout      Decimal?  @db.Decimal(38, 18) // absolute winnings cap in the bonus currency
+  availableUntil  DateTime? // offer window: hidden from catalog / not claimable after this
+  wagerPeriodHours Int? // time allowed to complete wagering (null = unlimited)
   enabled         Boolean   @default(true)
   descriptionRu   String?
   descriptionEn   String?
@@ -562,6 +564,7 @@ model PromoCode {
   depositWithinDays Int? // require a qualifying deposit within N days (null = ever)
   minDeposit     Decimal?  @db.Decimal(38, 18) // min qualifying deposit (USD-equiv)
   wagerMultiplier Float    @default(0) // wager on a granted BONUS/FREEBET (0 = instantly cleared)
+  wagerPeriodHours Int? // time allowed to complete wagering (null = unlimited)
   sticky         Boolean   @default(true) // granted bonus is sticky (principal removed on clearing)
   maxCashoutMultiplier Float? // cap kept winnings at N× the granted amount
   maxCashout     Decimal?  @db.Decimal(38, 18) // absolute winnings cap in the promo currency

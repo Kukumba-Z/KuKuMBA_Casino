@@ -18,10 +18,10 @@ export class BonusesController {
     return this.bonuses.myBonuses(userId);
   }
 
-  /** Preview the deposit-match bonus for a currency+amount, before depositing. */
-  @Get('deposit-offer')
-  depositOffer(@CurrentUser('id') userId: string, @Query('currency') currency: string, @Query('amount') amount: string) {
-    return this.bonuses.depositOffer(userId, currency, amount);
+  /** All deposit bonuses the player can choose from for a currency+amount. */
+  @Get('deposit-offers')
+  depositOffers(@CurrentUser('id') userId: string, @Query('currency') currency: string, @Query('amount') amount: string) {
+    return this.bonuses.depositOffers(userId, currency, amount);
   }
 
   @Post(':key/claim')

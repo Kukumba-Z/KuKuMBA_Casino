@@ -356,6 +356,7 @@ export class AdminService {
         depositWithinDays: dto.depositWithinDays ? Number(dto.depositWithinDays) : null,
         minDeposit: dto.minDeposit ? D(dto.minDeposit) : null,
         wagerMultiplier: dto.wagerMultiplier ? Number(dto.wagerMultiplier) : 0,
+        wagerPeriodHours: dto.wagerPeriodHours ? Number(dto.wagerPeriodHours) : null,
         sticky: dto.sticky ?? true,
         maxCashoutMultiplier: dto.maxCashoutMultiplier ? Number(dto.maxCashoutMultiplier) : null,
         maxCashout: dto.maxCashout ? D(dto.maxCashout) : null,
@@ -369,7 +370,7 @@ export class AdminService {
 
   async updatePromocode(adminId: string, id: string, dto: any) {
     const data: any = {};
-    for (const k of ['enabled', 'maxRedemptions', 'perUserLimit', 'vipXp', 'requiresDeposit', 'depositWithinDays', 'wagerMultiplier', 'sticky', 'maxCashoutMultiplier']) if (dto[k] !== undefined) data[k] = dto[k];
+    for (const k of ['enabled', 'maxRedemptions', 'perUserLimit', 'vipXp', 'requiresDeposit', 'depositWithinDays', 'wagerMultiplier', 'wagerPeriodHours', 'sticky', 'maxCashoutMultiplier']) if (dto[k] !== undefined) data[k] = dto[k];
     if (dto.amount !== undefined) data.amount = D(dto.amount);
     if (dto.minDeposit !== undefined) data.minDeposit = dto.minDeposit ? D(dto.minDeposit) : null;
     if (dto.maxCashout !== undefined) data.maxCashout = dto.maxCashout ? D(dto.maxCashout) : null;
@@ -399,6 +400,8 @@ export class AdminService {
       sticky: dto.sticky ?? true,
       maxCashoutMultiplier: dto.maxCashoutMultiplier ? Number(dto.maxCashoutMultiplier) : null,
       maxCashout: dto.maxCashout ? D(dto.maxCashout) : null,
+      availableUntil: dto.availableUntil ? new Date(dto.availableUntil) : null,
+      wagerPeriodHours: dto.wagerPeriodHours ? Number(dto.wagerPeriodHours) : null,
       enabled: dto.enabled ?? true,
       descriptionRu: dto.descriptionRu,
       descriptionEn: dto.descriptionEn,
@@ -410,6 +413,15 @@ export class AdminService {
     });
     await this.audit(adminId, 'bonus.upsert', 'bonus', bonus.id, { key: dto.key });
     return bonus;
+  }
+
+  /** Delete a bonus offer. Players' UserBonus history survives (bonusId → null). */
+  async deleteBonus(adminId: string, key: string) {
+    const bonus = await this.prisma.bonus.findUnique({ where: { key } });
+    if (!bonus) throw new NotFoundException('BONUS_NOT_FOUND');
+    await this.prisma.bonus.delete({ where: { key } });
+    await this.audit(adminId, 'bonus.delete', 'bonus', bonus.id, { key });
+    return { ok: true };
   }
 
   /**
@@ -433,6 +445,7 @@ export class AdminService {
         sticky: dto.sticky ?? true,
         maxCashout: dto.maxCashout ? D(dto.maxCashout) : null,
         maxCashoutMultiplier: dto.maxCashoutMultiplier ? Number(dto.maxCashoutMultiplier) : null,
+        wagerPeriodHours: dto.wagerPeriodHours ? Number(dto.wagerPeriodHours) : null,
         refType: 'admin-grant',
         description: dto.name || 'Personal bonus',
       }),

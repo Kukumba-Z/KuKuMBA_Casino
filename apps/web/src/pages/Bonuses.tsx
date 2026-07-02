@@ -83,12 +83,17 @@ function BonusCatalog() {
   const en = i18n.language?.startsWith('en');
   const { data: catalog } = useQuery({ queryKey: ['bonuses'], queryFn: async () => (await api.get('/bonuses')).data });
   const { data: mine } = useQuery({ queryKey: ['my-bonuses'], enabled: authed, queryFn: async () => (await api.get('/bonuses/me')).data });
-  // Bonuses that ended badly (lost/cancelled/expired) no longer "hold" the card —
-  // the block is dropped and the terminal status is shown instead. A still-held
-  // bonus (active/wagering/cleared) keeps the "claimed" block (once per account).
-  const DEAD = new Set(['LOST', 'CANCELLED', 'FORFEITED', 'EXPIRED']);
   const mineByBonus = new Map<string, any>();
   for (const m of mine ?? []) if (m.bonusId && !mineByBonus.has(m.bonusId)) mineByBonus.set(m.bonusId, m); // newest first
+
+  // Used one-shot offers vanish from the catalog entirely — the outcome lives in
+  // "My bonuses". RELOAD stays (reusable); deposit bonuses are picked on the
+  // deposit form, so their card is just a shortcut there.
+  const visible = (catalog ?? []).filter((b: any) => {
+    const used = mineByBonus.has(b.id);
+    if (['WELCOME', 'NO_DEPOSIT', 'DEPOSIT'].includes(b.type) && used) return false;
+    return true;
+  });
 
   const claim = async (key: string, name: string) => {
     try {
@@ -116,7 +121,7 @@ function BonusCatalog() {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-3">
-        {(catalog ?? []).map((b: any) => (
+        {visible.map((b: any) => (
           <div key={b.id} className="card flex flex-col p-5">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-lg font-bold">{b.name}</span>
@@ -126,28 +131,29 @@ function BonusCatalog() {
             <div className="mt-3 text-sm text-white/70">
               {b.percent ? `${b.percent}%` : `${fmt(b.amount)} ${b.currency}`}
               {b.wagerMultiplier ? ` · ${t('bonuses.wagerTitle')} ×${b.wagerMultiplier}` : ''}
+              {b.wagerPeriodHours ? ` · ${b.wagerPeriodHours}${t('bonuses.hoursShort')}` : ''}
             </div>
+            {b.availableUntil && (
+              <div className="mt-1 text-xs text-sun/80">
+                {t('bonuses.availableUntil')} {new Date(b.availableUntil).toLocaleString()}
+              </div>
+            )}
             {b.requiresDeposit && <div className="mt-1 text-xs text-sun/80">{t('bonuses.needsDeposit')}</div>}
             {['WELCOME', 'NO_DEPOSIT'].includes(b.type) ? (
-              (() => {
-                const prior = mineByBonus.get(b.id);
-                if (prior && DEAD.has(prior.status)) {
-                  // Ended badly → drop the block, show the terminal status (not re-claimable).
-                  return <div className="mt-3 flex justify-center"><StatusChip category="bonusStatus" value={prior.status} /></div>;
-                }
-                if (prior) return <div className="mt-3 text-center text-xs font-semibold text-mint">{t('bonuses.claimed')}</div>;
-                return authed ? (
-                  <button onClick={() => claim(b.key, b.name)} className="btn-primary mt-3">{t('common.claim')}</button>
-                ) : (
-                  <Link to="/login" className="btn-ghost mt-3 text-center">{t('common.login')}</Link>
-                );
-              })()
+              authed ? (
+                <button onClick={() => claim(b.key, b.name)} className="btn-primary mt-3">{t('common.claim')}</button>
+              ) : (
+                <Link to="/login" className="btn-ghost mt-3 text-center">{t('common.login')}</Link>
+              )
+            ) : ['DEPOSIT', 'RELOAD'].includes(b.type) ? (
+              // Deposit bonuses are picked on the deposit form — this is a shortcut.
+              <Link to={`/wallet?bonus=${b.key}`} className="btn-primary mt-3 text-center">{t('bonuses.goDeposit')}</Link>
             ) : (
               <div className="mt-3 text-center text-xs text-white/40">{t('bonuses.autoApplied')}</div>
             )}
           </div>
         ))}
-        {(!catalog || catalog.length === 0) && <div className="text-white/40">{t('common.empty')}</div>}
+        {visible.length === 0 && <div className="text-white/40">{t('common.empty')}</div>}
       </div>
 
       {authed && mine && mine.length > 0 && (
@@ -183,8 +189,18 @@ function BonusCatalog() {
                   )}
                   {wagering && (
                     <div className="mt-2 flex items-center justify-between gap-2">
-                      {m.sticky && <span className="text-[11px] text-white/35">{t('bonuses.sticky')}{m.maxCashout ? ` · ${t('bonuses.maxCashout')} ${fmt(m.maxCashout)} ${m.currency}` : ''}</span>}
-                      <button onClick={() => cancel(m.id, m.name)} className="ml-auto text-[11px] font-semibold text-roul-red hover:underline">
+                      <span className="text-[11px] text-white/35">
+                        {m.sticky ? t('bonuses.sticky') : ''}
+                        {m.sticky && m.maxCashout ? ' · ' : ''}
+                        {m.maxCashout ? `${t('bonuses.maxCashout')} ${fmt(m.maxCashout)} ${m.currency}` : ''}
+                        {(m.sticky || m.maxCashout) && m.expiresAt ? ' · ' : ''}
+                        {m.expiresAt && (
+                          <span className="text-sun/80">
+                            {t('bonuses.timeLeft')} {Math.max(0, Math.ceil((new Date(m.expiresAt).getTime() - Date.now()) / 3_600_000))}{t('bonuses.hoursShort')}
+                          </span>
+                        )}
+                      </span>
+                      <button onClick={() => cancel(m.id, m.name)} className="ml-auto shrink-0 text-[11px] font-semibold text-roul-red hover:underline">
                         {t('bonuses.cancel')}
                       </button>
                     </div>

@@ -27,7 +27,7 @@ export class PaymentsService {
   }
 
   // ── Deposits ──────────────────────────────────────────────────────────────
-  async createDeposit(userId: string, dto: { currency: string; network?: string; amount: string; applyBonus?: boolean }) {
+  async createDeposit(userId: string, dto: { currency: string; network?: string; amount: string; bonusKey?: string | null }) {
     const cur = await this.realCurrency(dto.currency);
     if (cur.type === 'CRYPTO' && (!dto.network || !cur.networks.includes(dto.network))) {
       throw new BadRequestException('INVALID_NETWORK');
@@ -35,6 +35,15 @@ export class PaymentsService {
     const amount = D(dto.amount);
     if (amount.lte(0)) throw new BadRequestException('BAD_AMOUNT');
     if (cur.minDeposit && amount.lt(cur.minDeposit)) throw new BadRequestException('BELOW_MIN_DEPOSIT');
+
+    // The player picks their deposit bonus explicitly (null = no bonus). Verify
+    // the chosen key is actually offered for this currency + amount right now.
+    if (dto.bonusKey) {
+      const { offers } = await this.bonuses.depositOffers(userId, dto.currency, dto.amount);
+      if (!offers.some((o: any) => o.key === dto.bonusKey)) {
+        throw new BadRequestException('BONUS_OFFER_EXPIRED');
+      }
+    }
 
     const res = await this.provider.createDeposit({
       userId,
@@ -52,7 +61,7 @@ export class PaymentsService {
         address: res.address,
         provider: this.provider.name,
         status: 'PENDING',
-        applyBonus: dto.applyBonus !== false, // opt-out of the deposit bonus
+        bonusKey: dto.bonusKey || null, // the bonus the player chose (null = none)
         meta: { reference: res.reference, expiresAt: res.expiresAt, ...res.meta },
       },
     });
@@ -87,10 +96,9 @@ export class PaymentsService {
         refId: dep.id,
         description: `Deposit ${dep.currency}`,
       });
-      // Auto-apply any matching deposit/reload bonus (with wagering) — unless the
-      // player opted out of it on the deposit form.
-      if (dep.applyBonus) {
-        granted = await this.bonuses.applyDepositBonuses(tx, dep.userId, dep.currency, D(dep.amount));
+      // Apply only the bonus the player explicitly chose on the deposit form.
+      if (dep.bonusKey) {
+        granted = await this.bonuses.applyChosenDepositBonus(tx, dep.userId, dep.currency, D(dep.amount), dep.bonusKey);
       }
     });
 
@@ -137,6 +145,8 @@ export class PaymentsService {
     }
 
     // Anti-abuse: block withdrawals while any bonus is still being wagered.
+    // Sweep expired/busted bonuses first so a dead wager never locks a payout.
+    await this.bonuses.reconcileUserBonuses(userId);
     const wagering = await this.prisma.userBonus.count({
       where: { userId, status: { in: WAGERING_STATUSES } },
     });

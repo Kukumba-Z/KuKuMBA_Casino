@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { IsBoolean, IsNumberString, IsOptional, IsString } from 'class-validator';
+import { IsNumberString, IsOptional, IsString } from 'class-validator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PaymentsService } from './payments.service';
 
@@ -7,7 +7,7 @@ class CreateDepositDto {
   @IsString() currency: string;
   @IsOptional() @IsString() network?: string;
   @IsNumberString() amount: string;
-  @IsOptional() @IsBoolean() applyBonus?: boolean;
+  @IsOptional() @IsString() bonusKey?: string;
 }
 class CreateWithdrawalDto {
   @IsString() currency: string;

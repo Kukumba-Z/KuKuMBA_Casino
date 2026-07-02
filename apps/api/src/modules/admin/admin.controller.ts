@@ -207,6 +207,12 @@ export class AdminController {
     return this.admin.upsertBonus(adminId, body);
   }
 
+  @Delete('bonuses/:key')
+  @RequirePermission('bonuses.manage')
+  deleteBonus(@CurrentUser('id') adminId: string, @Param('key') key: string) {
+    return this.admin.deleteBonus(adminId, key);
+  }
+
   // Games (catalog CRUD)
   @Get('games')
   @RequirePermission('games.manage')

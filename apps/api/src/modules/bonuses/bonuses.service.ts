@@ -14,6 +14,11 @@ type Dec = Prisma.Decimal;
 // AppSetting `promo.monthlyLimitPerUser`.
 const MONTHLY_PROMO_DEFAULT = 5;
 
+// A wagering bonus is LOST once the player's total REAL balance (USD-equivalent)
+// drops below this — dust in another currency shouldn't keep a busted bonus
+// "active" forever. Overridable via the AppSetting `bonus.bustThresholdUsd`.
+const BUST_THRESHOLD_USD_DEFAULT = 0.01;
+
 /** Statuses that still owe wagering — these lock withdrawals and keep progressing. */
 export const WAGERING_STATUSES: BonusStatus[] = ['ACTIVE', 'WAGERING'];
 
@@ -42,17 +47,74 @@ export class BonusesService {
   /** Public catalog of available bonuses (REAL money only — demo is free). */
   catalog() {
     return this.prisma.bonus.findMany({
-      where: { enabled: true, NOT: { currency: 'DEMO' } },
+      where: {
+        enabled: true,
+        NOT: { currency: 'DEMO' },
+        OR: [{ availableUntil: null }, { availableUntil: { gt: new Date() } }],
+      },
       orderBy: { createdAt: 'asc' },
     });
   }
 
-  myBonuses(userId: string) {
+  async myBonuses(userId: string) {
+    // Lazy sweep so expired / busted bonuses resolve even without another bet.
+    await this.reconcileUserBonuses(userId);
     return this.prisma.userBonus.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
+  }
+
+  /**
+   * Lazy terminal sweep for a player's wagering bonuses:
+   * - past `expiresAt` → funds forfeited (settle) + EXPIRED;
+   * - total REAL balance (USD-equiv) below the bust threshold → LOST.
+   * Called from reads (my bonuses, deposit offers) and the withdrawal gate, so a
+   * bonus never lingers "active" after it can no longer be cleared.
+   */
+  async reconcileUserBonuses(userId: string) {
+    const live = await this.prisma.userBonus.findMany({
+      where: { userId, status: { in: WAGERING_STATUSES } },
+    });
+    if (!live.length) return;
+
+    const now = new Date();
+    const expired = live.filter((b) => b.expiresAt && b.expiresAt < now);
+    for (const ub of expired) {
+      await this.prisma.$transaction(async (tx) => {
+        await this.settle(tx, ub, { forfeit: true });
+        await tx.userBonus.update({ where: { id: ub.id }, data: { status: 'EXPIRED' } });
+      });
+      void this.notifications.notify(userId, {
+        type: 'BONUS',
+        titleRu: 'Срок отыгрыша истёк',
+        titleEn: 'Wagering time expired',
+        bodyRu: `Время на отыгрыш бонуса «${ub.name}» вышло — бонусные средства списаны.`,
+        bodyEn: `The wagering window for "${ub.name}" ran out — bonus funds were removed.`,
+      });
+    }
+
+    const still = live.filter((b) => !expired.some((e) => e.id === b.id));
+    if (!still.length) return;
+
+    const threshold = D(await this.settings.get('bonus.bustThresholdUsd', BUST_THRESHOLD_USD_DEFAULT));
+    const rates = await this.usdRates();
+    const balances = await this.prisma.balance.findMany({ where: { userId, mode: 'REAL' } });
+    let totalUsd = ZERO;
+    for (const b of balances) totalUsd = totalUsd.plus(D(b.amount).mul(rates.get(b.currency) ?? ZERO));
+    if (totalUsd.lt(threshold)) {
+      for (const ub of still) {
+        await this.prisma.userBonus.update({ where: { id: ub.id }, data: { status: 'LOST' } });
+        void this.notifications.notify(userId, {
+          type: 'BONUS',
+          titleRu: 'Бонус проигран',
+          titleEn: 'Bonus lost',
+          bodyRu: `Бонус «${ub.name}» проигран.`,
+          bodyEn: `The "${ub.name}" bonus was lost.`,
+        });
+      }
+    }
   }
 
   // ── Anti-abuse guards (shared by claim / promo / cashback) ──────────────────
@@ -137,6 +199,7 @@ export class BonusesService {
       maxCashout?: Dec | null; // absolute cap
       maxCashoutMultiplier?: number | null; // ×amount cap
       baseline?: Dec; // player's own funds already present (deposit); shielded from caps
+      wagerPeriodHours?: number | null; // time allowed to complete wagering
       credit?: boolean; // false = only attach the wager obligation (funds credited elsewhere)
       refType: string;
       refId?: string;
@@ -169,6 +232,10 @@ export class BonusesService {
         sticky: required.gt(0) ? !!opts.sticky : false,
         maxCashout: cap,
         baseline: opts.baseline ?? ZERO,
+        expiresAt:
+          required.gt(0) && opts.wagerPeriodHours && opts.wagerPeriodHours > 0
+            ? new Date(Date.now() + opts.wagerPeriodHours * 3_600_000)
+            : null,
       },
     });
     if (opts.credit === false) return; // funds already credited by the caller (e.g. cashback)
@@ -200,9 +267,20 @@ export class BonusesService {
     mode: WalletMode,
     stake: Dec,
     playUsdRate: Dec | number,
-  ): Promise<{ completed: string[]; lost: string[] }> {
-    const events = { completed: [] as string[], lost: [] as string[] };
+  ): Promise<{ completed: string[]; lost: string[]; expired: string[] }> {
+    const events = { completed: [] as string[], lost: [] as string[], expired: [] as string[] };
     if (mode !== 'REAL') return events; // demo play is free, never wagered
+
+    // Expire overdue bonuses first so a dead wager never absorbs this stake.
+    const now = new Date();
+    const overdue = await tx.userBonus.findMany({
+      where: { userId, mode: 'REAL', status: { in: WAGERING_STATUSES }, expiresAt: { lt: now } },
+    });
+    for (const dead of overdue) {
+      await this.settle(tx, dead, { forfeit: true });
+      await tx.userBonus.update({ where: { id: dead.id }, data: { status: 'EXPIRED' } });
+      events.expired.push(dead.name);
+    }
 
     const ub = await tx.userBonus.findFirst({
       where: { userId, mode: 'REAL', status: { in: WAGERING_STATUSES } },
@@ -233,14 +311,16 @@ export class BonusesService {
       events.completed.push(ub.name);
     }
 
-    // Wipe-out check: if the total REAL balance (USD-normalised) is ~0 while any
-    // bonus is still wagering, it can no longer be cleared → LOST.
+    // Wipe-out check: once the total REAL balance (USD-normalised) is below the
+    // bust threshold, a wagering bonus can no longer be cleared → LOST. Dust in
+    // another currency must not keep a busted bonus alive.
     const stuck = await tx.userBonus.findMany({ where: { userId, mode: 'REAL', status: { in: WAGERING_STATUSES } } });
     if (stuck.length) {
+      const threshold = D(await this.settings.get('bonus.bustThresholdUsd', BUST_THRESHOLD_USD_DEFAULT));
       const balances = await tx.balance.findMany({ where: { userId, mode: 'REAL' } });
       let totalUsd = ZERO;
       for (const b of balances) totalUsd = totalUsd.plus(D(b.amount).mul(rates.get(b.currency) ?? ZERO));
-      if (totalUsd.lte(D('0.00000001'))) {
+      if (totalUsd.lt(threshold)) {
         for (const b of stuck) {
           await tx.userBonus.update({ where: { id: b.id }, data: { status: 'LOST' } });
           events.lost.push(b.name);
@@ -321,79 +401,90 @@ export class BonusesService {
     return { ok: true };
   }
 
+  /** amount = min(deposit × percent%, maxAmount) (or the flat amount); null if nothing. */
+  private depositBonusAmount(b: Bonus, deposit: Dec): Dec | null {
+    let amount = b.percent ? deposit.mul(b.percent).div(100) : D(b.amount);
+    if (b.maxAmount && amount.gt(D(b.maxAmount))) amount = D(b.maxAmount);
+    return amount.gt(0) ? amount : null;
+  }
+
+  /** Is this deposit bonus usable for the player right now (window, min, once-per-user)? */
+  private async depositBonusEligible(client: Tx | PrismaService, userId: string, b: Bonus, deposit: Dec): Promise<boolean> {
+    if (!b.enabled || !['DEPOSIT', 'RELOAD'].includes(b.type)) return false;
+    if (b.availableUntil && b.availableUntil < new Date()) return false;
+    if (b.minDeposit && deposit.lt(D(b.minDeposit))) return false;
+    if (b.type === 'DEPOSIT') {
+      const already = await client.userBonus.count({ where: { userId, bonusId: b.id } });
+      if (already > 0) return false; // first-deposit match applies once per account
+    }
+    return true;
+  }
+
   /**
-   * The single deposit-match bonus that would apply to `deposit` in `currency`,
-   * with its computed amount, or null. DEPOSIT (welcome) applies once per user;
-   * RELOAD applies each qualifying deposit; both respect minDeposit.
-   * amount = min(deposit × percent%, maxAmount) (or the flat amount).
+   * All deposit bonuses the player can pick from for this currency + amount —
+   * the deposit form renders these as an explicit choice ("no bonus" is the
+   * default; nothing is ever applied automatically). `blockedByWager` tells the
+   * UI a pick won't apply until the current bonus is cleared (no stacking).
    */
-  private async pickDepositBonus(client: Tx | PrismaService, userId: string, currency: string, deposit: Dec): Promise<{ bonus: Bonus; amount: Dec } | null> {
-    const bonuses = await client.bonus.findMany({
+  async depositOffers(userId: string, currency: string, amount: string) {
+    const deposit = D(amount || 0);
+    const empty = { offers: [] as any[], blockedByWager: false };
+    if (!currency || currency === 'DEMO' || deposit.lte(0)) return empty;
+    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { bonusAccess: true } });
+    if (u && u.bonusAccess === false) return empty;
+    // Resolve stuck bonuses first so a dead wager doesn't silently block offers.
+    await this.reconcileUserBonuses(userId);
+
+    const bonuses = await this.prisma.bonus.findMany({
       where: { enabled: true, currency, type: { in: ['DEPOSIT', 'RELOAD'] } },
       orderBy: { createdAt: 'asc' },
     });
+    const offers = [];
     for (const b of bonuses) {
-      if (b.minDeposit && deposit.lt(D(b.minDeposit))) continue;
-      if (b.type === 'DEPOSIT') {
-        const already = await client.userBonus.count({ where: { userId, bonusId: b.id } });
-        if (already > 0) continue; // first-deposit match applies once
+      if (!(await this.depositBonusEligible(this.prisma, userId, b, deposit))) continue;
+      const bonusAmount = this.depositBonusAmount(b, deposit);
+      if (!bonusAmount) continue;
+      let cap = b.maxCashout ? D(b.maxCashout) : null;
+      if (b.maxCashoutMultiplier && b.maxCashoutMultiplier > 0) {
+        const m = bonusAmount.mul(b.maxCashoutMultiplier);
+        cap = cap == null ? m : min(cap, m);
       }
-      let amount = b.percent ? deposit.mul(b.percent).div(100) : D(b.amount);
-      if (b.maxAmount && amount.gt(D(b.maxAmount))) amount = D(b.maxAmount);
-      if (amount.lte(0)) continue;
-      return { bonus: b, amount };
-    }
-    return null;
-  }
-
-  /**
-   * Preview shown before a deposit so the player knows exactly what they'll get
-   * (percent/amount, total, wager, sticky, cashout cap) and can opt out. Returns
-   * null when nothing applies; `blockedByWager` flags that it won't apply until
-   * the current bonus is cleared (no stacking).
-   */
-  async depositOffer(userId: string, currency: string, amount: string) {
-    const deposit = D(amount || 0);
-    if (!currency || currency === 'DEMO' || deposit.lte(0)) return null;
-    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { bonusAccess: true } });
-    if (u && u.bonusAccess === false) return null;
-    const pick = await this.pickDepositBonus(this.prisma, userId, currency, deposit);
-    if (!pick) return null;
-    const { bonus: b, amount: bonusAmount } = pick;
-    let cap = b.maxCashout ? D(b.maxCashout) : null;
-    if (b.maxCashoutMultiplier && b.maxCashoutMultiplier > 0) {
-      const m = bonusAmount.mul(b.maxCashoutMultiplier);
-      cap = cap == null ? m : min(cap, m);
+      offers.push({
+        key: b.key,
+        name: b.name,
+        percent: b.percent ?? null,
+        currency,
+        bonusAmount: bonusAmount.toFixed(),
+        total: deposit.plus(bonusAmount).toFixed(),
+        wagerMultiplier: b.wagerMultiplier,
+        sticky: b.sticky,
+        maxCashout: cap ? cap.toFixed() : null,
+        wagerPeriodHours: b.wagerPeriodHours ?? null,
+        availableUntil: b.availableUntil ?? null,
+      });
     }
     const active = await this.prisma.userBonus.count({ where: { userId, status: { in: WAGERING_STATUSES } } });
-    return {
-      name: b.name,
-      percent: b.percent ?? null,
-      currency,
-      bonusAmount: bonusAmount.toFixed(),
-      total: deposit.plus(bonusAmount).toFixed(),
-      wagerMultiplier: b.wagerMultiplier,
-      sticky: b.sticky,
-      maxCashout: cap ? cap.toFixed() : null,
-      blockedByWager: active > 0,
-    };
+    return { offers, blockedByWager: active > 0 };
   }
 
   /**
-   * Auto-apply a deposit-match bonus when a deposit is credited. Called inside the
-   * confirm-deposit transaction. Respects the per-user block, no-stacking and
-   * minDeposit. The deposit itself becomes the `baseline` so cashout caps never
-   * eat own money. Returns the granted bonus (for a notification), or null.
+   * Apply the deposit bonus the player explicitly chose on the deposit form.
+   * Re-validates eligibility inside the confirm transaction (the offer may have
+   * expired or been used between create and confirm). The deposit itself becomes
+   * the `baseline` so sticky/cashout never eat own money. Returns the granted
+   * bonus (for a notification), or null when it no longer applies.
    */
-  async applyDepositBonuses(tx: Tx, userId: string, currency: string, deposit: Dec) {
+  async applyChosenDepositBonus(tx: Tx, userId: string, currency: string, deposit: Dec, bonusKey: string) {
     const u = await tx.user.findUnique({ where: { id: userId }, select: { bonusAccess: true } });
     if (u && u.bonusAccess === false) return null;
-    // No stacking: skip auto-apply while another bonus is still being wagered.
+    // No stacking: the chosen bonus is skipped while another is still wagering.
     const active = await tx.userBonus.count({ where: { userId, status: { in: WAGERING_STATUSES } } });
     if (active > 0) return null;
-    const pick = await this.pickDepositBonus(tx, userId, currency, deposit);
-    if (!pick) return null;
-    const { bonus: b, amount } = pick;
+    const b = await tx.bonus.findUnique({ where: { key: bonusKey } });
+    if (!b || b.currency !== currency) return null;
+    if (!(await this.depositBonusEligible(tx, userId, b, deposit))) return null;
+    const amount = this.depositBonusAmount(b, deposit);
+    if (!amount) return null;
     await this.grantBonus(tx, {
       userId,
       bonusId: b.id,
@@ -406,6 +497,7 @@ export class BonusesService {
       maxCashout: b.maxCashout,
       maxCashoutMultiplier: b.maxCashoutMultiplier,
       baseline: deposit, // own deposit is shielded from sticky/cashout
+      wagerPeriodHours: b.wagerPeriodHours,
       refType: 'deposit-bonus',
       refId: b.id,
       description: `Deposit bonus ${b.name}`,
@@ -413,8 +505,17 @@ export class BonusesService {
     return { name: b.name, amount: amount.toFixed(), currency, wagerMultiplier: b.wagerMultiplier, sticky: b.sticky };
   }
 
-  /** Fire user notifications for bonuses that just cleared / were lost (post-commit). */
-  notifyWagerEvents(userId: string, events: { completed: string[]; lost: string[] }) {
+  /** Fire user notifications for bonuses that just cleared / were lost / expired (post-commit). */
+  notifyWagerEvents(userId: string, events: { completed: string[]; lost: string[]; expired?: string[] }) {
+    for (const name of events.expired ?? []) {
+      void this.notifications.notify(userId, {
+        type: 'BONUS',
+        titleRu: 'Срок отыгрыша истёк',
+        titleEn: 'Wagering time expired',
+        bodyRu: `Время на отыгрыш бонуса «${name}» вышло — бонусные средства списаны.`,
+        bodyEn: `The wagering window for "${name}" ran out — bonus funds were removed.`,
+      });
+    }
     for (const name of events.completed) {
       void this.notifications.notify(userId, {
         type: 'BONUS',
@@ -441,7 +542,10 @@ export class BonusesService {
     const bonus = await this.prisma.bonus.findUnique({ where: { key } });
     if (!bonus || !bonus.enabled) throw new NotFoundException('BONUS_NOT_FOUND');
     if (!['NO_DEPOSIT', 'WELCOME'].includes(bonus.type)) {
-      throw new BadRequestException('BONUS_NOT_CLAIMABLE'); // deposit/reload bonuses apply automatically
+      throw new BadRequestException('BONUS_NOT_CLAIMABLE'); // deposit/reload bonuses are chosen on the deposit form
+    }
+    if (bonus.availableUntil && bonus.availableUntil < new Date()) {
+      throw new BadRequestException('BONUS_OFFER_EXPIRED'); // the offer window has closed
     }
     await this.assertBonusAccess(userId);
     await this.assertNoActiveWager(userId); // no stacking
@@ -472,6 +576,7 @@ export class BonusesService {
         sticky: bonus.sticky,
         maxCashout: bonus.maxCashout,
         maxCashoutMultiplier: bonus.maxCashoutMultiplier,
+        wagerPeriodHours: bonus.wagerPeriodHours,
         refType: 'bonus',
         refId: bonus.id,
         description: `Bonus ${bonus.name}`,

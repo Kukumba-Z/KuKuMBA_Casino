@@ -77,6 +77,7 @@ export class PromocodesService {
           sticky: promo.sticky,
           maxCashout: promo.maxCashout ?? bonus?.maxCashout ?? null,
           maxCashoutMultiplier: promo.maxCashoutMultiplier ?? bonus?.maxCashoutMultiplier ?? null,
+          wagerPeriodHours: promo.wagerPeriodHours ?? bonus?.wagerPeriodHours ?? null,
           refType: 'promo',
           refId: promo.id,
           description: `Promo bonus ${promo.code}`,

@@ -166,12 +166,13 @@ function Users({ me }: { me: AdminMe }) {
 /** Grant a one-off personal bonus to this user (routes through the wagering engine). */
 function GrantBonusPanel({ id, act }: { id: string; act: (fn: () => Promise<any>, ok?: string) => Promise<void> }) {
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ name: 'Personal bonus', amount: '10', currency: 'USD', wagerMultiplier: '0', sticky: true, maxCashoutMultiplier: '', maxCashout: '' });
+  const [f, setF] = useState({ name: 'Personal bonus', amount: '10', currency: 'USD', wagerMultiplier: '0', wagerPeriodHours: '', sticky: true, maxCashoutMultiplier: '', maxCashout: '' });
   const set = (patch: any) => setF((s) => ({ ...s, ...patch }));
   const grant = () =>
     act(() => api.post(`/admin/users/${id}/grant-bonus`, {
       name: f.name, amount: f.amount, currency: f.currency,
       wagerMultiplier: Number(f.wagerMultiplier) || 0, sticky: f.sticky,
+      wagerPeriodHours: f.wagerPeriodHours ? Number(f.wagerPeriodHours) : null,
       maxCashoutMultiplier: f.maxCashoutMultiplier ? Number(f.maxCashoutMultiplier) : null,
       maxCashout: f.maxCashout || null,
     }), 'Bonus granted');
@@ -189,6 +190,7 @@ function GrantBonusPanel({ id, act }: { id: string; act: (fn: () => Promise<any>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <input className="input w-20 !py-1.5" title="вейджер ×" placeholder="wager×" value={f.wagerMultiplier} onChange={(e) => set({ wagerMultiplier: e.target.value })} />
+            <input className="input w-24 !py-1.5" title="срок отыгрыша, часов" placeholder="срок, ч" value={f.wagerPeriodHours} onChange={(e) => set({ wagerPeriodHours: e.target.value })} />
             <input className="input w-24 !py-1.5" title="макс. вывод ×бонус" placeholder="cashout×" value={f.maxCashoutMultiplier} onChange={(e) => set({ maxCashoutMultiplier: e.target.value })} />
             <input className="input w-28 !py-1.5" title="макс. вывод сумма" placeholder="cashout сумма" value={f.maxCashout} onChange={(e) => set({ maxCashout: e.target.value })} />
             <label className="flex items-center gap-1.5 text-sm text-white/70">
@@ -411,7 +413,7 @@ function Withdrawals() {
 
 const PROMO_BLANK = {
   code: '', type: 'BALANCE', currency: 'USD', amount: '0', bonusKey: '',
-  perUserLimit: '1', maxRedemptions: '', wagerMultiplier: '', sticky: true,
+  perUserLimit: '1', maxRedemptions: '', wagerMultiplier: '', wagerPeriodHours: '', sticky: true,
   maxCashoutMultiplier: '', maxCashout: '', requiresDeposit: false, minDeposit: '', depositWithinDays: '',
 };
 
@@ -428,6 +430,7 @@ function Promo() {
         perUserLimit: Number(form.perUserLimit) || 1,
         maxRedemptions: form.maxRedemptions ? Number(form.maxRedemptions) : null,
         wagerMultiplier: form.wagerMultiplier ? Number(form.wagerMultiplier) : 0,
+        wagerPeriodHours: form.wagerPeriodHours ? Number(form.wagerPeriodHours) : null,
         maxCashoutMultiplier: form.maxCashoutMultiplier ? Number(form.maxCashoutMultiplier) : null,
         maxCashout: form.maxCashout || null,
         minDeposit: form.minDeposit || null,
@@ -476,6 +479,7 @@ function Promo() {
             <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-white/40">Отыгрыш и вывод</div>
             <div className="flex flex-wrap items-end gap-3">
               <Labeled label="Вейджер ×" hint="0 = сразу отыгран"><input className="input w-20" value={form.wagerMultiplier} onChange={(e) => set({ wagerMultiplier: e.target.value })} /></Labeled>
+              <Labeled label="Срок отыгрыша, ч" hint="пусто = без лимита"><input className="input w-28" value={form.wagerPeriodHours} onChange={(e) => set({ wagerPeriodHours: e.target.value })} /></Labeled>
               <Labeled label="Макс. вывод ×бонус" hint="напр. 5"><input className="input w-24" value={form.maxCashoutMultiplier} onChange={(e) => set({ maxCashoutMultiplier: e.target.value })} /></Labeled>
               <Labeled label="Макс. вывод (сумма)"><input className="input w-28" value={form.maxCashout} onChange={(e) => set({ maxCashout: e.target.value })} /></Labeled>
               <label className="flex items-center gap-1.5 pb-2 text-sm text-white/70">
@@ -516,7 +520,8 @@ function Promo() {
 const BONUS_BLANK = {
   key: '', name: '', type: 'NO_DEPOSIT', currency: 'USD', amount: '0', percent: '',
   wagerMultiplier: '0', minDeposit: '', maxAmount: '', requiresDeposit: false, depositWithinDays: '',
-  sticky: true, maxCashoutMultiplier: '', maxCashout: '', descriptionRu: '', descriptionEn: '',
+  sticky: true, maxCashoutMultiplier: '', maxCashout: '', availableUntil: '', wagerPeriodHours: '',
+  descriptionRu: '', descriptionEn: '',
 };
 const BONUS_TYPES = ['NO_DEPOSIT', 'WELCOME', 'DEPOSIT', 'RELOAD', 'FREEBET', 'CASHBACK'];
 
@@ -531,6 +536,7 @@ function Bonuses() {
     percent: b.percent ?? '', wagerMultiplier: String(b.wagerMultiplier ?? 0), minDeposit: b.minDeposit ? fmt(b.minDeposit) : '',
     maxAmount: b.maxAmount ? fmt(b.maxAmount) : '', requiresDeposit: !!b.requiresDeposit, depositWithinDays: b.depositWithinDays ?? '',
     sticky: b.sticky ?? true, maxCashoutMultiplier: b.maxCashoutMultiplier ?? '', maxCashout: b.maxCashout ? fmt(b.maxCashout) : '',
+    availableUntil: toLocalInput(b.availableUntil), wagerPeriodHours: b.wagerPeriodHours ?? '',
     descriptionRu: b.descriptionRu ?? '', descriptionEn: b.descriptionEn ?? '',
   });
   const save = async () => {
@@ -544,10 +550,22 @@ function Bonuses() {
         depositWithinDays: form.depositWithinDays ? Number(form.depositWithinDays) : null,
         maxCashoutMultiplier: form.maxCashoutMultiplier ? Number(form.maxCashoutMultiplier) : null,
         maxCashout: form.maxCashout || null,
+        availableUntil: form.availableUntil ? new Date(form.availableUntil).toISOString() : null,
+        wagerPeriodHours: form.wagerPeriodHours ? Number(form.wagerPeriodHours) : null,
       });
       qc.invalidateQueries({ queryKey: ['adm-bonuses'] });
       toast.success('Bonus saved');
       setForm(BONUS_BLANK);
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+  const del = async (key: string) => {
+    if (!confirm(`Удалить бонус «${key}»? История игроков сохранится.`)) return;
+    try {
+      await api.delete(`/admin/bonuses/${key}`);
+      qc.invalidateQueries({ queryKey: ['adm-bonuses'] });
+      toast.success('Bonus deleted');
     } catch (e) {
       toast.error(apiError(e));
     }
@@ -557,7 +575,8 @@ function Bonuses() {
       <div className="card space-y-4 p-4">
         <p className="text-xs text-white/45">
           NO_DEPOSIT / WELCOME — берутся вручную во вкладке «Бонусы». DEPOSIT (раз на игрока) и RELOAD (каждый деп) —
-          применяются автоматически при пополнении. Сумма = процент × депозит (или фиксированная), не больше «макс. бонуса».
+          игрок сам выбирает их на форме пополнения (по умолчанию — без бонуса). Сумма = процент × депозит (или
+          фиксированная), не больше «макс. бонуса».
         </p>
         {/* Basics */}
         <div className="flex flex-wrap gap-3">
@@ -582,12 +601,19 @@ function Bonuses() {
           <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-white/40">Отыгрыш и вывод</div>
           <div className="flex flex-wrap items-end gap-3">
             <Labeled label="Вейджер ×" hint="0 = сразу отыгран"><input className="input w-20" value={form.wagerMultiplier} onChange={(e) => set({ wagerMultiplier: e.target.value })} /></Labeled>
+            <Labeled label="Срок отыгрыша, ч" hint="пусто = без лимита"><input className="input w-28" value={form.wagerPeriodHours} onChange={(e) => set({ wagerPeriodHours: e.target.value })} /></Labeled>
             <Labeled label="Макс. вывод ×бонус"><input className="input w-24" value={form.maxCashoutMultiplier} onChange={(e) => set({ maxCashoutMultiplier: e.target.value })} /></Labeled>
             <Labeled label="Макс. вывод (сумма)"><input className="input w-28" value={form.maxCashout} onChange={(e) => set({ maxCashout: e.target.value })} /></Labeled>
             <label className="flex items-center gap-1.5 pb-2 text-sm text-white/70">
               <input type="checkbox" checked={form.sticky} onChange={(e) => set({ sticky: e.target.checked })} /> Липкий
             </label>
           </div>
+        </div>
+        {/* Availability window */}
+        <div className="flex flex-wrap items-end gap-3">
+          <Labeled label="Доступен до" hint="пусто = бессрочно; после — исчезает из каталога">
+            <input type="datetime-local" className="input w-56" value={form.availableUntil} onChange={(e) => set({ availableUntil: e.target.value })} />
+          </Labeled>
         </div>
         {/* Deposit gating (claimable bonuses) */}
         {!isDeposit && (
@@ -617,13 +643,17 @@ function Bonuses() {
       </div>
       <Table
         rows={data ?? []}
-        cols={['key', 'name', 'type', 'amount', 'wager', 'enabled', '']}
+        cols={['key', 'name', 'type', 'amount', 'wager', 'until', 'enabled', '']}
         render={(b: any) => [
           b.key, b.name, b.type,
           `${fmt(b.amount)} ${b.currency ?? ''}${b.percent ? ` / ${b.percent}%` : ''}`,
-          b.wagerMultiplier ? `×${b.wagerMultiplier}${b.sticky ? ' 🔒' : ''}` : '—',
+          b.wagerMultiplier ? `×${b.wagerMultiplier}${b.wagerPeriodHours ? ` · ${b.wagerPeriodHours}ч` : ''}${b.sticky ? ' 🔒' : ''}` : '—',
+          b.availableUntil ? new Date(b.availableUntil).toLocaleDateString() : '—',
           b.enabled ? 'yes' : 'no',
-          <button key="e" onClick={() => edit(b)} className="text-xs text-lav hover:underline">edit</button>,
+          <span key="a" className="flex gap-2">
+            <button onClick={() => edit(b)} className="text-xs text-lav hover:underline">edit</button>
+            <button onClick={() => del(b.key)} className="text-xs text-roul-red hover:underline">del</button>
+          </span>,
         ]}
       />
     </div>
