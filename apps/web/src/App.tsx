@@ -6,7 +6,7 @@ import { isStaff } from './lib/roles';
 import { reconnectSocket } from './lib/socket';
 import { useAuth } from './store/auth';
 
-import AdminPage from './pages/Admin';
+import AdminPage from './pages/admin';
 import AuthPage from './pages/Auth';
 import Bonuses from './pages/Bonuses';
 import Games from './pages/Games';
