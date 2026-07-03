@@ -24,6 +24,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PromocodesModule } from './modules/promocodes/promocodes.module';
 import { ProvablyFairModule } from './modules/provably-fair/provably-fair.module';
+import { ProvidersModule } from './modules/providers/providers.module';
 import { RafflesModule } from './modules/raffles/raffles.module';
 import { RakebackModule } from './modules/rakeback/rakeback.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
@@ -54,6 +55,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
     ReferralsModule,
     PaymentsModule,
     RafflesModule,
+    ProvidersModule,
     UploadsModule,
 
     // feature modules

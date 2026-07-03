@@ -558,8 +558,17 @@ export class AdminService {
     return this.prisma.game.findMany({ orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] });
   }
 
+  /** Provider mapping must reference a real GameProvider row (or clear it). */
+  private async normalizeProviderRef(providerRefId: unknown): Promise<string | null> {
+    if (!providerRefId) return null;
+    const row = await this.prisma.gameProvider.findUnique({ where: { id: String(providerRefId) } });
+    if (!row) throw new BadRequestException('PROVIDER_NOT_FOUND');
+    return row.id;
+  }
+
   async upsertGame(adminId: string, dto: any) {
     if (!dto.key) throw new BadRequestException('KEY_REQUIRED');
+    const providerRefId = await this.normalizeProviderRef(dto.providerRefId);
     const data = {
       name: dto.name ?? dto.key,
       type: dto.type ?? 'slots',
@@ -567,6 +576,8 @@ export class AdminService {
       provider: dto.provider ?? 'KuKuMBA Originals',
       status: dto.status === 'COMING_SOON' ? 'COMING_SOON' : 'LIVE',
       route: dto.route || null,
+      providerRefId,
+      externalId: providerRefId ? dto.externalId || null : null,
       rtp: dto.rtp !== undefined && dto.rtp !== '' ? normalizeRtp(dto.rtp) : 0.97,
       minBet: D(dto.minBet ?? 0.1),
       maxBet: D(dto.maxBet ?? 100000),
@@ -603,6 +614,19 @@ export class AdminService {
     if (dto.maxBet !== undefined && dto.maxBet !== '') data.maxBet = D(dto.maxBet);
     if (dto.enabled !== undefined) data.enabled = !!dto.enabled;
     if (dto.sortOrder !== undefined && dto.sortOrder !== '') data.sortOrder = Number(dto.sortOrder);
+    if (dto.type !== undefined) data.type = dto.type;
+    if (dto.category !== undefined) data.category = dto.category;
+    if (dto.provider !== undefined) data.provider = dto.provider;
+    if (dto.route !== undefined) data.route = dto.route || null;
+    if (dto.thumbnail !== undefined) data.thumbnail = dto.thumbnail || null;
+    if (dto.descriptionRu !== undefined) data.descriptionRu = dto.descriptionRu ?? null;
+    if (dto.descriptionEn !== undefined) data.descriptionEn = dto.descriptionEn ?? null;
+    if (dto.providerRefId !== undefined) {
+      const providerRefId = await this.normalizeProviderRef(dto.providerRefId);
+      data.providerRef = providerRefId ? { connect: { id: providerRefId } } : { disconnect: true };
+      if (!providerRefId) data.externalId = null;
+    }
+    if (dto.externalId !== undefined && dto.providerRefId !== null) data.externalId = dto.externalId || null;
     if (Object.keys(data).length === 0) throw new BadRequestException('NO_FIELDS');
     const updated = await this.prisma.game.update({ where: { key }, data });
     await this.audit(adminId, 'game.patch', 'game', updated.id, { key, fields: Object.keys(data) });

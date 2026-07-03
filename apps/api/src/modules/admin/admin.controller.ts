@@ -15,6 +15,8 @@ import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { UpsertProviderDto } from '../providers/dto/callbacks.dto';
+import { ProvidersService } from '../providers/providers.service';
 import { CreateRaffleBody, DrawRaffleBody, UpdateRaffleBody } from '../raffles/raffles.dto';
 import { SupportService } from '../support/support.service';
 import { displayName, multerOptionsFor, type UploadedFileLike } from '../uploads/uploads.config';
@@ -32,6 +34,7 @@ export class AdminController {
   constructor(
     private admin: AdminService,
     private bets: BetsAdminService,
+    private providers: ProvidersService,
     private support: SupportService,
     private uploads: UploadsService,
   ) {}
@@ -310,6 +313,33 @@ export class AdminController {
   @RequirePermission('games.manage')
   deleteGame(@CurrentUser('id') adminId: string, @Param('key') key: string) {
     return this.admin.deleteGame(adminId, key);
+  }
+
+  // Game providers / aggregators
+  @Get('providers')
+  @RequirePermission('providers.manage')
+  listProviders() {
+    return this.providers.listProviders();
+  }
+
+  @Post('providers')
+  @RequirePermission('providers.manage')
+  async upsertProvider(@CurrentUser('id') adminId: string, @Body() body: UpsertProviderDto) {
+    const res = await this.providers.upsertProvider(body);
+    await this.admin.auditAction(adminId, 'provider.upsert', 'provider', body.key, {
+      name: body.name,
+      kind: body.kind,
+      secretsChanged: { apiKey: !!body.apiKey, webhookSecret: !!body.webhookSecret },
+    });
+    return res;
+  }
+
+  @Delete('providers/:key')
+  @RequirePermission('providers.manage')
+  async deleteProvider(@CurrentUser('id') adminId: string, @Param('key') key: string) {
+    const res = await this.providers.deleteProvider(key);
+    await this.admin.auditAction(adminId, 'provider.delete', 'provider', key);
+    return res;
   }
 
   // Currencies / settings / content
