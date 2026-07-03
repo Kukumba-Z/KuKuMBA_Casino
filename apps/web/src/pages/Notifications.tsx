@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, CheckCheck, Trash2 } from 'lucide-react';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { NotificationIcon } from '../components/NotificationIcon';
 import api from '../lib/api';
 import { getSocket } from '../lib/socket';
 
@@ -58,6 +59,9 @@ export default function Notifications() {
             key={n.id}
             className={`card flex items-start gap-2 p-4 transition ${n.readAt ? 'opacity-60' : 'border-lav/30'}`}
           >
+            <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/5">
+              <NotificationIcon type={n.type} data={n.data} size={16} />
+            </span>
             <button onClick={() => !n.readAt && read(n.id)} className="min-w-0 flex-1 text-left">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-bold">{en ? n.titleEn : n.titleRu}</span>

@@ -15,6 +15,7 @@ import { useChat } from '../store/chat';
 import { ChatDrawer } from './ChatDrawer';
 import { CurrencyMenu } from './CurrencyMenu';
 import { Logo, Mascot } from './Mascot';
+import { NotificationIcon } from './NotificationIcon';
 
 /** Is there a live raffle right now? Drives the accent raffle tab. */
 function useRaffleActive(): boolean {
@@ -155,6 +156,7 @@ function NotificationsMenu() {
               >
                 <div className="flex items-center gap-2">
                   {!n.readAt && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-lav" />}
+                  <NotificationIcon type={n.type} data={n.data} size={14} />
                   <span className="truncate text-sm font-semibold">{en ? n.titleEn : n.titleRu}</span>
                   <span className="ml-auto shrink-0 text-[10px] text-white/40">{timeAgo(n.createdAt, i18n.language)}</span>
                 </div>
