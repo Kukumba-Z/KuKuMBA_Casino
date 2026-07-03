@@ -53,11 +53,6 @@ export class PromocodesService {
           refId: promo.id,
           description: `Promo ${promo.code}`,
         });
-      } else if (promo.type === 'VIP_XP') {
-        await tx.user.update({
-          where: { id: userId },
-          data: { vipXp: { increment: promo.vipXp ?? 0 } },
-        });
       } else if (promo.type === 'BONUS' || promo.type === 'FREEBET') {
         const bonus = promo.bonusKey
           ? await tx.bonus.findUnique({ where: { key: promo.bonusKey } })

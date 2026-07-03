@@ -136,7 +136,7 @@ export class AdminController {
   @Post('users/:id/vip')
   @RequirePermission('users.vip')
   vip(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: any) {
-    return this.admin.setVip(adminId, id, +body.level, body.xp !== undefined ? +body.xp : undefined);
+    return this.admin.setVip(adminId, id, +body.level);
   }
 
   @Post('balance/adjust')

@@ -171,19 +171,59 @@ async function main() {
   }
 
   // ── VIP ladder ────────────────────────────────────────────────────────
-  const vip = [
-    { level: 0, name: 'Foal', xpRequired: 0, cashbackPercent: 0, rakebackPercent: 0, weeklyBonus: 0, color: '#9AA4C7', perksRu: 'Старт пути', perksEn: 'Start of the journey' },
-    { level: 1, name: 'Pony', xpRequired: 100, cashbackPercent: 1, rakebackPercent: 0.5, weeklyBonus: 1, color: '#7CC4FF', perksRu: 'Кешбэк 1%', perksEn: '1% cashback' },
-    { level: 2, name: 'Unicorn', xpRequired: 1000, cashbackPercent: 2, rakebackPercent: 1, weeklyBonus: 5, color: '#B79CED', perksRu: 'Кешбэк 2% + рейкбэк', perksEn: '2% cashback + rakeback' },
-    { level: 3, name: 'Pegasus', xpRequired: 5000, cashbackPercent: 3, rakebackPercent: 1.5, weeklyBonus: 15, color: '#7EE7C7', perksRu: 'Персональный менеджер', perksEn: 'Personal manager' },
-    { level: 4, name: 'Alicorn', xpRequired: 20000, cashbackPercent: 5, rakebackPercent: 2, weeklyBonus: 50, color: '#FF8FD0', perksRu: 'Кешбэк 5%', perksEn: '5% cashback' },
-    { level: 5, name: 'Crystal', xpRequired: 75000, cashbackPercent: 7, rakebackPercent: 2.5, weeklyBonus: 150, color: '#FFD86E', perksRu: 'VIP-турниры', perksEn: 'VIP tournaments' },
-    { level: 6, name: 'Celestial', xpRequired: 200000, cashbackPercent: 9, rakebackPercent: 3, weeklyBonus: 500, color: '#FFB36E', perksRu: 'Эксклюзивные розыгрыши', perksEn: 'Exclusive raffles' },
-    { level: 7, name: 'Cosmic', xpRequired: 500000, cashbackPercent: 12, rakebackPercent: 4, weeklyBonus: 1500, color: '#FF6EC7', perksRu: 'Максимальные привилегии', perksEn: 'Maximum privileges' },
+  // 21 ступень (0–20) по миру My Little Pony. Прокачка двумя треками: сумма
+  // депозитов И сумма ставок (ставок нужно в WAGER_TO_DEPOSIT раз больше), обе
+  // в USD-эквиваленте. Первые уровни намеренно дешёвые, чтобы новички быстро
+  // получали статус. Кешбэк: 2% + 0.75%/уровень. Рейкбэк: доля от house edge,
+  // 5% на 1-м уровне, +1.5%/уровень (см. RakebackService — казино всегда
+  // оставляет себе бо́льшую часть маржи).
+  const WAGER_TO_DEPOSIT = 5;
+  const VIP_LADDER: Array<{
+    name: string; icon: string; color: string; deposit: number; perksRu?: string; perksEn?: string;
+  }> = [
+    { name: 'Foal', icon: '🐴', color: '#9AA4C7', deposit: 0, perksRu: 'Старт пути — кешбэк уже работает', perksEn: 'Start of the journey — cashback already works' },
+    { name: 'Apple Bloom', icon: '🍎', color: '#F26B8A', deposit: 10, perksRu: 'Открывается рейкбэк', perksEn: 'Rakeback unlocks' },
+    { name: 'Sweetie Belle', icon: '🔔', color: '#D9A6F2', deposit: 25 },
+    { name: 'Scootaloo', icon: '🛴', color: '#FF9A5C', deposit: 50 },
+    { name: 'Bon Bon', icon: '🍬', color: '#7FD1E8', deposit: 100 },
+    { name: 'Lyra Heartstrings', icon: '🎼', color: '#9AE8C9', deposit: 200, perksRu: 'Доступ к VIP-розыгрышам', perksEn: 'Access to VIP raffles' },
+    { name: 'Derpy Hooves', icon: '🧁', color: '#C9CCD6', deposit: 350 },
+    { name: 'DJ Pon-3', icon: '🎧', color: '#4FD8E8', deposit: 550 },
+    { name: 'Octavia Melody', icon: '🎻', color: '#C7A6E0', deposit: 800 },
+    { name: 'Big McIntosh', icon: '🍏', color: '#E8604C', deposit: 1200 },
+    { name: 'Spitfire', icon: '🔥', color: '#FFB347', deposit: 1750, perksRu: 'Приоритетная поддержка', perksEn: 'Priority support' },
+    { name: 'Trixie', icon: '🎩', color: '#8FA7F2', deposit: 2500 },
+    { name: 'Starlight Glimmer', icon: '✨', color: '#B87FE8', deposit: 3500 },
+    { name: 'Applejack', icon: '🤠', color: '#FFA94D', deposit: 5000 },
+    { name: 'Pinkie Pie', icon: '🎈', color: '#FF8FD0', deposit: 7500 },
+    { name: 'Fluttershy', icon: '🦋', color: '#FFE38F', deposit: 11000, perksRu: 'Персональный менеджер', perksEn: 'Personal manager' },
+    { name: 'Rarity', icon: '💎', color: '#B79CED', deposit: 16000 },
+    { name: 'Rainbow Dash', icon: '🌈', color: '#5CD1FF', deposit: 23000 },
+    { name: 'Twilight Sparkle', icon: '⭐', color: '#A56EFF', deposit: 32000, perksRu: 'Закрытые VIP-розыгрыши', perksEn: 'Invite-only VIP raffles' },
+    { name: 'Princess Luna', icon: '🌙', color: '#6E7BFF', deposit: 45000 },
+    { name: 'Princess Celestia', icon: '☀️', color: '#FFD86E', deposit: 60000, perksRu: 'Максимальный кешбэк и рейкбэк', perksEn: 'Maximum cashback and rakeback' },
   ];
-  for (const v of vip) {
-    await prisma.vipLevel.upsert({ where: { level: v.level }, create: v as any, update: v as any });
+  for (let level = 0; level < VIP_LADDER.length; level++) {
+    const v = VIP_LADDER[level];
+    const row = {
+      name: v.name,
+      icon: v.icon,
+      color: v.color,
+      depositRequiredUsd: v.deposit,
+      wagerRequiredUsd: v.deposit * WAGER_TO_DEPOSIT,
+      cashbackPercent: +(2 + 0.75 * level).toFixed(2),
+      rakebackPercent: level === 0 ? 0 : +(5 + 1.5 * (level - 1)).toFixed(1),
+      perksRu: v.perksRu ?? null,
+      perksEn: v.perksEn ?? null,
+    };
+    await prisma.vipLevel.upsert({ where: { level }, create: { level, ...row }, update: row });
   }
+  // Drop legacy levels beyond the ladder and clamp any user parked above it.
+  await prisma.vipLevel.deleteMany({ where: { level: { gte: VIP_LADDER.length } } });
+  await prisma.user.updateMany({
+    where: { vipLevel: { gte: VIP_LADDER.length } },
+    data: { vipLevel: VIP_LADDER.length - 1 },
+  });
 
   // ── Account ID counter ────────────────────────────────────────────
   await prisma.counter.upsert({ where: { key: 'account' }, create: { key: 'account', value: 100000 }, update: {} });
@@ -241,6 +281,10 @@ async function main() {
     { key: 'welcome', name: 'Welcome Bonus', type: 'WELCOME', currency: 'USD', amount: 5, wagerMultiplier: 10, descriptionRu: 'Приветственный бонус 5 USD для новых игроков.', descriptionEn: '5 USD welcome bonus for new players.' },
     { key: 'nodep', name: 'No-Deposit Spark', type: 'NO_DEPOSIT', currency: 'USD', amount: 2, wagerMultiplier: 15, descriptionRu: 'Бездепозитный бонус 2 USD — без пополнения.', descriptionEn: '2 USD, no deposit needed.' },
     { key: 'deposit100', name: '100% First Deposit', type: 'DEPOSIT', currency: 'USD', amount: 0, percent: 100, maxAmount: 500, wagerMultiplier: 3, descriptionRu: '100% к первому депозиту до 500 USD.', descriptionEn: '100% first deposit match up to 500 USD.' },
+    // Терм-конфиг еженедельного кешбэка: сумма считается в CashbackService
+    // ((депозиты − выводы за 7 дней) × процент VIP-уровня), отсюда берётся
+    // только отыгрыш. currency=null — строка не попадает в каталог бонусов.
+    { key: 'cashback', name: 'Weekly Cashback', type: 'CASHBACK', currency: null, amount: 0, wagerMultiplier: 3, sticky: false, descriptionRu: 'Еженедельный кешбэк: (депозиты − выводы за 7 дней) × процент VIP-уровня. Вейджер ×3.', descriptionEn: 'Weekly cashback: (deposits − withdrawals over 7 days) × your VIP percent. Wagering ×3.' },
   ];
   for (const b of bonuses) {
     await prisma.bonus.upsert({ where: { key: b.key }, create: b as any, update: b as any });
@@ -250,23 +294,27 @@ async function main() {
   const promos = [
     { code: 'KUKUMBA', type: 'BALANCE', currency: 'DEMO', amount: 1000, mode: 'DEMO', perUserLimit: 1 },
     { code: 'WELCOME50', type: 'BALANCE', currency: 'DEMO', amount: 500, mode: 'DEMO', perUserLimit: 1 },
-    { code: 'VIPBOOST', type: 'VIP_XP', vipXp: 500, mode: 'DEMO', perUserLimit: 1 },
   ];
   for (const p of promos) {
     await prisma.promoCode.upsert({ where: { code: p.code }, create: p as any, update: {} });
   }
+  // The VIP_XP promo type is gone together with XP — drop the legacy code.
+  await prisma.promoCode.deleteMany({ where: { code: 'VIPBOOST' } });
 
   // ── App settings ───────────────────────────────────────────────
   const settings: Record<string, any> = {
     'platform.name': 'KuKuMBA',
     'game.rtp': 0.973,
-    'referral.wagerCommission': 0.005,
+    // Referral revenue share: the referrer's fraction of a referral's net losses.
+    'referral.lossCommission': 0.1,
     'payments.requireKycForWithdrawal': false,
     'payments.autoApproveWithdrawals': false,
   };
   for (const [key, value] of Object.entries(settings)) {
     await prisma.appSetting.upsert({ where: { key }, create: { key, value }, update: { value } });
   }
+  // The per-bet wager commission is replaced by the loss revenue share above.
+  await prisma.appSetting.deleteMany({ where: { key: 'referral.wagerCommission' } });
 
   // ── RBAC default grants (idempotent; never overrides later admin edits) ──
   for (const [role, perms] of Object.entries(DEFAULT_GRANTS)) {

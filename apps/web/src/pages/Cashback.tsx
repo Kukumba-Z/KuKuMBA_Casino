@@ -29,6 +29,7 @@ export default function Cashback({ embedded = false }: { embedded?: boolean }) {
       toast.success(t('common.done'));
       qc.invalidateQueries({ queryKey: ['cashback'] });
       qc.invalidateQueries({ queryKey: ['balances'] });
+      qc.invalidateQueries({ queryKey: ['my-bonuses'] });
     } catch (e) {
       toast.error(apiError(e));
     }
@@ -38,6 +39,7 @@ export default function Cashback({ embedded = false }: { embedded?: boolean }) {
   const has = items.length > 0;
   const onCooldown = !!data?.onCooldown;
   const next = countdown(data?.nextClaimAt);
+  const wager = data?.wagerMultiplier ?? 0;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -49,6 +51,23 @@ export default function Cashback({ embedded = false }: { embedded?: boolean }) {
       <div className="card space-y-4 p-6 text-center">
         <div className="text-sm text-white/50">{t('cashback.percentLabel')}</div>
         <div className="holo-text text-5xl font-extrabold">{data?.percent ?? 0}%</div>
+
+        {/* This week's base: deposits − withdrawals (USD-normalised). */}
+        <div className="grid grid-cols-3 gap-2 text-sm">
+          <div className="rounded-xl bg-white/[0.03] px-3 py-2.5">
+            <div className="text-[11px] uppercase text-white/40">{t('cashback.deposits')}</div>
+            <div className="font-bold tabular-nums text-mint">${fmt(data?.depositsUsd, 2)}</div>
+          </div>
+          <div className="rounded-xl bg-white/[0.03] px-3 py-2.5">
+            <div className="text-[11px] uppercase text-white/40">{t('cashback.withdrawals')}</div>
+            <div className="font-bold tabular-nums text-white/70">−${fmt(data?.withdrawalsUsd, 2)}</div>
+          </div>
+          <div className="rounded-xl bg-white/[0.03] px-3 py-2.5">
+            <div className="text-[11px] uppercase text-white/40">{t('cashback.net')}</div>
+            <div className="font-bold tabular-nums text-white">${fmt(data?.netUsd, 2)}</div>
+          </div>
+        </div>
+
         {onCooldown ? (
           <div className="rounded-xl bg-white/[0.03] px-4 py-3 text-sm text-white/60">
             {t('cashback.nextClaim')}: <span className="font-bold text-white/80">{next}</span>
@@ -61,6 +80,7 @@ export default function Cashback({ embedded = false }: { embedded?: boolean }) {
                 <span className="font-bold text-mint">+{fmt(i.cashback, 4)} {i.currency}</span>
               </div>
             ))}
+            {wager > 0 && <p className="text-xs text-sun/80">{t('cashback.wagerNote', { x: wager })}</p>}
             <button onClick={claim} className="btn-primary w-full">{t('common.claim')}</button>
           </div>
         ) : (

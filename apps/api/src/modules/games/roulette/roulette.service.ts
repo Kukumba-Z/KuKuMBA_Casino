@@ -11,6 +11,7 @@ import { SettingsService } from '../../../config/settings.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { rouletteResult } from '../../provably-fair/provably-fair.crypto';
 import { ProvablyFairService } from '../../provably-fair/provably-fair.service';
+import { RakebackService } from '../../rakeback/rakeback.service';
 import { RealtimeService } from '../../realtime/realtime.service';
 import { ReferralsService } from '../../referrals/referrals.service';
 import { VipService } from '../../vip/vip.service';
@@ -32,6 +33,7 @@ export class RouletteService implements OnModuleInit {
     private pf: ProvablyFairService,
     private settings: SettingsService,
     private vip: VipService,
+    private rakeback: RakebackService,
     private referrals: ReferralsService,
     private realtime: RealtimeService,
     private notifications: NotificationsService,
@@ -193,10 +195,15 @@ export class RouletteService implements OnModuleInit {
       }
       await tx.gameRound.update({ where: { id: round.id }, data: { totalPayout } });
 
-      // 5) loyalty side-effects
-      const usd = total.mul(cur.usdRate).toNumber();
-      const vipRes = await this.vip.addWager(tx, userId, usd);
-      const refRes = await this.referrals.onWager(tx, userId, total, currency, mode);
+      // 5) loyalty side-effects — REAL money only (demo chips are free play):
+      //    VIP wager track, rakeback on the house edge, referral revenue share.
+      let vipRes: Awaited<ReturnType<VipService['addWager']>> | null = null;
+      if (mode === 'REAL') {
+        const usd = total.mul(cur.usdRate).toNumber();
+        vipRes = await this.vip.addWager(tx, userId, usd);
+        await this.rakeback.accrue(tx, userId, currency, total, Math.max(0, 1 - rtp));
+        await this.referrals.onRoundSettled(tx, userId, currency, mode, total, totalPayout);
+      }
       // Advance any active bonus wagering with this stake (REAL only). Runs after
       // the win is paid so the balance-wipeout check sees the settled balance.
       const bonusRes = await this.bonuses.onWager(tx, userId, currency, mode, total, cur.usdRate);
@@ -205,7 +212,7 @@ export class RouletteService implements OnModuleInit {
         where: { userId_currency_mode: { userId, currency, mode } },
       });
 
-      return { round, bets: betRows, outcome, outcomeColor, totalPayout, balRow, vipRes, refRes, bonusRes, seed };
+      return { round, bets: betRows, outcome, outcomeColor, totalPayout, balRow, vipRes, bonusRes, seed };
     });
 
     // post-commit broadcasts & notifications (never block the bet)
@@ -255,22 +262,14 @@ export class RouletteService implements OnModuleInit {
     void this.stats.recordRound({ userId, bets: dto.bets.length, stake: total.toFixed() });
 
     if (result.vipRes?.leveledUp) {
+      const badge = result.vipRes.icon ? `${result.vipRes.icon} ` : '';
       this.notifications.notify(userId, {
         type: 'VIP',
         titleRu: 'Новый VIP-уровень!',
         titleEn: 'New VIP level!',
-        bodyRu: `Поздравляем! Вы достигли уровня ${result.vipRes.name}.`,
-        bodyEn: `Congrats! You reached ${result.vipRes.name}.`,
+        bodyRu: `Поздравляем! Вы достигли уровня ${badge}${result.vipRes.name}.`,
+        bodyEn: `Congrats! You reached ${badge}${result.vipRes.name}.`,
         data: { level: result.vipRes.level },
-      });
-    }
-    if (result.refRes) {
-      this.notifications.notify(result.refRes.referrerId, {
-        type: 'REFERRAL',
-        titleRu: 'Реферальное вознаграждение',
-        titleEn: 'Referral reward',
-        bodyRu: `Вам начислено ${result.refRes.amount.toFixed()} ${currency} от реферала.`,
-        bodyEn: `You earned ${result.refRes.amount.toFixed()} ${currency} from a referral.`,
       });
     }
     if (result.bonusRes) this.bonuses.notifyWagerEvents(userId, result.bonusRes);

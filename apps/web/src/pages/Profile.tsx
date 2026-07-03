@@ -29,11 +29,18 @@ export default function Profile() {
           <Mascot size={52} />
         </span>
         <div className="flex-1">
-          <div className="text-2xl font-extrabold">{me?.username}</div>
+          <div className="text-2xl font-extrabold">
+            {me?.vip?.icon && (
+              <span className="mr-1.5" title={`${me.vip.name} · VIP ${me.vip.level}`}>{me.vip.icon}</span>
+            )}
+            {me?.username}
+          </div>
           <div className="text-sm text-white/50">{me?.email}</div>
           <div className="mt-2 flex flex-wrap gap-2">
             <span className="chip">{t('common.accountId')} #{me?.accountId}</span>
-            <span className="chip">VIP {me?.vip?.level} · {me?.vip?.name}</span>
+            <span className="chip font-semibold" style={me?.vip?.color ? { color: me.vip.color } : undefined}>
+              {me?.vip?.icon ? `${me.vip.icon} ` : ''}{me?.vip?.name} · VIP {me?.vip?.level}
+            </span>
             <StatusChip category="kycStatus" value={me?.kycStatus} prefix="KYC" />
             <span className="chip">{t('profile.betsLabel')}: {me?.stats?.bets ?? 0}</span>
           </div>

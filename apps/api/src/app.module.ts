@@ -25,6 +25,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { PromocodesModule } from './modules/promocodes/promocodes.module';
 import { ProvablyFairModule } from './modules/provably-fair/provably-fair.module';
 import { RafflesModule } from './modules/raffles/raffles.module';
+import { RakebackModule } from './modules/rakeback/rakeback.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { ReferralsModule } from './modules/referrals/referrals.module';
 import { ResponsibleGamingModule } from './modules/responsible-gaming/responsible-gaming.module';
@@ -49,6 +50,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
     WalletModule,
     ProvablyFairModule,
     VipModule,
+    RakebackModule,
     ReferralsModule,
     PaymentsModule,
     RafflesModule,

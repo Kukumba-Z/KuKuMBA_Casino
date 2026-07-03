@@ -4,6 +4,7 @@ import { D } from '../../common/utils/money';
 import { SettingsService } from '../../config/settings.service';
 import { BonusesService, WAGERING_STATUSES } from '../bonuses/bonuses.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { VipService, VipLevelUp } from '../vip/vip.service';
 import { WalletService } from '../wallet/wallet.service';
 import { PAYMENT_PROVIDER, PaymentProvider } from './providers/provider.interface';
 
@@ -15,6 +16,7 @@ export class PaymentsService {
     private settings: SettingsService,
     private notifications: NotificationsService,
     private bonuses: BonusesService,
+    private vip: VipService,
     @Inject(PAYMENT_PROVIDER) private provider: PaymentProvider,
   ) {}
 
@@ -84,6 +86,7 @@ export class PaymentsService {
     if (dep.status === 'COMPLETED') return dep;
 
     let granted: { name: string; amount: string; currency: string; wagerMultiplier: number; sticky: boolean } | null = null;
+    let vipRes: VipLevelUp | null = null;
     await this.prisma.$transaction(async (tx) => {
       await tx.deposit.update({ where: { id: dep.id }, data: { status: 'COMPLETED' } });
       await this.wallet.apply(tx, {
@@ -96,6 +99,9 @@ export class PaymentsService {
         refId: dep.id,
         description: `Deposit ${dep.currency}`,
       });
+      // VIP deposit track: credit the USD-equivalent of the completed deposit.
+      const cur = await tx.currency.findUnique({ where: { code: dep.currency } });
+      vipRes = await this.vip.addDeposit(tx, dep.userId, D(dep.amount).mul(cur?.usdRate ?? 0).toNumber());
       // Apply only the bonus the player explicitly chose on the deposit form.
       if (dep.bonusKey) {
         granted = await this.bonuses.applyChosenDepositBonus(tx, dep.userId, dep.currency, D(dep.amount), dep.bonusKey);
@@ -109,6 +115,18 @@ export class PaymentsService {
       bodyRu: `${dep.amount.toFixed()} ${dep.currency} зачислено на ваш баланс.`,
       bodyEn: `${dep.amount.toFixed()} ${dep.currency} has been credited.`,
     });
+    if (vipRes && (vipRes as VipLevelUp).leveledUp) {
+      const up = vipRes as VipLevelUp;
+      const badge = up.icon ? `${up.icon} ` : '';
+      await this.notifications.notify(dep.userId, {
+        type: 'VIP',
+        titleRu: 'Новый VIP-уровень!',
+        titleEn: 'New VIP level!',
+        bodyRu: `Поздравляем! Вы достигли уровня ${badge}${up.name}.`,
+        bodyEn: `Congrats! You reached ${badge}${up.name}.`,
+        data: { level: up.level },
+      });
+    }
     if (granted) {
       const g = granted as { name: string; amount: string; currency: string; wagerMultiplier: number; sticky: boolean };
       await this.notifications.notify(dep.userId, {

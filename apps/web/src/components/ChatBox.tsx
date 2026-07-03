@@ -2,7 +2,7 @@ import { MessageCircle, Send, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api, { apiError } from '../lib/api';
-import { useVipColors } from '../lib/hooks';
+import { useVipBadges, useVipColors } from '../lib/hooks';
 import { ROLE_TAGS, nameColor } from '../lib/roles';
 import { getSocket } from '../lib/socket';
 import { useAuth } from '../store/auth';
@@ -27,6 +27,7 @@ export function ChatBox({ className = '', onClose }: { className?: string; onClo
   const { t } = useTranslation();
   const authed = !!useAuth((s) => s.accessToken);
   const { data: vipColors } = useVipColors();
+  const { data: vipBadges } = useVipBadges();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [text, setText] = useState('');
   const [sel, setSel] = useState<Msg | null>(null);
@@ -81,6 +82,7 @@ export function ChatBox({ className = '', onClose }: { className?: string; onClo
       <div ref={listRef} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-4 py-3">
         {messages.map((m) => {
           const tag = m.role ? ROLE_TAGS[m.role] : undefined;
+          const badge = m.vipLevel != null ? vipBadges?.[m.vipLevel] : undefined;
           return (
             <div key={m.id} className="text-sm leading-snug">
               <span className="mr-1 text-[11px] tabular-nums text-white/30">{hhmm(m.createdAt)}</span>
@@ -90,6 +92,9 @@ export function ChatBox({ className = '', onClose }: { className?: string; onClo
                 className="font-semibold hover:underline"
                 style={{ color: nameColor({ role: m.role, vipLevel: m.vipLevel }, vipColors) }}
               >
+                {badge?.icon && (
+                  <span className="mr-0.5" title={`${badge.name} · VIP ${badge.level}`}>{badge.icon}</span>
+                )}
                 {m.username}
               </button>
               {tag && (

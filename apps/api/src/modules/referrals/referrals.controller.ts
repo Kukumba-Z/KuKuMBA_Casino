@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Post } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReferralsService } from './referrals.service';
 
@@ -9,5 +9,11 @@ export class ReferralsController {
   @Get('me')
   me(@CurrentUser('id') userId: string) {
     return this.referrals.myStats(userId);
+  }
+
+  /** Pay the accumulated commission balances out to the wallet. */
+  @Post('claim')
+  claim(@CurrentUser('id') userId: string) {
+    return this.referrals.claim(userId);
   }
 }

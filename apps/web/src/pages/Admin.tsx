@@ -457,7 +457,6 @@ function Promo() {
                 <option value="BALANCE">BALANCE — на баланс</option>
                 <option value="BONUS">BONUS — бонус с вейджером</option>
                 <option value="FREEBET">FREEBET — фрибет</option>
-                <option value="VIP_XP">VIP_XP — опыт VIP</option>
               </select>
             </Labeled>
             <Labeled label="Валюта"><input className="input w-24" value={form.currency} onChange={(e) => set({ currency: e.target.value })} /></Labeled>
@@ -676,6 +675,7 @@ const RAFFLE_BLANK = {
   requiresDeposit: false,
   minDeposit: '',
   depositWithinDays: '',
+  minVipLevel: '',
   audience: 'ALL',
   partnerId: '',
 };
@@ -714,6 +714,7 @@ function RafflesAdmin() {
     requiresDeposit: !!form.requiresDeposit,
     minDeposit: form.requiresDeposit && form.minDeposit ? String(form.minDeposit) : null,
     depositWithinDays: form.requiresDeposit && form.depositWithinDays ? Number(form.depositWithinDays) : null,
+    minVipLevel: form.minVipLevel !== '' ? Number(form.minVipLevel) : null,
     audience: form.audience,
     partnerId: form.audience === 'PARTNER_REFERRALS' ? form.partnerId || undefined : null,
   });
@@ -750,6 +751,7 @@ function RafflesAdmin() {
       requiresDeposit: !!r.requiresDeposit,
       minDeposit: r.minDeposit ?? '',
       depositWithinDays: r.depositWithinDays ?? '',
+      minVipLevel: r.minVipLevel ?? '',
       audience: r.audience ?? 'ALL',
       partnerId: r.partnerId ?? '',
     });
@@ -813,6 +815,9 @@ function RafflesAdmin() {
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <L label="Description (RU)"><input className="input" value={form.descriptionRu} onChange={(e) => set({ descriptionRu: e.target.value })} /></L>
           <L label="Description (EN)"><input className="input" value={form.descriptionEn} onChange={(e) => set({ descriptionEn: e.target.value })} /></L>
+          <L label="Min VIP level (blank = everyone)">
+            <input className="input" type="number" min={0} value={form.minVipLevel} onChange={(e) => set({ minVipLevel: e.target.value })} placeholder="e.g. 5" />
+          </L>
           <L label="Requires deposit">
             <label className="flex h-9 items-center gap-2 text-sm">
               <input type="checkbox" checked={form.requiresDeposit} onChange={(e) => set({ requiresDeposit: e.target.checked })} />

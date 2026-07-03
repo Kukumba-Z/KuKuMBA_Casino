@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Coins, PartyPopper, Users } from 'lucide-react';
+import { Coins, PartyPopper, Sparkles, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { StatusChip } from '../components/StatusChip';
@@ -31,11 +31,16 @@ export default function Raffles() {
               <Info label={t('raffles.participants')} value={r.participants} />
               <Info label={t('raffles.entry')} value={Number(r.entryCost) > 0 ? `${fmt(r.entryCost)} ${r.currency}` : t('raffles.free')} />
             </div>
-            {(r.requiresDeposit || r.audience !== 'ALL') && (
+            {(r.requiresDeposit || r.minVipLevel || r.audience !== 'ALL') && (
               <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
                 {r.audience !== 'ALL' && (
                   <span className="inline-flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-white/60">
                     <Users size={12} className="text-bubble" /> {enumLabel('raffleAudience', r.audience)}
+                  </span>
+                )}
+                {!!r.minVipLevel && (
+                  <span className="inline-flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-white/60">
+                    <Sparkles size={12} className="text-sun" /> {t('raffles.minVip')} {r.minVipLevel}+
                   </span>
                 )}
                 {r.requiresDeposit && (

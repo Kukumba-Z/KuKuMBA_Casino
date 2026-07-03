@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarClock, CheckCircle2, Coins, Dices, ShieldCheck, Ticket, Users } from 'lucide-react';
+import { CalendarClock, CheckCircle2, Coins, Dices, ShieldCheck, Sparkles, Ticket, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
@@ -88,7 +88,7 @@ export default function RaffleDetail() {
 
   if (!r) return <div className="text-white/40">{t('common.loading')}</div>;
 
-  const hasConditions = r.requiresDeposit || r.audience !== 'ALL';
+  const hasConditions = r.requiresDeposit || !!r.minVipLevel || r.audience !== 'ALL';
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -128,6 +128,11 @@ export default function RaffleDetail() {
               {r.audience !== 'ALL' && (
                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-1.5">
                   <Users size={14} className="text-bubble" /> {enumLabel('raffleAudience', r.audience)}
+                </span>
+              )}
+              {!!r.minVipLevel && (
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-1.5">
+                  <Sparkles size={14} className="text-sun" /> {t('raffles.minVip')} {r.minVipLevel}+
                 </span>
               )}
               {r.requiresDeposit && (

@@ -71,6 +71,50 @@ async function main() {
     await prisma.counter.create({ data: { key: 'init:userstats', value: 1 } });
     console.log(`reconcile: backfilled stats (rounds=${rounds}, bets=${bets})`);
   }
+
+  // One-time backfill of the dual-track VIP counters (the XP era stored only
+  // vipXp, which the schema dropped). Both lifetime counters are rebuilt from
+  // the authoritative ledgers in USD-equivalent: deposits from completed REAL
+  // deposits, wagers from REAL BET transactions. Stored levels are then
+  // re-derived raise-only, so nobody is demoted by the migration.
+  const vipDone = await prisma.counter.findUnique({ where: { key: 'init:vip-dual-track' } });
+  if (!vipDone) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "User" u SET "vipDepositUsd" = d.sum
+       FROM (SELECT dep."userId", COALESCE(SUM(dep."amount" * c."usdRate"), 0) AS sum
+             FROM "Deposit" dep JOIN "Currency" c ON c."code" = dep."currency"
+             WHERE dep."status" = 'COMPLETED' AND dep."mode" = 'REAL'
+             GROUP BY dep."userId") d
+       WHERE u."id" = d."userId"`,
+    );
+    await prisma.$executeRawUnsafe(
+      `UPDATE "User" u SET "vipWagerUsd" = w.sum
+       FROM (SELECT t."userId", COALESCE(SUM(t."amount" * c."usdRate"), 0) AS sum
+             FROM "Transaction" t JOIN "Currency" c ON c."code" = t."currency"
+             WHERE t."type" = 'BET' AND t."mode" = 'REAL'
+             GROUP BY t."userId") w
+       WHERE u."id" = w."userId"`,
+    );
+    const levels = await prisma.vipLevel.findMany({ orderBy: { level: 'asc' } });
+    const players = await prisma.user.findMany({
+      select: { id: true, vipLevel: true, vipDepositUsd: true, vipWagerUsd: true },
+    });
+    let raised = 0;
+    for (const u of players) {
+      let level = 0;
+      for (const l of levels) {
+        if (u.vipDepositUsd.gte(l.depositRequiredUsd) && u.vipWagerUsd.gte(l.wagerRequiredUsd)) {
+          level = Math.max(level, l.level);
+        }
+      }
+      if (level > u.vipLevel) {
+        await prisma.user.update({ where: { id: u.id }, data: { vipLevel: level } });
+        raised++;
+      }
+    }
+    await prisma.counter.create({ data: { key: 'init:vip-dual-track', value: 1 } });
+    console.log(`reconcile: backfilled VIP dual-track counters (${players.length} users, ${raised} raised)`);
+  }
 }
 
 main()

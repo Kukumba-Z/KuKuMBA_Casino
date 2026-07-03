@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../store/auth';
 import api from './api';
 import { getSocket } from './socket';
@@ -94,18 +94,50 @@ export function useCurrencies() {
   });
 }
 
-/** Map of VIP level → colour (from /vip/levels), used to tint usernames in chat. */
-export function useVipColors() {
-  return useQuery<Record<number, string>>({
-    queryKey: ['vip-colors'],
-    queryFn: async () => {
-      const levels = (await api.get('/vip/levels')).data as { level: number; color?: string }[];
-      const map: Record<number, string> = {};
-      for (const l of levels) if (l.color) map[l.level] = l.color;
-      return map;
-    },
+export interface VipLevelInfo {
+  level: number;
+  name: string;
+  icon?: string | null;
+  color?: string | null;
+  depositRequiredUsd: string;
+  wagerRequiredUsd: string;
+  cashbackPercent: number;
+  rakebackPercent: number;
+  perksRu?: string | null;
+  perksEn?: string | null;
+}
+
+/** The full VIP ladder — one shared cache for the VIP page, chat emblems, etc. */
+export function useVipLevels() {
+  return useQuery<VipLevelInfo[]>({
+    queryKey: ['vip-levels'],
+    queryFn: async () => (await api.get('/vip/levels')).data,
     staleTime: 300_000,
   });
+}
+
+/** Per-level lookup of the ladder (emblem icon, colour, name) for nick badges. */
+export function useVipBadges(): { data?: Record<number, VipLevelInfo> } {
+  const { data: levels } = useVipLevels();
+  const data = useMemo(() => {
+    if (!levels) return undefined;
+    const map: Record<number, VipLevelInfo> = {};
+    for (const l of levels) map[l.level] = l;
+    return map;
+  }, [levels]);
+  return { data };
+}
+
+/** Map of VIP level → colour (from /vip/levels), used to tint usernames in chat. */
+export function useVipColors(): { data?: Record<number, string> } {
+  const { data: levels } = useVipLevels();
+  const data = useMemo(() => {
+    if (!levels) return undefined;
+    const map: Record<number, string> = {};
+    for (const l of levels) if (l.color) map[l.level] = l.color;
+    return map;
+  }, [levels]);
+  return { data };
 }
 
 export function useBalances() {

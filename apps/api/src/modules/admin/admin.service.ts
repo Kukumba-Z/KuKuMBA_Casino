@@ -288,12 +288,13 @@ export class AdminService {
     return { ok: true };
   }
 
-  async setVip(adminId: string, userId: string, level: number, xp?: number) {
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { vipLevel: level, ...(xp !== undefined ? { vipXp: xp } : {}) },
-    });
-    await this.audit(adminId, 'user.vip', 'user', userId, { level, xp });
+  /** Gift/set a VIP level. Clamped to the ladder; play only ever raises it further. */
+  async setVip(adminId: string, userId: string, level: number) {
+    if (!Number.isInteger(level) || level < 0) throw new BadRequestException('INVALID_VIP_LEVEL');
+    const def = await this.prisma.vipLevel.findUnique({ where: { level } });
+    if (!def) throw new BadRequestException('INVALID_VIP_LEVEL');
+    await this.prisma.user.update({ where: { id: userId }, data: { vipLevel: level } });
+    await this.audit(adminId, 'user.vip', 'user', userId, { level });
     return { ok: true };
   }
 
@@ -348,7 +349,6 @@ export class AdminService {
         currency: dto.currency ?? 'DEMO',
         amount: D(dto.amount ?? 0),
         bonusKey: dto.bonusKey,
-        vipXp: dto.vipXp,
         mode: dto.mode ?? (dto.currency && dto.currency !== 'DEMO' ? 'REAL' : 'DEMO'),
         maxRedemptions: dto.maxRedemptions ?? null,
         perUserLimit: dto.perUserLimit ?? 1,
@@ -370,7 +370,7 @@ export class AdminService {
 
   async updatePromocode(adminId: string, id: string, dto: any) {
     const data: any = {};
-    for (const k of ['enabled', 'maxRedemptions', 'perUserLimit', 'vipXp', 'requiresDeposit', 'depositWithinDays', 'wagerMultiplier', 'wagerPeriodHours', 'sticky', 'maxCashoutMultiplier']) if (dto[k] !== undefined) data[k] = dto[k];
+    for (const k of ['enabled', 'maxRedemptions', 'perUserLimit', 'requiresDeposit', 'depositWithinDays', 'wagerMultiplier', 'wagerPeriodHours', 'sticky', 'maxCashoutMultiplier']) if (dto[k] !== undefined) data[k] = dto[k];
     if (dto.amount !== undefined) data.amount = D(dto.amount);
     if (dto.minDeposit !== undefined) data.minDeposit = dto.minDeposit ? D(dto.minDeposit) : null;
     if (dto.maxCashout !== undefined) data.maxCashout = dto.maxCashout ? D(dto.maxCashout) : null;

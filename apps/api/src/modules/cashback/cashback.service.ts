@@ -1,18 +1,27 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { D, ZERO } from '../../common/utils/money';
 import { BonusesService } from '../bonuses/bonuses.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WalletService } from '../wallet/wallet.service';
 
+type Dec = Prisma.Decimal;
+
 /** Cashback is a weekly perk: claimable once every 7 days. */
 const PERIOD_DAYS = 7;
 const PERIOD_MS = PERIOD_DAYS * 24 * 60 * 60 * 1000;
 
 /**
- * Cashback = a slice of NET REAL losses over the trailing 7 days, sized by VIP
- * level, claimable once per week. Demo play never counts (demo is free). Losses
- * are computed per currency so it's correct across the multi-currency wallet.
+ * Weekly cashback on the player's net cash-in:
+ *
+ *   cashback = (deposits − withdrawals over the trailing 7 days) × VIP percent
+ *
+ * Both sides are aggregated in USD-equivalent across ALL currencies (so a
+ * deposit-in-USD / withdraw-in-RUB round-trip via conversion can't inflate the
+ * base), and the payout lands in the currency the player deposited the most
+ * that week, floored to its precision. The wagering terms (×3 by default) come
+ * from the CASHBACK bonus config row, so they stay admin-tunable data.
  */
 @Injectable()
 export class CashbackService {
@@ -35,132 +44,160 @@ export class CashbackService {
     const now = new Date();
     const nextClaimAt = last ? new Date(last.createdAt.getTime() + PERIOD_MS) : null;
     const onCooldown = !!nextClaimAt && nextClaimAt > now;
-
-    // Cashback covers REAL net losses over the trailing 7 days. The weekly
-    // cooldown guarantees this window never overlaps a previous claim.
     const since = new Date(now.getTime() - PERIOD_MS);
 
-    const [bets, wins] = await Promise.all([
-      this.prisma.transaction.groupBy({
+    const [deposits, withdrawals, currencies] = await Promise.all([
+      this.prisma.deposit.groupBy({
         by: ['currency'],
-        where: { userId, type: 'BET', mode: 'REAL', createdAt: { gte: since } },
+        where: { userId, mode: 'REAL', status: 'COMPLETED', createdAt: { gte: since } },
         _sum: { amount: true },
       }),
-      this.prisma.transaction.groupBy({
+      this.prisma.withdrawal.groupBy({
         by: ['currency'],
-        where: { userId, type: 'WIN', mode: 'REAL', createdAt: { gte: since } },
-        _sum: { amount: true },
+        // Everything that took (or is taking) money out; rejected/failed ones
+        // were refunded, so they don't reduce the week's net cash-in.
+        where: { userId, createdAt: { gte: since }, status: { notIn: ['REJECTED', 'FAILED'] } },
+        _sum: { amount: true, fee: true },
       }),
+      this.prisma.currency.findMany({ select: { code: true, usdRate: true, decimals: true } }),
     ]);
+    const rates = new Map(currencies.map((c) => [c.code, D(c.usdRate)]));
+    const decimals = new Map(currencies.map((c) => [c.code, c.decimals]));
 
-    const map = new Map<string, { currency: string; netLoss: any }>();
-    for (const b of bets) {
-      map.set(b.currency, { currency: b.currency, netLoss: D(b._sum.amount ?? 0) });
+    let depositsUsd = ZERO;
+    let withdrawalsUsd = ZERO;
+    // USD value deposited per currency — picks the payout currency below.
+    const depUsdByCurrency = new Map<string, Dec>();
+    for (const d of deposits) {
+      const usd = D(d._sum.amount ?? 0).mul(rates.get(d.currency) ?? ZERO);
+      depositsUsd = depositsUsd.plus(usd);
+      depUsdByCurrency.set(d.currency, usd);
     }
-    for (const w of wins) {
-      const cur = map.get(w.currency);
-      if (cur) cur.netLoss = cur.netLoss.minus(D(w._sum.amount ?? 0));
+    for (const w of withdrawals) {
+      const out = D(w._sum.amount ?? 0).plus(D(w._sum.fee ?? 0));
+      withdrawalsUsd = withdrawalsUsd.plus(out.mul(rates.get(w.currency) ?? ZERO));
     }
 
-    const items = [...map.values()]
-      .map((it) => ({
-        currency: it.currency,
-        netLoss: it.netLoss,
-        cashback: it.netLoss.gt(0) ? it.netLoss.mul(percent / 100) : ZERO,
-      }))
-      .filter((it) => it.cashback.gt(0));
+    const netUsd = depositsUsd.minus(withdrawalsUsd);
+    const cashbackUsd = netUsd.gt(0) ? netUsd.mul(percent).div(100) : ZERO;
 
-    return { percent, since, items, now, nextClaimAt, onCooldown };
+    // Pay in the week's dominant deposit currency, floored to its precision —
+    // the kopecks are simply dropped, never minted.
+    let payout: { currency: string; amount: Dec } | null = null;
+    if (cashbackUsd.gt(0)) {
+      let bestCurrency: string | null = null;
+      let bestUsd = ZERO;
+      for (const [currency, usd] of depUsdByCurrency) {
+        if (usd.gt(bestUsd)) {
+          bestUsd = usd;
+          bestCurrency = currency;
+        }
+      }
+      if (bestCurrency) {
+        const rate = rates.get(bestCurrency) ?? ZERO;
+        const amount = rate.gt(0)
+          ? cashbackUsd.div(rate).toDecimalPlaces(decimals.get(bestCurrency) ?? 2, Prisma.Decimal.ROUND_DOWN)
+          : ZERO;
+        if (amount.gt(0)) payout = { currency: bestCurrency, amount };
+      }
+    }
+
+    return { percent, since, now, nextClaimAt, onCooldown, depositsUsd, withdrawalsUsd, netUsd, payout };
   }
 
   async status(userId: string) {
-    const { percent, since, items, nextClaimAt, onCooldown } = await this.compute(userId);
+    const c = await this.compute(userId);
+    // The wagering terms shown next to the claim button come from the config.
+    const cfg = await this.cashbackConfig();
     return {
-      percent,
+      percent: c.percent,
       periodDays: PERIOD_DAYS,
-      since,
-      onCooldown,
-      nextClaimAt,
-      claimable: items.map((i) => ({
-        currency: i.currency,
-        mode: 'REAL' as const,
-        netLoss: i.netLoss.toFixed(),
-        cashback: i.cashback.toFixed(),
-      })),
+      since: c.since,
+      onCooldown: c.onCooldown,
+      nextClaimAt: c.nextClaimAt,
+      depositsUsd: c.depositsUsd.toFixed(2),
+      withdrawalsUsd: c.withdrawalsUsd.toFixed(2),
+      netUsd: c.netUsd.toFixed(2),
+      wagerMultiplier: cfg?.wagerMultiplier ?? 0,
+      claimable: c.payout
+        ? [{ currency: c.payout.currency, mode: 'REAL' as const, cashback: c.payout.amount.toFixed() }]
+        : [],
     };
+  }
+
+  /** The CASHBACK bonus row holds the wagering terms (×3 seeded; admin-tunable). */
+  private cashbackConfig() {
+    return this.prisma.bonus.findFirst({
+      where: { type: 'CASHBACK', enabled: true },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
   async claim(userId: string) {
     await this.bonuses.assertBonusAccess(userId);
-    const { percent, since, items, now, onCooldown } = await this.compute(userId);
+    const { percent, since, now, onCooldown, netUsd, payout } = await this.compute(userId);
     if (onCooldown) throw new BadRequestException('CASHBACK_ON_COOLDOWN');
-    if (!items.length) throw new BadRequestException('NOTHING_TO_CLAIM');
+    if (!payout) throw new BadRequestException('NOTHING_TO_CLAIM');
 
-    // Optional cashback wager: an enabled CASHBACK bonus config sets the terms
-    // (multiplier / sticky / cashout). Absent or ×0 → cashback is instant cash.
-    const cfg = await this.prisma.bonus.findFirst({
-      where: { type: 'CASHBACK', enabled: true },
-      orderBy: { createdAt: 'asc' },
-    });
+    const cfg = await this.cashbackConfig();
     const wager = cfg?.wagerMultiplier ?? 0;
 
-    const credited: any[] = [];
     await this.prisma.$transaction(async (tx) => {
-      for (const it of items) {
-        await this.wallet.apply(tx, {
+      await this.wallet.apply(tx, {
+        userId,
+        type: 'CASHBACK',
+        currency: payout.currency,
+        mode: 'REAL',
+        amount: payout.amount,
+        refType: 'cashback',
+        description: 'Weekly cashback',
+      });
+      if (cfg && wager > 0) {
+        // Attach the wager obligation without re-crediting (money added above).
+        await this.bonuses.grantBonus(tx, {
           userId,
-          type: 'CASHBACK',
-          currency: it.currency,
+          bonusId: cfg.id,
+          name: cfg.name,
+          amount: payout.amount,
+          currency: payout.currency,
           mode: 'REAL',
-          amount: it.cashback,
+          wagerMultiplier: wager,
+          sticky: cfg.sticky,
+          maxCashout: cfg.maxCashout,
+          maxCashoutMultiplier: cfg.maxCashoutMultiplier,
+          wagerPeriodHours: cfg.wagerPeriodHours,
+          credit: false,
           refType: 'cashback',
-          description: 'Cashback',
+          refId: cfg.id,
+          description: `Cashback wager ${cfg.name}`,
         });
-        if (wager > 0) {
-          // Attach a wager obligation without re-crediting (money added above).
-          await this.bonuses.grantBonus(tx, {
-            userId,
-            bonusId: cfg!.id,
-            name: cfg!.name,
-            amount: it.cashback,
-            currency: it.currency,
-            mode: 'REAL',
-            wagerMultiplier: wager,
-            sticky: cfg!.sticky,
-            maxCashout: cfg!.maxCashout,
-            maxCashoutMultiplier: cfg!.maxCashoutMultiplier,
-            wagerPeriodHours: cfg!.wagerPeriodHours,
-            credit: false,
-            refType: 'cashback',
-            refId: cfg!.id,
-            description: `Cashback wager ${cfg!.name}`,
-          });
-        }
-        await tx.cashbackClaim.create({
-          data: {
-            userId,
-            periodStart: since,
-            periodEnd: now,
-            currency: it.currency,
-            mode: 'REAL',
-            netLoss: it.netLoss,
-            percent,
-            amount: it.cashback,
-            status: 'CLAIMED',
-            claimedAt: now,
-          },
-        });
-        credited.push({ currency: it.currency, mode: 'REAL', amount: it.cashback.toFixed() });
       }
+      await tx.cashbackClaim.create({
+        data: {
+          userId,
+          periodStart: since,
+          periodEnd: now,
+          currency: payout.currency,
+          mode: 'REAL',
+          baseUsd: netUsd,
+          percent,
+          amount: payout.amount,
+          status: 'CLAIMED',
+          claimedAt: now,
+        },
+      });
     });
 
     await this.notifications.notify(userId, {
       type: 'BONUS',
       titleRu: 'Кешбэк получен',
       titleEn: 'Cashback claimed',
-      bodyRu: 'Ваш кешбэк зачислен на баланс.',
-      bodyEn: 'Your cashback has been credited.',
+      bodyRu: wager > 0 ? `Кешбэк зачислен на баланс. Вейджер ×${wager}.` : 'Ваш кешбэк зачислен на баланс.',
+      bodyEn: wager > 0 ? `Cashback credited. Wagering ×${wager}.` : 'Your cashback has been credited.',
     });
-    return { ok: true, credited };
+    return {
+      ok: true,
+      credited: [{ currency: payout.currency, mode: 'REAL', amount: payout.amount.toFixed() }],
+    };
   }
 }

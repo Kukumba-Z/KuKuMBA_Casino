@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Ban, MicOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api, { apiError } from '../lib/api';
-import { can, useAdminMe } from '../lib/hooks';
+import { can, useAdminMe, useVipBadges } from '../lib/hooks';
 import { enumLabel } from '../lib/labels';
 import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
@@ -23,6 +23,7 @@ export function ChatUserPopover({ user, onClose }: { user: any; onClose: () => v
     enabled: user.accountId != null,
     queryFn: async () => (await api.get(`/users/${user.accountId}/card`)).data,
   });
+  const { data: vipBadges } = useVipBadges();
 
   const mute = async (minutes: number, ok: string) => {
     if (!user.userId) return;
@@ -36,12 +37,14 @@ export function ChatUserPopover({ user, onClose }: { user: any; onClose: () => v
   };
 
   const registered = card?.createdAt ? new Date(card.createdAt).toLocaleDateString() : null;
+  const vipLevel = user.vipLevel ?? card?.vipLevel ?? 0;
+  const badge = vipBadges?.[vipLevel];
 
   return (
-    <Modal open onClose={onClose} title={user.username}>
+    <Modal open onClose={onClose} title={badge?.icon ? `${badge.icon} ${user.username}` : user.username}>
       <div className="space-y-3 text-sm">
         <Row label={t('common.accountId')} value={`#${user.accountId ?? card?.accountId ?? '—'}`} />
-        <Row label="VIP" value={String(user.vipLevel ?? card?.vipLevel ?? 0)} />
+        <Row label="VIP" value={badge ? `${badge.icon ?? ''} ${badge.name} · ${vipLevel}`.trim() : String(vipLevel)} />
         {user.role && user.role !== 'USER' && <Row label={t('chat.role')} value={enumLabel('role', user.role)} />}
         {registered && <Row label={t('chat.registered')} value={registered} />}
 

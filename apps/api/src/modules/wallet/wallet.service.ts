@@ -42,7 +42,7 @@ const TX_GROUPS: Record<string, TransactionType[]> = {
   deposits: [TransactionType.DEPOSIT],
   withdrawals: [TransactionType.WITHDRAWAL, TransactionType.ROLLBACK],
   bonuses: [TransactionType.BONUS, TransactionType.PROMO, TransactionType.REFERRAL],
-  cashback: [TransactionType.CASHBACK],
+  cashback: [TransactionType.CASHBACK, TransactionType.RAKEBACK],
   raffles: [TransactionType.RAFFLE_ENTRY, TransactionType.RAFFLE_PRIZE, TransactionType.REFUND],
 };
 

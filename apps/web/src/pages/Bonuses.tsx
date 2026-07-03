@@ -11,10 +11,11 @@ import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
 import Cashback from './Cashback';
 import Promo from './Promo';
+import Rakeback from './Rakeback';
 import Referrals from './Referrals';
 import Vip from './Vip';
 
-const AUTH_TABS = new Set(['cashback', 'promo', 'referrals']);
+const AUTH_TABS = new Set(['cashback', 'rakeback', 'promo', 'referrals']);
 
 export default function Bonuses() {
   const { t } = useTranslation();
@@ -56,6 +57,7 @@ export default function Bonuses() {
         <>
           {tab === 'bonuses' && <BonusCatalog />}
           {tab === 'cashback' && <Cashback embedded />}
+          {tab === 'rakeback' && <Rakeback embedded />}
           {tab === 'promo' && <Promo embedded />}
           {tab === 'vip' && <Vip embedded />}
           {tab === 'referrals' && <Referrals embedded />}

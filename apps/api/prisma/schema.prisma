@@ -55,6 +55,7 @@ enum TransactionType {
   REFUND
   BONUS
   CASHBACK
+  RAKEBACK
   REFERRAL
   PROMO
   RAFFLE_ENTRY
@@ -125,7 +126,6 @@ enum PromoType {
   BALANCE
   BONUS
   FREEBET
-  VIP_XP
 }
 
 enum RaffleStatus {
@@ -210,9 +210,12 @@ model User {
   referredBy   User?   @relation("UserReferrals", fields: [referredById], references: [id])
   referrals    User[]  @relation("UserReferrals")
 
-  // VIP
-  vipLevel Int   @default(0)
-  vipXp    Float @default(0)
+  // VIP progression is dual-track: lifetime REAL deposits AND lifetime REAL
+  // wagers, both in USD-equivalent. A level unlocks only when BOTH thresholds
+  // of the VipLevel row are met (see VipService.levelFor).
+  vipLevel      Int     @default(0)
+  vipDepositUsd Decimal @default(0) @db.Decimal(38, 18)
+  vipWagerUsd   Decimal @default(0) @db.Decimal(38, 18)
 
   // Lifetime play stats — persisted counters so the profile numbers survive
   // GameRound/Bet pruning (they're incremented per round, never recomputed).
@@ -237,7 +240,11 @@ model User {
   promoRedemptions PromoRedemption[]
   referralEarningsReceived ReferralEarning[] @relation("ReferralEarner")
   referralEarningsGenerated ReferralEarning[] @relation("ReferralSource")
+  referralCommissionsReceived ReferralCommission[] @relation("ReferralCommissionEarner")
+  referralCommissionsGenerated ReferralCommission[] @relation("ReferralCommissionSource")
+  referralBalances ReferralBalance[] @relation("ReferralBalanceOwner")
   cashbackClaims  CashbackClaim[]
+  rakebackAccruals RakebackAccrual[]
   raffleEntries   RaffleEntry[]
   raffleWins      RaffleWinner[]
   chatMessages    ChatMessage[]
@@ -556,7 +563,6 @@ model PromoCode {
   currency       String?
   amount         Decimal   @default(0) @db.Decimal(38, 18)
   bonusKey       String?
-  vipXp          Float?
   mode           WalletMode @default(REAL)
   maxRedemptions Int? // null = unlimited
   perUserLimit   Int       @default(1)
@@ -588,6 +594,8 @@ model PromoRedemption {
   @@index([userId])
 }
 
+/// Referral earnings history — one row each time a referral's net losses turn
+/// into commission for the referrer (see ReferralCommission.pending flushes).
 model ReferralEarning {
   id         String     @id @default(cuid())
   referrerId String
@@ -597,40 +605,101 @@ model ReferralEarning {
   currency   String
   mode       WalletMode @default(REAL)
   amount     Decimal    @db.Decimal(38, 18)
-  type       String // "wager_commission" | "deposit_commission" | "signup"
+  type       String // "loss_commission"
   createdAt  DateTime   @default(now())
 
   @@index([referrerId, createdAt])
 }
 
-model VipLevel {
-  level           Int     @id
-  name            String
-  xpRequired      Float
-  cashbackPercent Float   @default(0)
-  rakebackPercent Float   @default(0)
-  weeklyBonus     Decimal @default(0) @db.Decimal(38, 18)
-  color           String?
-  perksRu         String?
-  perksEn         String?
+/// Revenue-share ledger per (referrer, referral, currency). `pending` is the
+/// negative-carryover buffer: each settled round adds commission% × (stake −
+/// payout), so a referral's WIN drives it below zero and later losses must
+/// refill the hole before new commission is earned — the casino can never pay
+/// out more than its share of that player's real net losses. Whenever `pending`
+/// turns positive it is flushed into the referrer's claimable ReferralBalance.
+model ReferralCommission {
+  id         String   @id @default(cuid())
+  referrerId String
+  referrer   User     @relation("ReferralCommissionEarner", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredId String
+  referred   User     @relation("ReferralCommissionSource", fields: [referredId], references: [id], onDelete: Cascade)
+  currency   String
+  pending    Decimal  @default(0) @db.Decimal(38, 18) // carryover; ≤ 0 between flushes
+  earned     Decimal  @default(0) @db.Decimal(38, 18) // lifetime flushed from this referral
+  updatedAt  DateTime @updatedAt
+
+  @@unique([referrerId, referredId, currency])
+  @@index([referrerId])
 }
 
+/// The referrer's claimable commission per currency. Claiming credits the
+/// wallet floored to the currency's precision — the dust stays claimable.
+model ReferralBalance {
+  id          String   @id @default(cuid())
+  referrerId  String
+  referrer    User     @relation("ReferralBalanceOwner", fields: [referrerId], references: [id], onDelete: Cascade)
+  currency    String
+  amount      Decimal  @default(0) @db.Decimal(38, 18) // claimable now
+  earnedTotal Decimal  @default(0) @db.Decimal(38, 18) // lifetime earned (stats)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([referrerId, currency])
+}
+
+/// The VIP ladder (fully data-driven, seeded 0–20 with My Little Pony ranks).
+/// A level is reached when the player's lifetime REAL deposits AND wagers (both
+/// USD-equivalent) meet the two thresholds; the seed keeps wagerRequiredUsd at
+/// 5× depositRequiredUsd, but each row is independently tunable by an operator.
+model VipLevel {
+  level              Int     @id
+  name               String
+  /// Emblem shown beside the nickname (profile, chat) — an emoji glyph.
+  icon               String?
+  depositRequiredUsd Decimal @default(0) @db.Decimal(38, 18)
+  wagerRequiredUsd   Decimal @default(0) @db.Decimal(38, 18)
+  /// Weekly cashback: % of (deposits − withdrawals) over the trailing 7 days.
+  cashbackPercent    Float   @default(0)
+  /// Rakeback: share (%) of the house edge on each real bet returned to the player.
+  rakebackPercent    Float   @default(0)
+  color              String?
+  perksRu            String?
+  perksEn            String?
+}
+
+/// One weekly cashback payout. The base is (deposits − withdrawals) over the
+/// claim window, aggregated in USD across all currencies; the payout lands in
+/// the player's dominant deposit currency of that week.
 model CashbackClaim {
   id          String     @id @default(cuid())
   userId      String
   user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   periodStart DateTime
   periodEnd   DateTime
-  currency    String
+  currency    String // payout currency
   mode        WalletMode @default(REAL)
-  netLoss     Decimal    @db.Decimal(38, 18)
+  baseUsd     Decimal    @db.Decimal(38, 18) // net deposits of the week, USD-equivalent
   percent     Float
-  amount      Decimal    @db.Decimal(38, 18)
+  amount      Decimal    @db.Decimal(38, 18) // payout in `currency`
   status      String     @default("PENDING") // PENDING | CLAIMED | EXPIRED
   claimedAt   DateTime?
   createdAt   DateTime   @default(now())
 
   @@index([userId, status])
+}
+
+/// Pending rakeback, accrued per REAL bet in the bet's currency:
+/// stake × houseEdge × VipLevel.rakebackPercent. Claiming credits the wallet
+/// (floored to the currency's precision — the sub-cent dust stays accrued).
+model RakebackAccrual {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency    String
+  amount      Decimal  @default(0) @db.Decimal(38, 18) // claimable now
+  earnedTotal Decimal  @default(0) @db.Decimal(38, 18) // lifetime accrued (stats)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, currency])
 }
 
 // ── Raffles / giveaways ────────────────────────────────────────────────────────
@@ -661,6 +730,7 @@ model Raffle {
   requiresDeposit   Boolean        @default(false)
   minDeposit        Decimal?       @db.Decimal(38, 18) // USD-equivalent threshold (any deposit currency, via Currency.usdRate)
   depositWithinDays Int?           // qualifying-deposit window: 1 / 7 / 14 / 30
+  minVipLevel       Int?           // VIP-exclusive raffles: entry needs this VIP level or higher
   audience          RaffleAudience @default(ALL)
   partnerId         String?        // audience=PARTNER_REFERRALS: only this partner's referrals may enter
 

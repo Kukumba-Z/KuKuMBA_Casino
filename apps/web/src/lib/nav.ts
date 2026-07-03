@@ -7,6 +7,7 @@ import {
   type LucideIcon,
   MessagesSquare,
   PartyPopper,
+  Repeat,
   Shield,
   Sparkles,
   Tag,
@@ -38,7 +39,7 @@ export const ADMIN: NavItem = { to: '/admin', key: 'admin', icon: Shield };
 // Items inside the "More" sheet (mobile) / account menu (desktop).
 export const MORE_ITEMS: NavItem[] = [{ to: '/support', key: 'support', icon: LifeBuoy }];
 
-// Sub-tabs of the Bonuses hub (cashback / promo / vip / referrals live here now).
+// Sub-tabs of the Bonuses hub (cashback / rakeback / promo / vip / referrals).
 export interface BonusTab {
   key: string;
   icon: LucideIcon;
@@ -46,6 +47,7 @@ export interface BonusTab {
 export const BONUS_TABS: BonusTab[] = [
   { key: 'bonuses', icon: Gift },
   { key: 'cashback', icon: BadgePercent },
+  { key: 'rakeback', icon: Repeat },
   { key: 'promo', icon: Tag },
   { key: 'vip', icon: Sparkles },
   { key: 'referrals', icon: Users },

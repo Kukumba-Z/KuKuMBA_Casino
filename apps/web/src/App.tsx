@@ -59,6 +59,7 @@ export default function App() {
           {/* Bonuses hub holds cashback / promo / vip / referrals as tabs (members only) */}
           <Route path="/bonuses" element={<RequireAuth><Bonuses /></RequireAuth>} />
           <Route path="/cashback" element={<Navigate to="/bonuses?tab=cashback" replace />} />
+          <Route path="/rakeback" element={<Navigate to="/bonuses?tab=rakeback" replace />} />
           <Route path="/promo" element={<Navigate to="/bonuses?tab=promo" replace />} />
           <Route path="/vip" element={<Navigate to="/bonuses?tab=vip" replace />} />
           <Route path="/referrals" element={<Navigate to="/bonuses?tab=referrals" replace />} />

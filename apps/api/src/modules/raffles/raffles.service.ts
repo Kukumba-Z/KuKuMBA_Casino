@@ -23,6 +23,7 @@ export interface RaffleConditionsDto {
   requiresDeposit?: boolean;
   minDeposit?: string | null;
   depositWithinDays?: number | null;
+  minVipLevel?: number | null;
   audience?: RaffleAudience;
   partnerId?: string | null;
 }
@@ -150,6 +151,7 @@ export class RafflesService {
       requiresDeposit: r.requiresDeposit,
       minDeposit: r.minDeposit ? r.minDeposit.toFixed() : null,
       depositWithinDays: r.depositWithinDays,
+      minVipLevel: r.minVipLevel,
       audience: r.audience,
       partnerId: r.partnerId,
       serverSeedHash: r.serverSeedHash,
@@ -175,7 +177,7 @@ export class RafflesService {
    * Enforce the raffle's entry conditions for a user. Throws a specific
    * BadRequestException the front-end maps to a localized message.
    */
-  private async assertEligible(userId: string, raffle: { id: string; currency: string; audience: RaffleAudience; partnerId: string | null; createdById: string | null; requiresDeposit: boolean; minDeposit: Prisma.Decimal | null; depositWithinDays: number | null }) {
+  private async assertEligible(userId: string, raffle: { id: string; currency: string; audience: RaffleAudience; partnerId: string | null; createdById: string | null; requiresDeposit: boolean; minDeposit: Prisma.Decimal | null; depositWithinDays: number | null; minVipLevel: number | null }) {
     // Audience gate: partner-referrals raffles are only open to that partner's referrals.
     if (raffle.audience === 'PARTNER_REFERRALS') {
       const partnerId = raffle.partnerId ?? raffle.createdById;
@@ -185,6 +187,17 @@ export class RafflesService {
       });
       if (!partnerId || me?.referredById !== partnerId) {
         throw new BadRequestException('NOT_PARTNER_REFERRAL');
+      }
+    }
+
+    // VIP gate: exclusive raffles need a VIP status of the given level or higher.
+    if (raffle.minVipLevel != null && raffle.minVipLevel > 0) {
+      const me = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { vipLevel: true },
+      });
+      if ((me?.vipLevel ?? 0) < raffle.minVipLevel) {
+        throw new BadRequestException('VIP_LEVEL_REQUIRED');
       }
     }
 
@@ -302,6 +315,7 @@ export class RafflesService {
         requiresDeposit: dto.requiresDeposit ?? false,
         minDeposit: this.normMinDeposit(dto.minDeposit),
         depositWithinDays: this.normWindow(dto.depositWithinDays),
+        minVipLevel: this.normVipLevel(dto.minVipLevel),
         audience,
         partnerId,
       },
@@ -335,6 +349,7 @@ export class RafflesService {
     if (dto.requiresDeposit !== undefined) data.requiresDeposit = dto.requiresDeposit;
     if (dto.minDeposit !== undefined) data.minDeposit = this.normMinDeposit(dto.minDeposit);
     if (dto.depositWithinDays !== undefined) data.depositWithinDays = this.normWindow(dto.depositWithinDays);
+    if (dto.minVipLevel !== undefined) data.minVipLevel = this.normVipLevel(dto.minVipLevel);
     if (dto.audience !== undefined) {
       data.audience = dto.audience;
       // Keep partnerId coherent with the audience.
@@ -393,6 +408,13 @@ export class RafflesService {
   private normWindow(v?: number | null): number | null {
     if (v === undefined || v === null) return null;
     return (DEPOSIT_WINDOWS as readonly number[]).includes(v) ? v : null;
+  }
+
+  /** VIP entry threshold: a positive integer level, anything else = no gate. */
+  private normVipLevel(v?: number | null): number | null {
+    if (v === undefined || v === null) return null;
+    const n = Math.floor(Number(v));
+    return Number.isFinite(n) && n > 0 ? n : null;
   }
 
   /**

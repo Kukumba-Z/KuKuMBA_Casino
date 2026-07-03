@@ -29,7 +29,7 @@ export class UsersService {
       kycStatus: user.kycStatus,
       twoFactorEnabled: user.twoFactorEnabled,
       referralCode: user.referralCode,
-      vip: { level: user.vipLevel, xp: user.vipXp, name: vipLevel?.name },
+      vip: { level: user.vipLevel, name: vipLevel?.name, icon: vipLevel?.icon, color: vipLevel?.color },
       // Lifetime, persisted — stays accurate even after old rounds are pruned.
       stats: { bets: user.lifetimeBets, totalWagered: user.lifetimeWagered.toString() },
       linkedAccounts: linked.map((l) => ({
