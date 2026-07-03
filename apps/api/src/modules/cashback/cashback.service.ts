@@ -2,15 +2,15 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { D, ZERO } from '../../common/utils/money';
+import { SettingsService } from '../../config/settings.service';
 import { BonusesService } from '../bonuses/bonuses.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WalletService } from '../wallet/wallet.service';
 
 type Dec = Prisma.Decimal;
 
-/** Cashback is a weekly perk: claimable once every 7 days. */
-const PERIOD_DAYS = 7;
-const PERIOD_MS = PERIOD_DAYS * 24 * 60 * 60 * 1000;
+/** Fallback accrual window when the cashback.periodDays setting is unset. */
+const DEFAULT_PERIOD_DAYS = 7;
 
 /**
  * Weekly cashback on the player's net cash-in:
@@ -30,21 +30,30 @@ export class CashbackService {
     private wallet: WalletService,
     private notifications: NotificationsService,
     private bonuses: BonusesService,
+    private settings: SettingsService,
   ) {}
+
+  /** Admin-tunable accrual window (cashback.periodDays app setting). */
+  private async periodDays(): Promise<number> {
+    const raw = Number(await this.settings.get('cashback.periodDays', DEFAULT_PERIOD_DAYS));
+    return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : DEFAULT_PERIOD_DAYS;
+  }
 
   private async compute(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     const vip = await this.prisma.vipLevel.findUnique({ where: { level: user?.vipLevel ?? 0 } });
     const percent = vip?.cashbackPercent ?? 0;
 
+    const periodDays = await this.periodDays();
+    const periodMs = periodDays * 24 * 60 * 60 * 1000;
     const last = await this.prisma.cashbackClaim.findFirst({
       where: { userId, status: 'CLAIMED' },
       orderBy: { createdAt: 'desc' },
     });
     const now = new Date();
-    const nextClaimAt = last ? new Date(last.createdAt.getTime() + PERIOD_MS) : null;
+    const nextClaimAt = last ? new Date(last.createdAt.getTime() + periodMs) : null;
     const onCooldown = !!nextClaimAt && nextClaimAt > now;
-    const since = new Date(now.getTime() - PERIOD_MS);
+    const since = new Date(now.getTime() - periodMs);
 
     const [deposits, withdrawals, currencies] = await Promise.all([
       this.prisma.deposit.groupBy({
@@ -102,7 +111,7 @@ export class CashbackService {
       }
     }
 
-    return { percent, since, now, nextClaimAt, onCooldown, depositsUsd, withdrawalsUsd, netUsd, payout };
+    return { percent, periodDays, since, now, nextClaimAt, onCooldown, depositsUsd, withdrawalsUsd, netUsd, payout };
   }
 
   async status(userId: string) {
@@ -111,7 +120,7 @@ export class CashbackService {
     const cfg = await this.cashbackConfig();
     return {
       percent: c.percent,
-      periodDays: PERIOD_DAYS,
+      periodDays: c.periodDays,
       since: c.since,
       onCooldown: c.onCooldown,
       nextClaimAt: c.nextClaimAt,

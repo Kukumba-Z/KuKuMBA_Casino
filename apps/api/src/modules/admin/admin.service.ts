@@ -15,6 +15,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { BonusesService } from '../bonuses/bonuses.service';
 import { AdjustBalanceDto } from './dto/adjust-balance.dto';
 import { UpsertCurrencyDto } from './dto/upsert-currency.dto';
+import { UpsertVipLevelDto } from './dto/vip-level.dto';
 
 /**
  * Accept RTP as a fraction (0.973) or a percentage (97.3) — both are common —
@@ -52,6 +53,11 @@ export class AdminService {
     return this.prisma.auditLog.create({
       data: { actorId, actorName: actor?.username, action, targetType, targetId, meta },
     });
+  }
+
+  /** Audit hook for sibling admin services/controllers (same log, same shape). */
+  auditAction(actorId: string, action: string, targetType?: string, targetId?: string, meta?: any) {
+    return this.audit(actorId, action, targetType, targetId, meta);
   }
 
   async dashboard() {
@@ -298,6 +304,47 @@ export class AdminService {
       bodyRu: approve ? 'Верификация пройдена.' : `Причина: ${note || '—'}`,
       bodyEn: approve ? 'Your identity is verified.' : `Reason: ${note || '—'}`,
     });
+    return { ok: true };
+  }
+
+  // ── VIP ladder CRUD ───────────────────────────────────────────────────
+  listVipLevels() {
+    return this.prisma.vipLevel.findMany({ orderBy: { level: 'asc' } });
+  }
+
+  async upsertVipLevel(adminId: string, dto: UpsertVipLevelDto) {
+    const data = {
+      name: dto.name,
+      icon: dto.icon ?? null,
+      color: dto.color ?? null,
+      depositRequiredUsd: D(dto.depositRequiredUsd),
+      wagerRequiredUsd: D(dto.wagerRequiredUsd),
+      cashbackPercent: dto.cashbackPercent,
+      rakebackPercent: dto.rakebackPercent,
+      perksRu: dto.perksRu ?? null,
+      perksEn: dto.perksEn ?? null,
+    };
+    if (D(dto.depositRequiredUsd).lt(0) || D(dto.wagerRequiredUsd).lt(0)) {
+      throw new BadRequestException('BAD_AMOUNT');
+    }
+    const level = await this.prisma.vipLevel.upsert({
+      where: { level: dto.level },
+      create: { level: dto.level, ...data },
+      update: data,
+    });
+    await this.audit(adminId, 'vip.upsert', 'vipLevel', String(dto.level), { name: dto.name });
+    return level;
+  }
+
+  async deleteVipLevel(adminId: string, level: number) {
+    // Level 0 is the ladder's base — every new player starts there.
+    if (!Number.isInteger(level) || level <= 0) throw new BadRequestException('VIP_LEVEL_PROTECTED');
+    const def = await this.prisma.vipLevel.findUnique({ where: { level } });
+    if (!def) throw new NotFoundException('VIP_LEVEL_NOT_FOUND');
+    const inUse = await this.prisma.user.count({ where: { vipLevel: level } });
+    if (inUse > 0) throw new BadRequestException('VIP_LEVEL_IN_USE');
+    await this.prisma.vipLevel.delete({ where: { level } });
+    await this.audit(adminId, 'vip.delete', 'vipLevel', String(level));
     return { ok: true };
   }
 

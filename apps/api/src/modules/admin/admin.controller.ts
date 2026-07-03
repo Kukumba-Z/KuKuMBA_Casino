@@ -20,15 +20,18 @@ import { SupportService } from '../support/support.service';
 import { displayName, multerOptionsFor, type UploadedFileLike } from '../uploads/uploads.config';
 import { UploadsService } from '../uploads/uploads.service';
 import { AdminService } from './admin.service';
+import { BetsAdminService } from './bets-admin.service';
 import { AdjustBalanceDto } from './dto/adjust-balance.dto';
 import { RejectWithdrawalDto } from './dto/reject-withdrawal.dto';
 import { UpsertCurrencyDto } from './dto/upsert-currency.dto';
+import { UpsertVipLevelDto } from './dto/vip-level.dto';
 
 @Roles('ADMIN', 'SUPPORT', 'MODERATOR')
 @Controller('admin')
 export class AdminController {
   constructor(
     private admin: AdminService,
+    private bets: BetsAdminService,
     private support: SupportService,
     private uploads: UploadsService,
   ) {}
@@ -141,6 +144,42 @@ export class AdminController {
   @RequirePermission('users.vip')
   vip(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: any) {
     return this.admin.setVip(adminId, id, +body.level);
+  }
+
+  // VIP ladder CRUD
+  @Get('vip-levels')
+  @RequirePermission('vip.manage')
+  vipLevels() {
+    return this.admin.listVipLevels();
+  }
+
+  @Post('vip-levels')
+  @RequirePermission('vip.manage')
+  upsertVipLevel(@CurrentUser('id') adminId: string, @Body() body: UpsertVipLevelDto) {
+    return this.admin.upsertVipLevel(adminId, body);
+  }
+
+  @Delete('vip-levels/:level')
+  @RequirePermission('vip.manage')
+  deleteVipLevel(@CurrentUser('id') adminId: string, @Param('level') level: string) {
+    return this.admin.deleteVipLevel(adminId, +level);
+  }
+
+  // Bet reversal (refund = stake only; rollback = full undo incl. winnings)
+  @Post('bets/:id/refund')
+  @RequirePermission('bets.manage')
+  async refundBet(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: { reason?: string }) {
+    const res = await this.bets.refund(id, body?.reason);
+    await this.admin.auditAction(adminId, 'bet.refund', 'bet', id, { reason: body?.reason });
+    return res;
+  }
+
+  @Post('bets/:id/rollback')
+  @RequirePermission('bets.manage')
+  async rollbackBet(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: { reason?: string }) {
+    const res = await this.bets.rollback(id, body?.reason);
+    await this.admin.auditAction(adminId, 'bet.rollback', 'bet', id, { reason: body?.reason });
+    return res;
   }
 
   @Post('balance/adjust')
