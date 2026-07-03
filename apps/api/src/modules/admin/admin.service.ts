@@ -470,6 +470,20 @@ export class AdminService {
     return res;
   }
 
+  /**
+   * Delete an unused promo code. Redeemed codes must be disabled instead:
+   * PromoRedemption rows cascade on delete, which would erase the redemption
+   * history the anti-abuse limits rely on.
+   */
+  async deletePromocode(adminId: string, id: string) {
+    const promo = await this.prisma.promoCode.findUnique({ where: { id } });
+    if (!promo) throw new NotFoundException('PROMO_NOT_FOUND');
+    if (promo.redeemedCount > 0) throw new BadRequestException('PROMO_USED_DISABLE_INSTEAD');
+    await this.prisma.promoCode.delete({ where: { id } });
+    await this.audit(adminId, 'promo.delete', 'promo', id, { code: promo.code });
+    return { ok: true };
+  }
+
   // ── Bonuses ──────────────────────────────────────────────────────────
   listBonuses() {
     return this.prisma.bonus.findMany({ orderBy: { createdAt: 'asc' } });

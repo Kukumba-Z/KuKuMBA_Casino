@@ -241,6 +241,12 @@ export class AdminController {
     return this.admin.updatePromocode(adminId, id, body);
   }
 
+  @Delete('promocodes/:id')
+  @RequirePermission('promo.manage')
+  deletePromo(@CurrentUser('id') adminId: string, @Param('id') id: string) {
+    return this.admin.deletePromocode(adminId, id);
+  }
+
   // Raffles — permission-gated staff surface (PARTNERs keep using /raffles).
   @Get('raffles')
   @RequirePermission('raffles.manage')
