@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ArrowDownToLine, BadgePercent, Check, Coins, Repeat, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { VipEmblem } from '../components/VipEmblem';
 import api from '../lib/api';
 import { fmt, useVipLevels, type VipLevelInfo } from '../lib/hooks';
 import { useAuth } from '../store/auth';
@@ -45,7 +46,7 @@ function ProgressTrack({
 /** Big round emblem of a VIP rank, glowing in the rank's colour. */
 function Emblem({ level, size = 'lg' }: { level?: VipLevelInfo | null; size?: 'lg' | 'sm' }) {
   if (!level) return null;
-  const cls = size === 'lg' ? 'h-20 w-20 text-4xl' : 'h-10 w-10 text-xl';
+  const cls = size === 'lg' ? 'h-20 w-20' : 'h-10 w-10';
   const color = level.color ?? '#9AA4C7';
   return (
     <span
@@ -53,7 +54,7 @@ function Emblem({ level, size = 'lg' }: { level?: VipLevelInfo | null; size?: 'l
       style={{ borderColor: `${color}66`, boxShadow: `0 0 28px -6px ${color}` }}
       title={level.name}
     >
-      {level.icon}
+      <VipEmblem icon={level.icon} color={color} size={size === 'lg' ? 42 : 21} />
     </span>
   );
 }
@@ -102,7 +103,8 @@ export default function Vip({ embedded = false }: { embedded?: boolean }) {
               <div className="flex items-center justify-between text-xs text-white/50">
                 <span>{t('vip.progressTo')}</span>
                 <span className="flex items-center gap-1.5 font-semibold text-white/80">
-                  {status.next.icon} {status.next.name} · {t('vip.level')} {status.next.level}
+                  <VipEmblem icon={status.next.icon} color={status.next.color} size={14} />
+                  {status.next.name} · {t('vip.level')} {status.next.level}
                 </span>
               </div>
               <ProgressTrack

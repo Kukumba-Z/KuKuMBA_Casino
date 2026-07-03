@@ -262,13 +262,12 @@ export class RouletteService implements OnModuleInit {
     void this.stats.recordRound({ userId, bets: dto.bets.length, stake: total.toFixed() });
 
     if (result.vipRes?.leveledUp) {
-      const badge = result.vipRes.icon ? `${result.vipRes.icon} ` : '';
       this.notifications.notify(userId, {
         type: 'VIP',
         titleRu: 'Новый VIP-уровень!',
         titleEn: 'New VIP level!',
-        bodyRu: `Поздравляем! Вы достигли уровня ${badge}${result.vipRes.name}.`,
-        bodyEn: `Congrats! You reached ${badge}${result.vipRes.name}.`,
+        bodyRu: `Поздравляем! Вы достигли уровня ${result.vipRes.name}.`,
+        bodyEn: `Congrats! You reached ${result.vipRes.name}.`,
         data: { level: result.vipRes.level },
       });
     }

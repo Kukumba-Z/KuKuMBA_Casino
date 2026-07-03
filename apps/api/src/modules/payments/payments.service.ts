@@ -117,13 +117,12 @@ export class PaymentsService {
     });
     if (vipRes && (vipRes as VipLevelUp).leveledUp) {
       const up = vipRes as VipLevelUp;
-      const badge = up.icon ? `${up.icon} ` : '';
       await this.notifications.notify(dep.userId, {
         type: 'VIP',
         titleRu: 'Новый VIP-уровень!',
         titleEn: 'New VIP level!',
-        bodyRu: `Поздравляем! Вы достигли уровня ${badge}${up.name}.`,
-        bodyEn: `Congrats! You reached ${badge}${up.name}.`,
+        bodyRu: `Поздравляем! Вы достигли уровня ${up.name}.`,
+        bodyEn: `Congrats! You reached ${up.name}.`,
         data: { level: up.level },
       });
     }

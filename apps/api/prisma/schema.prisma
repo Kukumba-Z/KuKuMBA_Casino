@@ -653,7 +653,8 @@ model ReferralBalance {
 model VipLevel {
   level              Int     @id
   name               String
-  /// Emblem shown beside the nickname (profile, chat) — an emoji glyph.
+  /// Emblem shown beside the nickname (profile, chat): the KEY of a built-in
+  /// SVG glyph (web/src/components/VipEmblem.tsx), e.g. "horseshoe", "gem".
   icon               String?
   depositRequiredUsd Decimal @default(0) @db.Decimal(38, 18)
   wagerRequiredUsd   Decimal @default(0) @db.Decimal(38, 18)

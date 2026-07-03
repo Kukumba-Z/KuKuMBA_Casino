@@ -6,6 +6,7 @@ import { isOriginal } from '../components/GameCard';
 import { HistoryRow } from '../components/HistoryRow';
 import { Mascot } from '../components/Mascot';
 import { StatusChip } from '../components/StatusChip';
+import { VipEmblem } from '../components/VipEmblem';
 import api, { apiError } from '../lib/api';
 import { AVATAR_PRESETS, avatarBg, avatarPresetKey } from '../lib/avatar';
 import { useGames, useMe } from '../lib/hooks';
@@ -29,17 +30,26 @@ export default function Profile() {
           <Mascot size={52} />
         </span>
         <div className="flex-1">
-          <div className="text-2xl font-extrabold">
+          <div className="flex items-center gap-2 text-2xl font-extrabold">
             {me?.vip?.icon && (
-              <span className="mr-1.5" title={`${me.vip.name} · VIP ${me.vip.level}`}>{me.vip.icon}</span>
+              <VipEmblem
+                icon={me.vip.icon}
+                color={me.vip.color}
+                size={22}
+                title={`${me.vip.name} · VIP ${me.vip.level}`}
+              />
             )}
             {me?.username}
           </div>
           <div className="text-sm text-white/50">{me?.email}</div>
           <div className="mt-2 flex flex-wrap gap-2">
             <span className="chip">{t('common.accountId')} #{me?.accountId}</span>
-            <span className="chip font-semibold" style={me?.vip?.color ? { color: me.vip.color } : undefined}>
-              {me?.vip?.icon ? `${me.vip.icon} ` : ''}{me?.vip?.name} · VIP {me?.vip?.level}
+            <span
+              className="chip inline-flex items-center gap-1.5 font-semibold"
+              style={me?.vip?.color ? { color: me.vip.color } : undefined}
+            >
+              <VipEmblem icon={me?.vip?.icon} size={13} />
+              {me?.vip?.name} · VIP {me?.vip?.level}
             </span>
             <StatusChip category="kycStatus" value={me?.kycStatus} prefix="KYC" />
             <span className="chip">{t('profile.betsLabel')}: {me?.stats?.bets ?? 0}</span>

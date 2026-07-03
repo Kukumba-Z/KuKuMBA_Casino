@@ -11,7 +11,6 @@ export interface VipLevelUp {
   leveledUp: boolean;
   level: number;
   name?: string;
-  icon?: string | null;
 }
 
 /**
@@ -92,12 +91,7 @@ export class VipService {
     if (newLevel > user.vipLevel) {
       await tx.user.update({ where: { id: user.id }, data: { vipLevel: newLevel } });
       const def = levels.find((l) => l.level === newLevel);
-      return {
-        leveledUp: true,
-        level: newLevel,
-        name: def?.name ?? `VIP ${newLevel}`,
-        icon: def?.icon ?? null,
-      };
+      return { leveledUp: true, level: newLevel, name: def?.name ?? `VIP ${newLevel}` };
     }
     return { leveledUp: false, level: user.vipLevel };
   }

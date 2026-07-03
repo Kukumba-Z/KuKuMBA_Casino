@@ -8,6 +8,7 @@ import { getSocket } from '../lib/socket';
 import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
 import { ChatUserPopover } from './ChatUserPopover';
+import { VipEmblem } from './VipEmblem';
 
 interface Msg {
   id: string;
@@ -93,7 +94,12 @@ export function ChatBox({ className = '', onClose }: { className?: string; onClo
                 style={{ color: nameColor({ role: m.role, vipLevel: m.vipLevel }, vipColors) }}
               >
                 {badge?.icon && (
-                  <span className="mr-0.5" title={`${badge.name} · VIP ${badge.level}`}>{badge.icon}</span>
+                  <VipEmblem
+                    icon={badge.icon}
+                    size={13}
+                    className="mr-1"
+                    title={`${badge.name} · VIP ${badge.level}`}
+                  />
                 )}
                 {m.username}
               </button>

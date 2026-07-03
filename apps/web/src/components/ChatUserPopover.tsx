@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Ban, MicOff } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import api, { apiError } from '../lib/api';
 import { can, useAdminMe, useVipBadges } from '../lib/hooks';
@@ -7,6 +8,7 @@ import { enumLabel } from '../lib/labels';
 import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
 import { Modal } from './Modal';
+import { VipEmblem } from './VipEmblem';
 
 /** Tap a chat nickname → mini profile (id, registered, VIP). Staff with
  *  `chat.moderate` also get mute / ban-from-chat (reusing the admin mute
@@ -41,10 +43,22 @@ export function ChatUserPopover({ user, onClose }: { user: any; onClose: () => v
   const badge = vipBadges?.[vipLevel];
 
   return (
-    <Modal open onClose={onClose} title={badge?.icon ? `${badge.icon} ${user.username}` : user.username}>
+    <Modal open onClose={onClose} title={user.username}>
       <div className="space-y-3 text-sm">
         <Row label={t('common.accountId')} value={`#${user.accountId ?? card?.accountId ?? '—'}`} />
-        <Row label="VIP" value={badge ? `${badge.icon ?? ''} ${badge.name} · ${vipLevel}`.trim() : String(vipLevel)} />
+        <Row
+          label="VIP"
+          value={
+            badge ? (
+              <span className="inline-flex items-center gap-1.5">
+                <VipEmblem icon={badge.icon} color={badge.color} size={15} />
+                {badge.name} · {vipLevel}
+              </span>
+            ) : (
+              String(vipLevel)
+            )
+          }
+        />
         {user.role && user.role !== 'USER' && <Row label={t('chat.role')} value={enumLabel('role', user.role)} />}
         {registered && <Row label={t('chat.registered')} value={registered} />}
 
@@ -66,7 +80,7 @@ export function ChatUserPopover({ user, onClose }: { user: any; onClose: () => v
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-center justify-between">
       <span className="text-white/45">{label}</span>
