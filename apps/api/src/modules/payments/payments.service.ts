@@ -88,7 +88,14 @@ export class PaymentsService {
     let granted: { name: string; amount: string; currency: string; wagerMultiplier: number; sticky: boolean } | null = null;
     let vipRes: VipLevelUp | null = null;
     await this.prisma.$transaction(async (tx) => {
-      await tx.deposit.update({ where: { id: dep.id }, data: { status: 'COMPLETED' } });
+      // Atomically claim the deposit: only the request that actually flips the
+      // status may credit the wallet, so a concurrent double-confirm can never
+      // credit twice (the pre-check above is just a UX fast-path).
+      const claimed = await tx.deposit.updateMany({
+        where: { id: dep.id, status: { in: ['PENDING', 'CONFIRMING'] } },
+        data: { status: 'COMPLETED' },
+      });
+      if (claimed.count === 0) throw new BadRequestException('DEPOSIT_NOT_PENDING');
       await this.wallet.apply(tx, {
         userId: dep.userId,
         type: 'DEPOSIT',
@@ -225,24 +232,37 @@ export class PaymentsService {
   async approveWithdrawal(adminId: string, id: string) {
     const w = await this.prisma.withdrawal.findUnique({ where: { id } });
     if (!w) throw new NotFoundException('WITHDRAWAL_NOT_FOUND');
-    if (!['PENDING', 'APPROVED', 'PROCESSING'].includes(w.status)) {
-      throw new BadRequestException('NOT_PENDING');
-    }
-    await this.prisma.withdrawal.update({ where: { id }, data: { status: 'PROCESSING' } });
-    const res = await this.provider.createWithdrawal({
-      userId: w.userId,
-      currency: w.currency,
-      network: w.network ?? undefined,
-      amount: w.amount.toFixed(),
-      address: w.address,
+    // Atomically claim PENDING → PROCESSING before touching the external
+    // provider: only the request that wins the claim may send money out, so a
+    // concurrent approve (or a double-click) can never pay out twice.
+    const claimed = await this.prisma.withdrawal.updateMany({
+      where: { id, status: 'PENDING' },
+      data: { status: 'PROCESSING', reviewedById: adminId, reviewedAt: new Date() },
     });
+    if (claimed.count === 0) throw new BadRequestException('NOT_PENDING');
+    let res;
+    try {
+      res = await this.provider.createWithdrawal({
+        userId: w.userId,
+        currency: w.currency,
+        network: w.network ?? undefined,
+        amount: w.amount.toFixed(),
+        address: w.address,
+      });
+    } catch (e: any) {
+      // The row stays PROCESSING (never re-approvable) — record the failure so
+      // ops can resolve it manually via reject (refund) or the provider console.
+      await this.prisma.withdrawal.update({
+        where: { id },
+        data: { meta: { ...((w.meta as object) ?? {}), error: String(e?.message ?? e) } },
+      });
+      throw e;
+    }
     const updated = await this.prisma.withdrawal.update({
       where: { id },
       data: {
         status: res.status === 'COMPLETED' ? 'COMPLETED' : 'PROCESSING',
         txHash: res.txHash,
-        reviewedById: adminId,
-        reviewedAt: new Date(),
         meta: res.meta,
       },
     });
@@ -259,10 +279,20 @@ export class PaymentsService {
   async rejectWithdrawal(adminId: string, id: string, reason?: string) {
     const w = await this.prisma.withdrawal.findUnique({ where: { id } });
     if (!w) throw new NotFoundException('WITHDRAWAL_NOT_FOUND');
-    if (!['PENDING', 'APPROVED', 'PROCESSING'].includes(w.status)) {
-      throw new BadRequestException('NOT_PENDING');
-    }
     await this.prisma.$transaction(async (tx) => {
+      // Claim first, refund second: the refund runs only when this request
+      // actually flipped the status, so concurrent rejects (or a reject racing
+      // an approve) can never credit the player twice.
+      const claimed = await tx.withdrawal.updateMany({
+        where: { id, status: { in: ['PENDING', 'PROCESSING'] } },
+        data: {
+          status: 'REJECTED',
+          reviewedById: adminId,
+          reviewedAt: new Date(),
+          meta: { ...((w.meta as object) ?? {}), reason },
+        },
+      });
+      if (claimed.count === 0) throw new BadRequestException('NOT_PENDING');
       await this.wallet.apply(tx, {
         userId: w.userId,
         type: 'ROLLBACK',
@@ -272,15 +302,6 @@ export class PaymentsService {
         refType: 'withdrawal',
         refId: w.id,
         description: 'Withdrawal refund',
-      });
-      await tx.withdrawal.update({
-        where: { id },
-        data: {
-          status: 'REJECTED',
-          reviewedById: adminId,
-          reviewedAt: new Date(),
-          meta: { reason },
-        },
       });
     });
     await this.notifications.notify(w.userId, {

@@ -113,6 +113,17 @@ export class WalletService {
   }
 
   /**
+   * Assert a currency code refers to a real Currency row (optionally enabled)
+   * and return it — admin flows must never mint balances in made-up codes.
+   */
+  async assertCurrency(code: string, opts: { requireEnabled?: boolean } = {}) {
+    const cur = await this.prisma.currency.findUnique({ where: { code } });
+    if (!cur) throw new BadRequestException('CURRENCY_NOT_FOUND');
+    if (opts.requireEnabled && !cur.enabled) throw new BadRequestException('CURRENCY_DISABLED');
+    return cur;
+  }
+
+  /**
    * Grant 10,000 demo coins — but only when the player's demo balance is empty.
    * Demo is for trying games, not an infinite faucet. The balance row is locked
    * FOR UPDATE before the check so concurrent claims can't both succeed.

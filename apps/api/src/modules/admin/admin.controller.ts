@@ -19,6 +19,9 @@ import { SupportService } from '../support/support.service';
 import { displayName, multerOptionsFor, type UploadedFileLike } from '../uploads/uploads.config';
 import { UploadsService } from '../uploads/uploads.service';
 import { AdminService } from './admin.service';
+import { AdjustBalanceDto } from './dto/adjust-balance.dto';
+import { RejectWithdrawalDto } from './dto/reject-withdrawal.dto';
+import { UpsertCurrencyDto } from './dto/upsert-currency.dto';
 
 @Roles('ADMIN', 'SUPPORT', 'MODERATOR')
 @Controller('admin')
@@ -141,7 +144,7 @@ export class AdminController {
 
   @Post('balance/adjust')
   @RequirePermission('users.balance')
-  adjust(@CurrentUser('id') adminId: string, @Body() body: any) {
+  adjust(@CurrentUser('id') adminId: string, @Body() body: AdjustBalanceDto) {
     return this.admin.adjustBalance(adminId, body);
   }
 
@@ -172,8 +175,8 @@ export class AdminController {
 
   @Post('withdrawals/:id/reject')
   @RequirePermission('withdrawals.manage')
-  reject(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: any) {
-    return this.admin.rejectWithdrawal(adminId, id, body?.reason);
+  reject(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: RejectWithdrawalDto) {
+    return this.admin.rejectWithdrawal(adminId, id, body.reason);
   }
 
   // Promo / bonuses
@@ -247,7 +250,7 @@ export class AdminController {
 
   @Post('currencies')
   @RequirePermission('currencies.manage')
-  upsertCurrency(@CurrentUser('id') adminId: string, @Body() body: any) {
+  upsertCurrency(@CurrentUser('id') adminId: string, @Body() body: UpsertCurrencyDto) {
     return this.admin.upsertCurrency(adminId, body);
   }
 

@@ -12,6 +12,8 @@ import { PermissionsService } from '../permissions/permissions.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { WalletService } from '../wallet/wallet.service';
 import { BonusesService } from '../bonuses/bonuses.service';
+import { AdjustBalanceDto } from './dto/adjust-balance.dto';
+import { UpsertCurrencyDto } from './dto/upsert-currency.dto';
 
 /**
  * Accept RTP as a fraction (0.973) or a percentage (97.3) — both are common —
@@ -43,9 +45,10 @@ export class AdminService {
     private bonuses: BonusesService,
   ) {}
 
-  private audit(actorId: string, action: string, targetType?: string, targetId?: string, meta?: any) {
+  private async audit(actorId: string, action: string, targetType?: string, targetId?: string, meta?: any) {
+    const actor = await this.prisma.user.findUnique({ where: { id: actorId }, select: { username: true } });
     return this.prisma.auditLog.create({
-      data: { actorId, action, targetType, targetId, meta },
+      data: { actorId, actorName: actor?.username, action, targetType, targetId, meta },
     });
   }
 
@@ -243,21 +246,29 @@ export class AdminService {
     return res;
   }
 
-  async adjustBalance(
-    adminId: string,
-    dto: { userId: string; currency: string; mode: 'DEMO' | 'REAL'; amount: string; reason?: string },
-  ) {
+  async adjustBalance(adminId: string, dto: AdjustBalanceDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: dto.userId }, select: { id: true } });
+    if (!user) throw new NotFoundException('USER_NOT_FOUND');
+    // Currency must be a real Currency row, and the wallet mode must match its
+    // kind (demo coins live in DEMO mode, fiat/crypto in REAL) — otherwise an
+    // admin typo mints a malformed balance row.
+    const cur = await this.wallet.assertCurrency(dto.currency);
+    if ((cur.type === 'DEMO') !== (dto.mode === 'DEMO')) {
+      throw new BadRequestException('MODE_CURRENCY_MISMATCH');
+    }
+    const amount = D(dto.amount);
+    if (!amount.isFinite() || amount.isZero()) throw new BadRequestException('BAD_AMOUNT');
     const tx = await this.wallet.applyStandalone({
       userId: dto.userId,
       type: 'ADMIN_ADJUST',
       currency: dto.currency,
-      mode: dto.mode as any,
-      amount: D(dto.amount),
-      allowNegative: true,
+      mode: dto.mode,
+      amount,
+      allowNegative: dto.allowNegative ?? false,
       refType: 'admin',
       description: dto.reason || 'Manual adjustment',
     });
-    await this.audit(adminId, 'balance.adjust', 'user', dto.userId, dto);
+    await this.audit(adminId, 'balance.adjust', 'user', dto.userId, { ...dto });
     await this.notifications.notify(dto.userId, {
       type: 'SYSTEM',
       titleRu: 'Корректировка баланса',
@@ -341,6 +352,7 @@ export class AdminService {
   }
 
   async createPromocode(adminId: string, dto: any) {
+    await this.wallet.assertCurrency(dto.currency ?? 'DEMO');
     const code = (dto.code || genPromoCode()).toUpperCase();
     const promo = await this.prisma.promoCode.create({
       data: {
@@ -386,6 +398,7 @@ export class AdminService {
   }
 
   async upsertBonus(adminId: string, dto: any) {
+    await this.wallet.assertCurrency(dto.currency ?? 'DEMO');
     const data = {
       name: dto.name,
       type: dto.type ?? 'NO_DEPOSIT',
@@ -432,6 +445,7 @@ export class AdminService {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
     if (!user) throw new NotFoundException('USER_NOT_FOUND');
     const currency = dto.currency || 'USD';
+    await this.wallet.assertCurrency(currency);
     const amount = D(dto.amount ?? 0);
     if (amount.lte(0)) throw new BadRequestException('BAD_AMOUNT');
     await this.wallet.runInTx((tx) =>
@@ -532,7 +546,7 @@ export class AdminService {
     return this.prisma.currency.findMany({ orderBy: { sortOrder: 'asc' } });
   }
 
-  async upsertCurrency(adminId: string, dto: any) {
+  async upsertCurrency(adminId: string, dto: UpsertCurrencyDto) {
     const data = {
       name: dto.name,
       type: dto.type,
@@ -544,6 +558,7 @@ export class AdminService {
       usdRate: D(dto.usdRate ?? 1),
       enabled: dto.enabled ?? true,
       sortOrder: dto.sortOrder ?? 0,
+      ...(dto.isDefault !== undefined ? { isDefault: dto.isDefault } : {}),
     };
     const cur = await this.prisma.currency.upsert({
       where: { code: dto.code },
