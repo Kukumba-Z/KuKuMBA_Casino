@@ -1,73 +1,9 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { RaffleAudience, RaffleCreatorType } from '@prisma/client';
-import {
-  IsBoolean,
-  IsIn,
-  IsInt,
-  IsNumberString,
-  IsOptional,
-  IsString,
-  Min,
-} from 'class-validator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
-import {
-  CreateRaffleDto,
-  DEPOSIT_WINDOWS,
-  RafflesService,
-  UpdateRaffleDto,
-} from './raffles.service';
-
-const AUDIENCES: RaffleAudience[] = ['ALL', 'PARTNER_REFERRALS'];
-
-class CreateRaffleBody implements CreateRaffleDto {
-  @IsString() title: string;
-  @IsOptional() @IsString() descriptionRu?: string;
-  @IsOptional() @IsString() descriptionEn?: string;
-  @IsOptional() @IsString() creatorType?: RaffleCreatorType;
-  @IsOptional() @IsString() creatorName?: string;
-  @IsString() currency: string;
-  @IsOptional() @IsString() mode?: any;
-  @IsNumberString() prizePool: string;
-  @IsOptional() @IsInt() @Min(1) winnersCount?: number;
-  @IsOptional() @IsNumberString() entryCost?: string;
-  @IsOptional() @IsInt() @Min(1) maxEntriesPerUser?: number;
-  @IsOptional() @IsString() opensAt?: string;
-  @IsOptional() @IsString() closesAt?: string;
-  @IsOptional() @IsString() drawAt?: string;
-  // entry conditions
-  @IsOptional() @IsBoolean() requiresDeposit?: boolean;
-  @IsOptional() @IsNumberString() minDeposit?: string | null;
-  @IsOptional() @IsIn(DEPOSIT_WINDOWS as readonly number[]) depositWithinDays?: number | null;
-  @IsOptional() @IsIn(AUDIENCES) audience?: RaffleAudience;
-  @IsOptional() @IsString() partnerId?: string | null;
-}
-
-class UpdateRaffleBody implements UpdateRaffleDto {
-  @IsOptional() @IsString() title?: string;
-  @IsOptional() @IsString() descriptionRu?: string;
-  @IsOptional() @IsString() descriptionEn?: string;
-  @IsOptional() @IsString() creatorName?: string;
-  @IsOptional() @IsString() currency?: string;
-  @IsOptional() @IsString() mode?: any;
-  @IsOptional() @IsNumberString() prizePool?: string;
-  @IsOptional() @IsInt() @Min(1) winnersCount?: number;
-  @IsOptional() @IsNumberString() entryCost?: string;
-  @IsOptional() @IsInt() @Min(1) maxEntriesPerUser?: number;
-  @IsOptional() @IsString() opensAt?: string | null;
-  @IsOptional() @IsString() closesAt?: string | null;
-  @IsOptional() @IsString() drawAt?: string | null;
-  @IsOptional() @IsBoolean() requiresDeposit?: boolean;
-  @IsOptional() @IsNumberString() minDeposit?: string | null;
-  @IsOptional() @IsIn(DEPOSIT_WINDOWS as readonly number[]) depositWithinDays?: number | null;
-  @IsOptional() @IsIn(AUDIENCES) audience?: RaffleAudience;
-  @IsOptional() @IsString() partnerId?: string | null;
-}
-
-class DrawBody {
-  @IsOptional() @IsString() clientSeed?: string;
-}
+import { CreateRaffleBody, DrawRaffleBody, UpdateRaffleBody } from './raffles.dto';
+import { RafflesService } from './raffles.service';
 
 @Controller('raffles')
 export class RafflesController {
@@ -124,7 +60,7 @@ export class RafflesController {
   // Manual draw kept for debugging; the cron auto-draws at drawAt.
   @Roles('ADMIN')
   @Post(':id/draw')
-  draw(@Param('id') id: string, @Body() dto: DrawBody) {
+  draw(@Param('id') id: string, @Body() dto: DrawRaffleBody) {
     return this.raffles.draw(id, dto.clientSeed);
   }
 }

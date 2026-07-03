@@ -9,6 +9,7 @@ import { SettingsService } from '../../config/settings.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PaymentsService } from '../payments/payments.service';
 import { PermissionsService } from '../permissions/permissions.service';
+import { CreateRaffleDto, RafflesService, UpdateRaffleDto } from '../raffles/raffles.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { WalletService } from '../wallet/wallet.service';
 import { BonusesService } from '../bonuses/bonuses.service';
@@ -43,6 +44,7 @@ export class AdminService {
     private realtime: RealtimeService,
     private permissions: PermissionsService,
     private bonuses: BonusesService,
+    private raffles: RafflesService,
   ) {}
 
   private async audit(actorId: string, action: string, targetType?: string, targetId?: string, meta?: any) {
@@ -390,6 +392,35 @@ export class AdminService {
     const promo = await this.prisma.promoCode.update({ where: { id }, data });
     await this.audit(adminId, 'promo.update', 'promo', id, dto);
     return promo;
+  }
+
+  // ── Raffles (staff surface — delegates to RafflesService, adds audit) ──
+  listRaffles() {
+    return this.raffles.list();
+  }
+
+  async createRaffle(adminId: string, dto: CreateRaffleDto) {
+    const raffle = await this.raffles.create(adminId, dto);
+    await this.audit(adminId, 'raffle.create', 'raffle', raffle.id, { title: dto.title });
+    return raffle;
+  }
+
+  async updateRaffle(adminId: string, id: string, dto: UpdateRaffleDto) {
+    const raffle = await this.raffles.update(id, dto);
+    await this.audit(adminId, 'raffle.update', 'raffle', id, { fields: Object.keys(dto) });
+    return raffle;
+  }
+
+  async cancelRaffle(adminId: string, id: string) {
+    const res = await this.raffles.cancel(id);
+    await this.audit(adminId, 'raffle.cancel', 'raffle', id);
+    return res;
+  }
+
+  async drawRaffle(adminId: string, id: string, clientSeed?: string) {
+    const res = await this.raffles.draw(id, clientSeed);
+    await this.audit(adminId, 'raffle.draw', 'raffle', id);
+    return res;
   }
 
   // ── Bonuses ──────────────────────────────────────────────────────────

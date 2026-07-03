@@ -15,6 +15,7 @@ import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CreateRaffleBody, DrawRaffleBody, UpdateRaffleBody } from '../raffles/raffles.dto';
 import { SupportService } from '../support/support.service';
 import { displayName, multerOptionsFor, type UploadedFileLike } from '../uploads/uploads.config';
 import { UploadsService } from '../uploads/uploads.service';
@@ -196,6 +197,37 @@ export class AdminController {
   @RequirePermission('promo.manage')
   updatePromo(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: any) {
     return this.admin.updatePromocode(adminId, id, body);
+  }
+
+  // Raffles — permission-gated staff surface (PARTNERs keep using /raffles).
+  @Get('raffles')
+  @RequirePermission('raffles.manage')
+  raffles() {
+    return this.admin.listRaffles();
+  }
+
+  @Post('raffles')
+  @RequirePermission('raffles.manage')
+  createRaffle(@CurrentUser('id') adminId: string, @Body() body: CreateRaffleBody) {
+    return this.admin.createRaffle(adminId, body);
+  }
+
+  @Patch('raffles/:id')
+  @RequirePermission('raffles.manage')
+  updateRaffle(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: UpdateRaffleBody) {
+    return this.admin.updateRaffle(adminId, id, body);
+  }
+
+  @Post('raffles/:id/cancel')
+  @RequirePermission('raffles.manage')
+  cancelRaffle(@CurrentUser('id') adminId: string, @Param('id') id: string) {
+    return this.admin.cancelRaffle(adminId, id);
+  }
+
+  @Post('raffles/:id/draw')
+  @RequirePermission('raffles.manage')
+  drawRaffle(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: DrawRaffleBody) {
+    return this.admin.drawRaffle(adminId, id, body?.clientSeed);
   }
 
   @Get('bonuses')

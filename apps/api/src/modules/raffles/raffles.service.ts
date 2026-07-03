@@ -377,6 +377,13 @@ export class RafflesService {
     if (raffle.status === 'CANCELLED') return this.get(id);
 
     await this.prisma.$transaction(async (tx) => {
+      // Atomically claim the cancellation: only the request that flips the
+      // status refunds, so two concurrent cancels can't refund entries twice.
+      const claimed = await tx.raffle.updateMany({
+        where: { id, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+        data: { status: 'CANCELLED' },
+      });
+      if (claimed.count === 0) throw new BadRequestException('ALREADY_DRAWN');
       if (D(raffle.entryCost).gt(0)) {
         // Refund every paid ticket so cancelling never costs a player money.
         for (const e of raffle.entries) {
@@ -392,7 +399,6 @@ export class RafflesService {
           });
         }
       }
-      await tx.raffle.update({ where: { id }, data: { status: 'CANCELLED' } });
     });
 
     this.realtime.raffleUpdate({ raffleId: id, status: 'CANCELLED' });
