@@ -199,11 +199,13 @@ export function useOnline() {
   return online;
 }
 
-/** Pretty-print an amount, trimming trailing zeros. */
+/** Pretty-print an amount, trimming trailing zeros of the FRACTION only
+ *  (never the integer part — "100".replace would eat real zeros). */
 export function fmt(amount: string | number | undefined, maxDp = 8): string {
   if (amount === undefined || amount === null) return '0';
   const n = typeof amount === 'string' ? Number(amount) : amount;
   if (!isFinite(n)) return String(amount);
   const fixed = n.toFixed(Math.min(maxDp, 8));
-  return fixed.replace(/\.?0+$/, '') || '0';
+  if (!fixed.includes('.')) return fixed;
+  return fixed.replace(/0+$/, '').replace(/\.$/, '');
 }
