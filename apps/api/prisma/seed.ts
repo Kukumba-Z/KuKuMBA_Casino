@@ -309,12 +309,23 @@ async function main() {
     'referral.lossCommission': 0.1,
     'payments.requireKycForWithdrawal': false,
     'payments.autoApproveWithdrawals': false,
+    // Cashback accrual window in days (admin-tunable; percentages live on VipLevel).
+    'cashback.periodDays': 7,
   };
   for (const [key, value] of Object.entries(settings)) {
     await prisma.appSetting.upsert({ where: { key }, create: { key, value }, update: { value } });
   }
   // The per-bet wager commission is replaced by the loss revenue share above.
   await prisma.appSetting.deleteMany({ where: { key: 'referral.wagerCommission' } });
+
+  // ── Game providers (aggregators) ───────────────────────────────
+  // A sandbox aggregator so the launch/callback loop is testable end-to-end.
+  // Secrets are configured from the admin panel (encrypted at rest), not seeded.
+  await prisma.gameProvider.upsert({
+    where: { key: 'mock' },
+    create: { key: 'mock', name: 'Mock Aggregator', kind: 'MOCK', enabled: true },
+    update: {},
+  });
 
   // ── RBAC default grants (idempotent; never overrides later admin edits) ──
   for (const [role, perms] of Object.entries(DEFAULT_GRANTS)) {

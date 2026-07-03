@@ -386,6 +386,49 @@ model Withdrawal {
 
 // ── Games: provably-fair roulette ──────────────────────────────────────────────
 
+/// A slot/game aggregator (or single provider) integration. Secrets are stored
+/// encrypted (AES-256-GCM via PROVIDER_SECRETS_KEY) — never in plaintext — and
+/// are masked in admin API responses.
+model GameProvider {
+  id               String   @id @default(cuid())
+  key              String   @unique // slug used in callback URLs: /providers/:key/callback/*
+  name             String
+  kind             String   @default("MOCK") // adapter discriminator: MOCK | GENERIC_SEAMLESS | ...
+  baseUrl          String? // provider's game-launch base URL
+  apiKeyEnc        String? // encrypted outbound API key
+  webhookSecretEnc String? // encrypted HMAC secret for inbound callbacks
+  enabled          Boolean  @default(true)
+  meta             Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  games        Game[]
+  transactions ProviderTransaction[]
+}
+
+/// Idempotency + audit record for seamless-wallet callbacks. One row per
+/// provider transaction id; a replayed callback finds the row and returns the
+/// stored response instead of touching the wallet again.
+model ProviderTransaction {
+  id              String       @id @default(cuid())
+  providerId      String
+  provider        GameProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  externalId      String // provider's transaction id (unique per provider)
+  action          String // BET | WIN | ROLLBACK
+  userId          String
+  gameId          String?
+  externalRoundId String?
+  currency        String
+  amount          Decimal      @db.Decimal(38, 18)
+  ledgerTxId      String? // wallet Transaction id this callback produced (null for IGNORED)
+  status          String       @default("COMPLETED") // COMPLETED | IGNORED
+  response        Json? // serialized response body, replayed verbatim on duplicates
+  createdAt       DateTime     @default(now())
+
+  @@unique([providerId, externalId])
+  @@index([userId, createdAt])
+}
+
 model Game {
   id       String  @id @default(cuid())
   key      String  @unique // "roulette"
@@ -398,6 +441,13 @@ model Game {
   status   String  @default("LIVE") // LIVE | COMING_SOON
   /// internal SPA route for built-in games (e.g. "/roulette"); null for external/provider games
   route    String?
+
+  // External-provider mapping: which aggregator serves this game and under
+  // which id. Null for KuKuMBA Originals. (providerRefId, not providerId, to
+  // avoid colliding with the display string `provider` above.)
+  providerRefId String?
+  providerRef   GameProvider? @relation(fields: [providerRefId], references: [id], onDelete: SetNull)
+  externalId    String?
 
   rtp           Float    @default(0.973)
   enabled       Boolean  @default(true)
@@ -412,6 +462,7 @@ model Game {
   rounds GameRound[]
   bets   Bet[]
 
+  @@unique([providerRefId, externalId])
   @@index([enabled, sortOrder])
 }
 

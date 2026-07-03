@@ -29,11 +29,14 @@ export const PERMISSIONS = [
   { key: 'withdrawals.manage', group: 'finance', labelRu: 'Выводы', labelEn: 'Withdrawals' },
   { key: 'transactions.view', group: 'finance', labelRu: 'Просмотр транзакций', labelEn: 'View transactions' },
   { key: 'currencies.manage', group: 'finance', labelRu: 'Валюты', labelEn: 'Currencies' },
+  { key: 'bets.manage', group: 'finance', labelRu: 'Возврат / откат ставок', labelEn: 'Refund / rollback bets' },
   // games & engagement
   { key: 'games.manage', group: 'games', labelRu: 'Управление играми', labelEn: 'Manage games' },
+  { key: 'providers.manage', group: 'games', labelRu: 'Провайдеры и агрегаторы', labelEn: 'Providers & aggregators' },
   { key: 'promo.manage', group: 'engagement', labelRu: 'Промокоды', labelEn: 'Promo codes' },
   { key: 'bonuses.manage', group: 'engagement', labelRu: 'Бонусы', labelEn: 'Bonuses' },
   { key: 'raffles.manage', group: 'engagement', labelRu: 'Розыгрыши', labelEn: 'Raffles' },
+  { key: 'vip.manage', group: 'engagement', labelRu: 'VIP-уровни и кешбэк', labelEn: 'VIP levels & cashback' },
   { key: 'notifications.send', group: 'engagement', labelRu: 'Рассылки и уведомления', labelEn: 'Broadcasts & notifications' },
   // support & system
   { key: 'chat.moderate', group: 'support', labelRu: 'Модерация чата', labelEn: 'Moderate chat' },
