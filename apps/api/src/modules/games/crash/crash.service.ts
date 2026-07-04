@@ -69,6 +69,16 @@ interface Settlement {
  */
 @Injectable()
 export class CrashService {
+  /**
+   * Per-round settlement timers. A running round is proactively settled the
+   * instant its outcome is decided by the clock (auto-cashout target reached, or
+   * the crash point passed) and the result is pushed to the player's socket —
+   * so the scene resolves on the true multiplier within a network hop, without
+   * the display having to lag the server. The 5s sweeper is the backstop for
+   * anything these timers miss (e.g. a process restart).
+   */
+  private settleTimers = new Map<string, NodeJS.Timeout>();
+
   constructor(
     private prisma: PrismaService,
     private wallet: WalletService,
@@ -210,10 +220,16 @@ export class CrashService {
           multiplier: win ? floorMult(autoCashout!) : 0,
           crashPoint,
         });
-        return { round, bet, settled, seed };
+        return { round, bet, settled, seed, crashPoint };
       }
-      return { round, bet, settled: null, seed };
+      return { round, bet, settled: null, seed, crashPoint };
     });
+
+    // Live round: arm the proactive settle-and-push at the moment the clock
+    // decides the outcome (crashPoint stays server-side — only used here).
+    if (!result.settled) {
+      this.armSettleTimer(result.bet.id, result.round.createdAt, result.crashPoint, autoCashout);
+    }
 
     // Per-round bookkeeping: counters, lifetime stats, history prune (fire & forget).
     void this.stats.recordRound({ userId, bets: 1, stake: stake.toFixed() });
@@ -386,6 +402,47 @@ export class CrashService {
 
   // ── internals ─────────────────────────────────────────────────────────
 
+  /**
+   * Arm (or re-arm) the timer that settles a live round the instant its outcome
+   * is fixed by the clock: an auto-cashout win lands at secondsToReach(target),
+   * everything else at secondsToReach(crashPoint). Settlement itself is the
+   * idempotent, row-locked path shared with polls/sweeper/cashout, so a timer
+   * firing next to any of them is a harmless no-op.
+   */
+  private armSettleTimer(betId: string, createdAt: Date, crashPoint: number, autoCashout: number | null) {
+    const settleAtSec =
+      autoCashout && autoCashoutWins(autoCashout, crashPoint)
+        ? secondsToReach(autoCashout)
+        : secondsToReach(crashPoint);
+    // +40ms guard so the elapsed clock has definitely crossed the point.
+    const delay = Math.max(0, settleAtSec * 1000 - (Date.now() - createdAt.getTime()) + 40);
+    this.clearSettleTimer(betId);
+    this.settleTimers.set(
+      betId,
+      setTimeout(() => {
+        this.settleTimers.delete(betId);
+        void this.settleBetById(betId);
+      }, delay),
+    );
+  }
+
+  private clearSettleTimer(betId: string) {
+    const timer = this.settleTimers.get(betId);
+    if (timer) {
+      clearTimeout(timer);
+      this.settleTimers.delete(betId);
+    }
+  }
+
+  /** Timer target: load the still-pending bet and settle it if the clock is due. */
+  private async settleBetById(betId: string) {
+    const bet = await this.prisma.bet.findFirst({
+      where: { id: betId, status: 'PENDING', game: { key: 'crash' } },
+      include: { round: { include: { seed: true } } },
+    });
+    if (bet) await this.settleIfDue(bet);
+  }
+
   private pfView(round: { serverSeedHash: string; clientSeed: string; nonce: number }) {
     return {
       serverSeedHash: round.serverSeedHash,
@@ -539,6 +596,16 @@ export class CrashService {
   /** Post-commit broadcasts & notifications — never block the settlement. */
   private async afterSettle(settled: Awaited<ReturnType<CrashService['applySettlement']>>) {
     const { bet, round, crashPoint } = settled;
+    // The round is done — retire its settle timer and push the verdict straight
+    // to the player's socket so the scene resolves on the true multiplier at
+    // once (no polling lag), regardless of which path did the settling.
+    this.clearSettleTimer(bet.id);
+    this.realtime.toUser(bet.userId, 'crash:settle', {
+      roundId: round.id,
+      status: bet.status,
+      crashPoint,
+      multiplier: bet.multiplier.toNumber(),
+    });
     const [user, game, cur] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: bet.userId },

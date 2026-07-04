@@ -11,6 +11,7 @@ import type { CrashStatePayload } from '../components/crash/engine';
 import api, { apiError } from '../lib/api';
 import { betLimits, clampStake, roundStake } from '../lib/bets';
 import { fmt, useBalances, useCurrencies } from '../lib/hooks';
+import { getSocket } from '../lib/socket';
 import { useAuth } from '../store/auth';
 import { useUI } from '../store/ui';
 import { toast } from '../store/toast';
@@ -111,9 +112,9 @@ export default function Crash() {
   };
   const startPoll = () => {
     stopPoll();
-    // Poll briskly: the loss verdict must land while the (lagged) scene is still
-    // short of the crash point, so it finishes exactly on it with no snap-back.
-    pollTimer.current = window.setInterval(poll, 300);
+    // Backup only — the verdict normally arrives instantly over the socket
+    // (crash:settle). This still guarantees a resolution if the push is missed.
+    pollTimer.current = window.setInterval(poll, 500);
   };
 
   const onState = (s: CrashStatePayload) => {
@@ -133,6 +134,22 @@ export default function Crash() {
     }
   };
   const onRoundEnd = (crashPoint: number) => setRecent((h) => [crashPoint, ...h].slice(0, 10));
+
+  // Instant verdict: the server pushes crash:settle the moment the round is
+  // decided (crash point passed / auto-cashout hit), so the scene resolves on
+  // the true multiplier within a network hop — no display lag, no poll wait.
+  const applySettledRef = useRef(applySettled);
+  applySettledRef.current = applySettled;
+  useEffect(() => {
+    if (!authed) return;
+    const s = getSocket();
+    const onSettle = (data: any) => {
+      const r = roundRef.current;
+      if (r && !r.settled && data?.roundId === r.id) applySettledRef.current(data);
+    };
+    s.on('crash:settle', onSettle);
+    return () => { s.off('crash:settle', onSettle); };
+  }, [authed]);
 
   // Re-attach to a round left flying by a reload/navigation: restore the HUD,
   // sync the curve by the server clock and resume polling for the verdict.

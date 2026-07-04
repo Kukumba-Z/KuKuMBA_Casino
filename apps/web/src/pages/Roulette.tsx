@@ -253,21 +253,19 @@ export default function Roulette() {
           </div>
         </div>
 
-        {/* controls — above the board so the total/clear/spin stay in reach. The
-            quick-play toggle now lives on the wheel card, so clear/spin move up
-            and hug the right, filling the freed space. */}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <div className="text-sm">
+        {/* controls — the quick-play toggle now lives on the wheel card, so the
+            total, clear and spin all share one line: the total takes the freed
+            space on the left, clear/spin hug the right. Single row, no wrap. */}
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1 truncate text-sm">
             {t('roulette.totalBet')}: <b className="text-lg tabular-nums">{fmt(total, 2)}</b> {currency}
           </div>
-          <div className="ml-auto flex gap-2">
-            <button onClick={clear} className="btn-ghost !px-3" disabled={busy || !total}>
-              {t('roulette.clear')}
-            </button>
-            <button onClick={spin} className="btn-primary inline-flex min-w-28 items-center justify-center gap-2" disabled={busy || !total}>
-              <Target size={18} /> {t('common.spin')}
-            </button>
-          </div>
+          <button onClick={clear} className="btn-ghost shrink-0 !px-3" disabled={busy || !total}>
+            {t('roulette.clear')}
+          </button>
+          <button onClick={spin} className="btn-primary inline-flex min-w-28 shrink-0 items-center justify-center gap-2" disabled={busy || !total}>
+            <Target size={18} /> {t('common.spin')}
+          </button>
         </div>
 
         {/* bets — uniform vertical gaps (match the number-grid gap). Order:
