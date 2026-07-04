@@ -39,6 +39,7 @@ export class BetsAdminService {
   async refund(betId: string, reason?: string) {
     const bet = await this.loadBet(betId);
     const allowed: BetStatus[] = ['LOST', 'PUSH'];
+    if (bet.status === 'VOID') throw new BadRequestException('BET_ALREADY_REVERSED');
     if (!allowed.includes(bet.status)) throw new BadRequestException('BET_NOT_REFUNDABLE');
 
     const tx = await this.wallet.runInTx(async (tx) => {
@@ -73,6 +74,7 @@ export class BetsAdminService {
   async rollback(betId: string, reason?: string) {
     const bet = await this.loadBet(betId);
     const allowed: BetStatus[] = ['WON', 'LOST', 'PUSH'];
+    if (bet.status === 'VOID') throw new BadRequestException('BET_ALREADY_REVERSED');
     if (!allowed.includes(bet.status)) throw new BadRequestException('BET_NOT_REVERSIBLE');
     const payout = D(bet.payout);
 
