@@ -30,6 +30,16 @@ useAuth.subscribe((s) => {
   }
 });
 
+// Cross-tab sync: a logout or account switch performed in ANOTHER tab must
+// apply here immediately, not on the next 401. The storage event fires only
+// in the tabs that did NOT write, so rehydrating from localStorage converges
+// every open tab on the latest session; the subscription above then runs the
+// usual cleanup (query cache, chat overlay, per-account UI prefs, socket).
+window.addEventListener('storage', (e) => {
+  if (e.key === 'kukumba-auth') void useAuth.persist.rehydrate();
+  if (e.key === 'kukumba-ui') void useUI.persist.rehydrate();
+});
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
