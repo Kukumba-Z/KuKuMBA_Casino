@@ -38,9 +38,30 @@ export class PromocodesService {
     });
     if (promo.type === 'BONUS' || promo.type === 'FREEBET') await this.bonuses.assertNoActiveWager(userId);
 
+    // The checks above are UX fast-paths; the transaction re-enforces every
+    // limit atomically so parallel redemptions can never double-credit.
     await this.prisma.$transaction(async (tx) => {
+      // Per-user serialization (consistent lock order: User first, then the
+      // promo row) — makes the per-user/monthly re-counts below race-free.
+      await tx.$queryRawUnsafe('SELECT 1 FROM "User" WHERE id = $1 FOR UPDATE', userId);
+
+      // Guarded increment enforces the global cap and locks the promo row,
+      // serializing concurrent redemptions of the same code.
+      const claimed = await tx.promoCode.updateMany({
+        where: {
+          id: promo.id,
+          enabled: true,
+          ...(promo.maxRedemptions ? { redeemedCount: { lt: promo.maxRedemptions } } : {}),
+        },
+        data: { redeemedCount: { increment: 1 } },
+      });
+      if (claimed.count === 0) throw new BadRequestException('PROMO_EXHAUSTED');
+
+      const used = await tx.promoRedemption.count({ where: { promoCodeId: promo.id, userId } });
+      if (used >= promo.perUserLimit) throw new BadRequestException('PROMO_ALREADY_USED');
+      await this.bonuses.assertPromoMonthlyLimit(userId, tx);
+
       await tx.promoRedemption.create({ data: { promoCodeId: promo.id, userId } });
-      await tx.promoCode.update({ where: { id: promo.id }, data: { redeemedCount: { increment: 1 } } });
 
       if (promo.type === 'BALANCE') {
         await this.wallet.apply(tx, {

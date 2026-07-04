@@ -266,6 +266,20 @@ export class RafflesService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      // Lock the raffle row: serializes concurrent joins (so the max-entries
+      // re-count below is race-free) and excludes a concurrent cancel/draw
+      // flipping the status after our pre-checks.
+      await tx.$queryRawUnsafe('SELECT 1 FROM "Raffle" WHERE id = $1 FOR UPDATE', raffleId);
+      const fresh = await tx.raffle.findUnique({
+        where: { id: raffleId },
+        select: { status: true, closesAt: true, maxEntriesPerUser: true },
+      });
+      if (!fresh || fresh.status !== 'OPEN') throw new BadRequestException('RAFFLE_NOT_OPEN');
+      if (fresh.closesAt && fresh.closesAt < new Date()) throw new BadRequestException('RAFFLE_CLOSED');
+      const owned = await tx.raffleEntry.aggregate({ where: { raffleId, userId }, _sum: { tickets: true } });
+      if ((owned._sum.tickets ?? 0) >= fresh.maxEntriesPerUser) {
+        throw new BadRequestException('MAX_ENTRIES_REACHED');
+      }
       if (D(raffle.entryCost).gt(0)) {
         await this.wallet.apply(tx, {
           userId,
@@ -368,10 +382,7 @@ export class RafflesService {
 
   /** Cancel an undrawn raffle and refund any paid entry fees. */
   async cancel(id: string) {
-    const raffle = await this.prisma.raffle.findUnique({
-      where: { id },
-      include: { entries: true },
-    });
+    const raffle = await this.prisma.raffle.findUnique({ where: { id } });
     if (!raffle) throw new NotFoundException('RAFFLE_NOT_FOUND');
     if (raffle.status === 'COMPLETED') throw new BadRequestException('ALREADY_DRAWN');
     if (raffle.status === 'CANCELLED') return this.get(id);
@@ -386,7 +397,11 @@ export class RafflesService {
       if (claimed.count === 0) throw new BadRequestException('ALREADY_DRAWN');
       if (D(raffle.entryCost).gt(0)) {
         // Refund every paid ticket so cancelling never costs a player money.
-        for (const e of raffle.entries) {
+        // Entries are re-read INSIDE the transaction: the status claim above
+        // holds the raffle row lock join() takes, so a ticket paid for while
+        // the cancel was in flight is refunded too, never stranded.
+        const entries = await tx.raffleEntry.findMany({ where: { raffleId: id } });
+        for (const e of entries) {
           await this.wallet.apply(tx, {
             userId: e.userId,
             type: 'REFUND',

@@ -157,11 +157,11 @@ export class BonusesService {
   }
 
   /** Throw if the user has hit the monthly promocode-activation cap. */
-  async assertPromoMonthlyLimit(userId: string) {
+  async assertPromoMonthlyLimit(userId: string, client: Tx | PrismaService = this.prisma) {
     const limit = Number(await this.settings.get('promo.monthlyLimitPerUser', MONTHLY_PROMO_DEFAULT));
     if (!Number.isFinite(limit) || limit <= 0) return; // disabled
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const used = await this.prisma.promoRedemption.count({ where: { userId, createdAt: { gte: since } } });
+    const used = await client.promoRedemption.count({ where: { userId, createdAt: { gte: since } } });
     if (used >= limit) throw new BadRequestException('PROMO_MONTHLY_LIMIT');
   }
 
@@ -387,8 +387,15 @@ export class BonusesService {
     if (!WAGERING_STATUSES.includes(ub.status)) throw new BadRequestException('BONUS_NOT_CANCELLABLE');
 
     await this.prisma.$transaction(async (tx) => {
+      // Claim the status flip first: only the request that actually moves the
+      // bonus out of a wagering status settles the balance, so two concurrent
+      // cancels can't debit the bonus funds twice.
+      const claimed = await tx.userBonus.updateMany({
+        where: { id: ub.id, status: { in: WAGERING_STATUSES } },
+        data: { status: 'FORFEITED' },
+      });
+      if (claimed.count === 0) throw new BadRequestException('BONUS_NOT_CANCELLABLE');
       await this.settle(tx, ub, { forfeit: true });
-      await tx.userBonus.update({ where: { id: ub.id }, data: { status: 'FORFEITED' } });
     });
 
     await this.notifications.notify(userId, {
@@ -564,8 +571,15 @@ export class BonusesService {
     // Bonuses are REAL money only — a demo/unset currency means it's misconfigured.
     if (!currency || currency === 'DEMO') throw new BadRequestException('BONUS_NOT_CLAIMABLE');
 
-    await this.prisma.$transaction((tx) =>
-      this.grantBonus(tx, {
+    await this.prisma.$transaction(async (tx) => {
+      // Serialize per user and re-check once-per-account + no-stacking INSIDE
+      // the transaction — parallel claims must not both credit.
+      await tx.$queryRawUnsafe('SELECT 1 FROM "User" WHERE id = $1 FOR UPDATE', userId);
+      const dup = await tx.userBonus.findFirst({ where: { userId, bonusId: bonus.id }, select: { id: true } });
+      if (dup) throw new BadRequestException('ALREADY_CLAIMED');
+      const stacking = await tx.userBonus.count({ where: { userId, status: { in: WAGERING_STATUSES } } });
+      if (stacking > 0) throw new BadRequestException('BONUS_STACKING');
+      await this.grantBonus(tx, {
         userId,
         bonusId: bonus.id,
         name: bonus.name,
@@ -580,8 +594,8 @@ export class BonusesService {
         refType: 'bonus',
         refId: bonus.id,
         description: `Bonus ${bonus.name}`,
-      }),
-    );
+      });
+    });
 
     await this.notifications.notify(userId, {
       type: 'BONUS',

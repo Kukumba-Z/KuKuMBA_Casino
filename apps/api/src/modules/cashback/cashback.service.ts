@@ -144,7 +144,7 @@ export class CashbackService {
 
   async claim(userId: string) {
     await this.bonuses.assertBonusAccess(userId);
-    const { percent, since, now, onCooldown, netUsd, payout } = await this.compute(userId);
+    const { percent, periodDays, since, now, onCooldown, netUsd, payout } = await this.compute(userId);
     if (onCooldown) throw new BadRequestException('CASHBACK_ON_COOLDOWN');
     if (!payout) throw new BadRequestException('NOTHING_TO_CLAIM');
 
@@ -152,6 +152,17 @@ export class CashbackService {
     const wager = cfg?.wagerMultiplier ?? 0;
 
     await this.prisma.$transaction(async (tx) => {
+      // Serialize claims per user and re-check the cooldown INSIDE the
+      // transaction — the pre-check above is only a UX fast-path, so two
+      // parallel claims must not both pay out.
+      await tx.$queryRawUnsafe('SELECT 1 FROM "User" WHERE id = $1 FOR UPDATE', userId);
+      const last = await tx.cashbackClaim.findFirst({
+        where: { userId, status: 'CLAIMED' },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (last && last.createdAt.getTime() + periodDays * 86_400_000 > Date.now()) {
+        throw new BadRequestException('CASHBACK_ON_COOLDOWN');
+      }
       await this.wallet.apply(tx, {
         userId,
         type: 'CASHBACK',
