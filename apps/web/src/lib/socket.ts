@@ -15,10 +15,19 @@ export function getSocket(): Socket {
   return socket;
 }
 
+/**
+ * Re-auth the socket on a token change WITHOUT tearing down the instance, so
+ * every `.on(...)` handler already attached by pages (crash verdicts, the lobby
+ * ticker, chat) survives. Destroying and rebuilding the socket here used to
+ * strand those handlers on a dead instance — the gateway re-runs its connection
+ * handler on the cycle below and re-joins the `user:<id>` room with the new token.
+ */
 export function reconnectSocket() {
+  const token = useAuth.getState().accessToken;
   if (socket) {
-    socket.disconnect();
-    socket = null;
+    socket.auth = { token };
+    socket.disconnect().connect();
+    return socket;
   }
   return getSocket();
 }

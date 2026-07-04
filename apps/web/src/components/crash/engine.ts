@@ -112,13 +112,14 @@ export interface CrashEngineOptions {
   ];
   const MAXMULT = 1000000;
   const HOUSE_EDGE = 0.01; // 1% — тот же плоский edge, что в рулетке (RTP 99%)
-  // Дисплей идёт РОВНО по серверным часам (лаг = 0): никакой паузы на старте и
-  // авто-кэшаут срабатывает точно на цели (а не «раньше»). Честность икса на
-  // проигрыше держит не отставание картинки, а мгновенный вердикт: сервер
-  // добивает раунд ровно в точке краша и пушит его в сокет (crash:settle),
-  // поэтому оверрайд, который перерастал бы настоящий икс, длится лишь один
-  // сетевой RTT — снап назад практически незаметен.
-  const RENDER_LAG_MS = 0;
+  // Дисплей идёт с небольшим буфером позади серверных часов (jitter-buffer, как
+  // в видеостриминге): вердикт о крахе (мгновенный push crash:settle) успевает
+  // прийти, ПОКА показанный икс ещё НЕ дорос до настоящей точки, и раунд
+  // завершается ровно на ней — без прыжка назад. Буфер вводится плавно (ease-in
+  // в update()), чтобы число начинало расти сразу, без паузы на старте. Выигрыш
+  // раскрывается, когда показанный икс догоняет цель кэшаута (см. _maybeRevealWin),
+  // поэтому авто-кэшаут срабатывает ровно на цели, а не «раньше».
+  const RENDER_LAG_MS = 200;
 
   // Честный маппинг: равномерный u ∈ [0,1) -> точка краша (флор до 2 знаков,
   // как rouletteOutcome=floor(float*37)). В бою u = floatFromSeeds(serverSeed, clientSeed, nonce)
@@ -515,7 +516,7 @@ export interface CrashEngineOptions {
     }
     resetRound(phase, now) {
       this.phase = phase; this.phaseStart = now; this.mult = 1;
-      this._prevStage = -1; this._drinkT = 0; this._drinkN = 0; this._pump = 0; this._bubble = null; this._fastHold = 0; this._hideMult = false;
+      this._prevStage = -1; this._drinkT = 0; this._drinkN = 0; this._pump = 0; this._bubble = null; this._fastHold = 0; this._hideMult = false; this._pendingWin = null;
       if (phase === 'idle') { this.betActive = false; this.cashedAt = null; this.lost = false; this.finale = false; this.autoAt = null; this._crashKnown = true; }
     }
     // placeBet starts the round immediately (no timer). autoAt — цель авто-кэшаута.
@@ -526,7 +527,7 @@ export interface CrashEngineOptions {
       if (this.phase !== 'idle') return;
       this.autoAt = (autoAt && autoAt > 1) ? autoAt : null;
       this.betActive = true; this.cashedAt = null; this.lost = false; this.finale = false;
-      this.mult = 1; this._prevStage = -1; this._drinkT = 0; this._drinkN = 0; this._pump = 0; this._bubble = null; this._prevDrink = null; this._hideMult = false;
+      this.mult = 1; this._prevStage = -1; this._drinkT = 0; this._drinkN = 0; this._pump = 0; this._bubble = null; this._prevDrink = null; this._hideMult = false; this._pendingWin = null;
       this._nextPhraseAt = performance.now() + rand(1800, 4200);
       // Серверный раунд: crashPoint скрыт (иначе его можно подсмотреть в devtools),
       // движок растит множитель по общей кривой до ответа сервера.
@@ -553,9 +554,11 @@ export interface CrashEngineOptions {
       this._crashKnown = true;
       this.crashPoint = crashPoint > 1 ? crashPoint : 1;
       if (cashedAt != null) {
-        if (this.cashedAt == null) { this.cashedAt = cashedAt; this.synth.cashout(); this.onEvent('cashout', cashedAt); }
-        this.mult = this.crashPoint;
-        this._resolve(performance.now());
+        // Выигрыш: не раскрываем сразу — ждём, пока БУФЕРИЗОВАННЫЙ икс догонит
+        // цель кэшаута (ручной — уже на ней → мгновенно; авто — доедет до цели),
+        // чтобы «ВЫЖИЛ @X» появилось ровно на X, а не раньше.
+        this._pendingWin = cashedAt;
+        this._maybeRevealWin(performance.now());
         return;
       }
       // Проигрыш: показанный икс отстаёт от сервера (RENDER_LAG_MS) и ещё не
@@ -563,6 +566,15 @@ export interface CrashEngineOptions {
       // update() зарезолвит раунд ровно на crashPoint. Если дисплей всё же
       // впереди (сбой лага/часов) — резолвим сразу, как раньше.
       if (this.mult >= this.crashPoint) this._resolve(performance.now());
+    }
+    // Раскрытие выигрыша, привязанное к показанному иксу (а не к серверным часам).
+    _maybeRevealWin(now) {
+      if (this._pendingWin == null || this.phase !== 'running') return;
+      if (this.mult >= this._pendingWin || this._pendingWin >= this.crashPoint) {
+        if (this.cashedAt == null) { this.cashedAt = this._pendingWin; this.synth.cashout(); this.onEvent('cashout', this.cashedAt); }
+        this.mult = this.crashPoint; this._pendingWin = null;
+        this._resolve(now);
+      }
     }
     cancelBet() { if (this.phase === 'running' && this.betActive && this.cashedAt == null && this.mult < 1.02) { this.betActive = false; this.resetRound('idle', performance.now()); return true; } return false; }
     cashOut() {
@@ -607,12 +619,17 @@ export interface CrashEngineOptions {
         else if (!this.fastMode || !this._crashKnown) {
           // Множитель — замкнутая функция времени (та же кривая, что валидирует
           // сервер), а не покадровое интегрирование: клиент и сервер сходятся.
-          // _lagMs держит слепой серверный раунд позади серверных часов.
-          this.mult = Math.min(multiplierAt((now - this.phaseStart - this._lagMs) / 1000), this.crashPoint);
+          // _lagMs держит слепой серверный раунд позади серверных часов; лаг
+          // нарастает плавно (0 → _lagMs), чтобы число тронулось сразу, без паузы.
+          const lag = Math.min(this._lagMs, (now - this.phaseStart) * 0.6);
+          this.mult = Math.min(multiplierAt((now - this.phaseStart - lag) / 1000), this.crashPoint);
         }
-        // Авто-кэшаут отыгрывается движком только когда точка краша известна
-        // (турбо/деморежим); в серверном раунде исход присылает settleFromServer.
-        if (this._crashKnown && this._fastHold <= 0 && this.betActive && this.cashedAt == null && this.autoAt && this.autoAt <= this.crashPoint && this.mult >= this.autoAt) {
+        // Выигрыш: раскрываем, когда показанный (буферизованный) икс догоняет цель.
+        if (this._pendingWin != null) this._maybeRevealWin(now);
+        // Авто-кэшаут отыгрывается движком только в турбо/деморежиме (известная
+        // точка краша, без _pendingWin); в серверном раунде выигрыш раскрывает
+        // _maybeRevealWin по settleFromServer.
+        if (this._pendingWin == null && this._crashKnown && this._fastHold <= 0 && this.betActive && this.cashedAt == null && this.autoAt && this.autoAt <= this.crashPoint && this.mult >= this.autoAt) {
           this.cashedAt = this.autoAt; this.mult = this.crashPoint; this.synth.cashout(); this.onEvent('cashout', this.cashedAt);
         }
         const idx = stageIndexFor(this.mult);
