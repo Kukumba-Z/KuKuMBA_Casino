@@ -112,6 +112,15 @@ export interface CrashEngineOptions {
   ];
   const MAXMULT = 1000000;
   const HOUSE_EDGE = 0.01; // 1% — тот же плоский edge, что в рулетке (RTP 99%)
+  // Дисплей серверного раунда отстаёт от серверных часов на этот лаг. Вердикт
+  // о проигрыше приезжает поллингом (интервал + RTT), и без лага показанный икс
+  // успевает ПЕРЕРАСТИ настоящую точку краша (на экране 2.00, а краш был 1.80),
+  // после чего его пришлось бы срезать вниз. С лагом кривая всегда позади
+  // сервера — вердикт застаёт её ещё не дошедшей до краша, и раунд завершается
+  // ровно на настоящем иксе, без прыжка назад. Ручной кэшаут при этом
+  // оплачивается по ПОКАЗАННОМУ иксу (сервер зажимает его своим временем, см.
+  // crash.service.cashOut), так что «что видишь — то и получаешь».
+  const RENDER_LAG_MS = 700;
 
   // Честный маппинг: равномерный u ∈ [0,1) -> точка краша (флор до 2 знаков,
   // как rouletteOutcome=floor(float*37)). В бою u = floatFromSeeds(serverSeed, clientSeed, nonce)
@@ -305,9 +314,12 @@ export interface CrashEngineOptions {
     hiccupSfx() { if (!this.on || !this.ctx) return; const t0 = this.ctx.currentTime; this.tone(320, t0, 0.06, { type: 'sine', gain: 0.13, dest: this.master }); this.tone(540, t0 + 0.05, 0.05, { type: 'sine', gain: 0.11, dest: this.master }); }
     tick() {}
     stageDing() {}
-    cashout() { if (!this.on || !this.ctx) return; const t0 = this.ctx.currentTime; [523, 659, 784, 1046, 1318].forEach((f, i) => this.tone(f, t0 + i * 0.06, 0.2, { type: 'triangle', gain: 0.2, filter: 3600, dest: this.master })); }
-    crash() { if (!this.on || !this.ctx) return; const t0 = this.ctx.currentTime; this.noise(0.5, 0.38, 900, t0, false, this.master); this.tone(200, t0, 0.5, { type: 'sawtooth', gain: 0.26, filter: 1200, dest: this.master, slide: 60 }); this.tone(150, t0, 0.5, { type: 'square', gain: 0.15, filter: 900, dest: this.master, slide: 50 }); }
-    finale() { if (!this.on || !this.ctx) return; const t0 = this.ctx.currentTime; [392, 523, 659, 784, 1046, 1318, 1568].forEach((f, i) => this.tone(f, t0 + i * 0.08, 0.32, { type: 'triangle', gain: 0.2, filter: 4000, dest: this.master })); this.noise(0.8, 0.22, 2600, t0, false, this.master); }
+    // Вердикт раунда может прийти поллингом, когда вкладка скрыта (контекст
+    // suspended, его currentTime заморожен) — не планируем эти one-shot'ы,
+    // иначе при возврате они выстрелят разом.
+    cashout() { if (!this.on || !this.ctx || document.hidden) return; const t0 = this.ctx.currentTime; [523, 659, 784, 1046, 1318].forEach((f, i) => this.tone(f, t0 + i * 0.06, 0.2, { type: 'triangle', gain: 0.2, filter: 3600, dest: this.master })); }
+    crash() { if (!this.on || !this.ctx || document.hidden) return; const t0 = this.ctx.currentTime; this.noise(0.5, 0.38, 900, t0, false, this.master); this.tone(200, t0, 0.5, { type: 'sawtooth', gain: 0.26, filter: 1200, dest: this.master, slide: 60 }); this.tone(150, t0, 0.5, { type: 'square', gain: 0.15, filter: 900, dest: this.master, slide: 50 }); }
+    finale() { if (!this.on || !this.ctx || document.hidden) return; const t0 = this.ctx.currentTime; [392, 523, 659, 784, 1046, 1318, 1568].forEach((f, i) => this.tone(f, t0 + i * 0.08, 0.32, { type: 'triangle', gain: 0.2, filter: 4000, dest: this.master })); this.noise(0.8, 0.22, 2600, t0, false, this.master); }
 
     startMusic() {
       if (this.playing || !this.ctx) return;
@@ -465,12 +477,26 @@ export interface CrashEngineOptions {
       this.shake = 0; this.flash = 0; this.last = 0; this.raf = 0;
       this._emitAcc = 0; this._prevStage = -1; this._drinkT = 0; this._drinkN = 0; this._burpT = 0;
       this._prevGulp = 0; this._prevHic = 0; this._pump = 0;
-      this._bubble = null; this.fastMode = false; this._fastHold = 0; this.autoAt = null; this._prevDrink = null; this._crashKnown = true;
+      this._bubble = null; this.fastMode = false; this._fastHold = 0; this.autoAt = null; this._prevDrink = null; this._crashKnown = true; this._lagMs = 0;
       this.resetRound('idle', performance.now());
       this._ro = new ResizeObserver(() => this.resize()); this._ro.observe(canvas.parentElement || canvas); this.resize();
+      // Ушёл со вкладки / свернул браузер — музыка и SFX замолкают мгновенно
+      // (suspend всего AudioContext); вернулся — играет дальше.
+      this._onVis = () => {
+        const actx = this.synth.ctx;
+        if (!actx) return;
+        if (document.hidden) { if (actx.state === 'running') actx.suspend(); }
+        else if (actx.state === 'suspended') actx.resume();
+      };
+      document.addEventListener('visibilitychange', this._onVis);
+      window.addEventListener('pagehide', this._onVis);
     }
     start() { if (this.raf) return; this.last = performance.now(); this.loop(this.last); }
-    destroy() { cancelAnimationFrame(this.raf); this.raf = 0; this._ro.disconnect(); this.synth.stopMusic(); }
+    destroy() {
+      cancelAnimationFrame(this.raf); this.raf = 0; this._ro.disconnect(); this.synth.stopMusic();
+      document.removeEventListener('visibilitychange', this._onVis);
+      window.removeEventListener('pagehide', this._onVis);
+    }
     resumeAudio() { this.synth.resume(); }
     setSound(v) { this.synth.setOn(v); }
     setMode(m) { this.mode = m; }
@@ -479,6 +505,9 @@ export interface CrashEngineOptions {
     setRtp(rtp) { if (rtp > 0 && rtp <= 1) this.houseEdge = 1 - rtp; }
     getRtp() { return 1 - this.houseEdge; }
     setFast(v) { this.fastMode = !!v; }
+    // Текущий ПОКАЗАННЫЙ множитель (в слепом раунде он отстаёт на RENDER_LAG_MS).
+    // Страница шлёт его при ручном кэшауте, чтобы оплата совпала с экраном.
+    getDisplayMult() { return this.mult; }
     resize() {
       const r = (this.canvas.parentElement || this.canvas).getBoundingClientRect();
       this.dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -504,6 +533,8 @@ export interface CrashEngineOptions {
       // Серверный раунд: crashPoint скрыт (иначе его можно подсмотреть в devtools),
       // движок растит множитель по общей кривой до ответа сервера.
       this._crashKnown = this.mode === 'scripted' || serverCrashPoint != null;
+      // Слепой раунд рисуется с отставанием — см. RENDER_LAG_MS.
+      this._lagMs = this._crashKnown ? 0 : RENDER_LAG_MS;
       this.crashPoint = this.mode === 'scripted' ? MAXMULT
         : (serverCrashPoint != null ? serverCrashPoint : MAXMULT);
       // турбо-прокрутка возможна только с известным исходом (мгновенный ответ сервера)
@@ -529,8 +560,14 @@ export interface CrashEngineOptions {
       if (cashedAt != null) {
         if (this.cashedAt == null) { this.cashedAt = cashedAt; this.synth.cashout(); this.onEvent('cashout', cashedAt); }
         this.mult = this.crashPoint;
+        this._resolve(performance.now());
+        return;
       }
-      this._resolve(performance.now());
+      // Проигрыш: показанный икс отстаёт от сервера (RENDER_LAG_MS) и ещё не
+      // дорос до настоящей точки краша — НЕ срезаем его, даём кривой долететь;
+      // update() зарезолвит раунд ровно на crashPoint. Если дисплей всё же
+      // впереди (сбой лага/часов) — резолвим сразу, как раньше.
+      if (this.mult >= this.crashPoint) this._resolve(performance.now());
     }
     cancelBet() { if (this.phase === 'running' && this.betActive && this.cashedAt == null && this.mult < 1.02) { this.betActive = false; this.resetRound('idle', performance.now()); return true; } return false; }
     cashOut() {
@@ -575,7 +612,8 @@ export interface CrashEngineOptions {
         else if (!this.fastMode || !this._crashKnown) {
           // Множитель — замкнутая функция времени (та же кривая, что валидирует
           // сервер), а не покадровое интегрирование: клиент и сервер сходятся.
-          this.mult = Math.min(multiplierAt((now - this.phaseStart) / 1000), this.crashPoint);
+          // _lagMs держит слепой серверный раунд позади серверных часов.
+          this.mult = Math.min(multiplierAt((now - this.phaseStart - this._lagMs) / 1000), this.crashPoint);
         }
         // Авто-кэшаут отыгрывается движком только когда точка краша известна
         // (турбо/деморежим); в серверном раунде исход присылает settleFromServer.

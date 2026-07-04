@@ -49,7 +49,7 @@ export function CrashScene({
   useEffect(() => { if (texts) eng.current?.setTexts(texts); }, [texts]);
 
   return (
-    <div className="relative h-[min(58vh,560px)] min-h-[320px] w-full">
+    <div className="relative h-[min(42vh,460px)] min-h-[300px] w-full">
       <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full" />
     </div>
   );

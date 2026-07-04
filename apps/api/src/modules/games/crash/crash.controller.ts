@@ -15,6 +15,9 @@ class CrashPlayDto {
 
 class CashoutDto {
   @IsString() roundId: string;
+  /** Multiplier the player saw on screen when they tapped. The server clamps it
+   *  to its own elapsed time, so it can only settle *earlier* (never higher). */
+  @IsOptional() @IsNumber() @Min(1) @Max(CRASH_MAX_MULT) atMultiplier?: number;
 }
 
 @Controller('games/crash')
@@ -47,7 +50,7 @@ export class CrashController {
 
   @Post('cashout')
   cashout(@CurrentUser('id') userId: string, @Body() dto: CashoutDto) {
-    return this.crash.cashOut(userId, dto.roundId);
+    return this.crash.cashOut(userId, dto.roundId, dto.atMultiplier);
   }
 
   @Get('active')

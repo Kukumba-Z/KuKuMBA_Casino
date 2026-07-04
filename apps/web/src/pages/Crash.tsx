@@ -111,7 +111,9 @@ export default function Crash() {
   };
   const startPoll = () => {
     stopPoll();
-    pollTimer.current = window.setInterval(poll, 650);
+    // Poll briskly: the loss verdict must land while the (lagged) scene is still
+    // short of the crash point, so it finishes exactly on it with no snap-back.
+    pollTimer.current = window.setInterval(poll, 300);
   };
 
   const onState = (s: CrashStatePayload) => {
@@ -169,14 +171,17 @@ export default function Crash() {
     if (phase !== 'idle' || busy) return;
     if (autoOn && !autoValid) {
       setNeedAuto(true);
+      toast.error(t('crash.needAutoHint'));
       return;
     }
     // Turbo settles by the auto-cashout target — it must be set.
     if (quick && (!autoOn || !autoValid)) {
       setNeedAuto(true);
+      toast.error(t('crash.turboNeedsAuto'));
       return;
     }
     setBusy(true);
+    setNeedAuto(false);
     const auto = autoOn && autoValid ? roundStake(autoNum, 2) : null;
     const t0 = performance.now();
     try {
@@ -219,7 +224,11 @@ export default function Crash() {
     if (!r || r.settled || busy) return;
     setBusy(true);
     try {
-      const { data } = await api.post('/games/crash/cashout', { roundId: r.id });
+      // Cash out at the multiplier the player actually SEES (the scene lags the
+      // server clock a touch — see RENDER_LAG_MS). The server clamps this to its
+      // own elapsed time, so it can only ever settle *earlier/lower*, never more.
+      const atMultiplier = engineRef.current?.getDisplayMult();
+      const { data } = await api.post('/games/crash/cashout', { roundId: r.id, atMultiplier });
       applySettled(data);
     } catch (e) {
       toast.error(apiError(e));
@@ -250,27 +259,6 @@ export default function Crash() {
     return { label: t('crash.nextBet'), sub: '', cls: 'btn-crash-mute', disabled: true };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, betPlaced, cashedAt, betStake, betCur, mult, stake, quick, busy, currency, autoArmed, t]);
-
-  const statusLine =
-    phase === 'idle'
-      ? needAuto
-        ? t('crash.needAutoHint')
-        : quick
-          ? autoOn && autoValid
-            ? t('crash.turboReady', { x: autoStr })
-            : t('crash.turboNeedsAuto')
-          : ''
-      : phase === 'running'
-        ? betPlaced
-          ? cashedAt == null
-            ? quick
-              ? t('crash.turboDecides')
-              : autoArmed
-                ? t('crash.autoFiring')
-                : t('crash.holdHint')
-            : t('crash.survivedHint')
-          : ''
-        : t('crash.roundOver');
 
   const histColor = (v: number) => (v < 2 ? 'text-roul-red' : v < 10 ? 'text-sky' : v < 100 ? 'text-mint' : v < 1e4 ? 'text-sun' : 'text-bubble');
 
@@ -340,32 +328,18 @@ export default function Crash() {
                   value={autoStr}
                   onChange={(e) => { setAutoStr(e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1')); setNeedAuto(false); }}
                   inputMode="decimal"
+                  aria-invalid={needAuto}
                   aria-label={t('crash.autoCashout')}
-                  className="input !py-2 pr-7 text-right font-bold tabular-nums"
+                  className={`input !py-2 pr-7 text-right font-bold tabular-nums ${needAuto ? '!border-sun' : ''}`}
                 />
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-extrabold text-white/45">×</span>
               </div>
             </div>
 
-            {/* Quick play (турбо) — the same persisted toggle roulette uses. */}
-            <button
-              type="button"
-              onClick={() => { toggleQuick(); setNeedAuto(false); }}
-              aria-pressed={quick}
-              disabled={phase === 'running'}
-              title={t('roulette.quickPlay')}
-              className={`inline-flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${quick ? 'border-sun/40 bg-sun/15 text-sun' : 'border-white/10 bg-white/5 text-white/60 hover:text-white'}`}
-            >
-              <Zap size={16} /> {t('roulette.quickPlay')}
-            </button>
-
             <button onClick={onAction} disabled={action.disabled} className={`crash-action ${action.cls}`}>
               <span className="font-display text-lg font-black">{action.label}</span>
               {action.sub && <span className="text-sm font-bold opacity-85">{action.sub}</span>}
             </button>
-            {statusLine && (
-              <div className={`text-center text-xs font-semibold ${needAuto ? 'font-bold text-sun' : 'text-white/40'}`}>{statusLine}</div>
-            )}
             {!authed && (
               <div className="text-center text-sm text-white/50">
                 <Link to="/login" className="text-lav hover:underline">
@@ -413,6 +387,20 @@ export default function Crash() {
             title={t('roulette.info')}
           >
             <Shield size={18} />
+          </button>
+          {/* Quick play (турбо) — the same persisted toggle roulette uses. */}
+          <button
+            type="button"
+            onClick={() => { toggleQuick(); setNeedAuto(false); }}
+            aria-pressed={quick}
+            disabled={phase === 'running'}
+            aria-label={t('roulette.quickPlay')}
+            title={t('roulette.quickPlay')}
+            className={`absolute bottom-3 left-3 z-10 grid h-9 w-9 place-items-center rounded-xl border backdrop-blur transition disabled:opacity-50 ${
+              quick ? 'border-sun/40 bg-sun/20 text-sun' : 'border-white/10 bg-night/55 text-white/70 hover:bg-white/10'
+            }`}
+          >
+            <Zap size={18} />
           </button>
         </div>
       </div>

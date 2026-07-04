@@ -253,7 +253,7 @@ export class CrashService {
    * round is settled as lost (or as an auto-cashout win if that fired first).
    * Always returns the final round state instead of throwing on "too late".
    */
-  async cashOut(userId: string, roundId: string) {
+  async cashOut(userId: string, roundId: string, atMultiplier?: number) {
     const bet = await this.prisma.bet.findFirst({
       where: { roundId, userId, game: { key: 'crash' } },
       include: { round: { include: { seed: true } } },
@@ -268,7 +268,13 @@ export class CrashService {
       const elapsed = (Date.now() - bet.round.createdAt.getTime()) / 1000;
       const due = this.dueSettlement(locked, crashPoint, elapsed);
       if (due) return this.applySettlement(tx, bet.id, due);
-      const m = floorMult(multiplierAt(elapsed));
+      // Still alive by server time → honour the multiplier the player actually
+      // SAW (the scene runs a touch behind the server clock). Clamp it to the
+      // live value so a client can only ever cash out *earlier/lower*, never
+      // beyond what the server clock allows — the money truth stays server-side.
+      const live = multiplierAt(elapsed);
+      const shown = atMultiplier && atMultiplier > 1 ? Math.min(atMultiplier, live) : live;
+      const m = floorMult(shown);
       const win = m < crashPoint;
       return this.applySettlement(tx, bet.id, { win, multiplier: win ? m : 0, crashPoint });
     });

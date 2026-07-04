@@ -1,7 +1,8 @@
-import { CircleDot, Dices, Gamepad2, Gem, Radio, ShieldCheck, Sparkles, type LucideIcon } from 'lucide-react';
+import { Beer, CircleDot, Dices, Gamepad2, Gem, Radio, ShieldCheck, Sparkles, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import type { Game } from '../lib/hooks';
+import { CrashCardArt } from './crash/CrashCardArt';
 import { RouletteWheel } from './RouletteWheel';
 
 /** Per-category visual identity (icon + gradient accent for the thumbnail). */
@@ -17,6 +18,16 @@ export function categoryMeta(category: string) {
   return CATEGORY[category] ?? FALLBACK;
 }
 
+/** Per-game visual identity for originals whose look shouldn't collapse into the
+ *  generic category (crash is a drinking game, not "dice"). Keyed by Game.key. */
+const GAME: Record<string, { icon: LucideIcon; grad: string }> = {
+  crash: { icon: Beer, grad: 'from-sun/30 to-roul-red/30' },
+};
+
+export function gameMeta(gameKey?: string) {
+  return gameKey ? GAME[gameKey] ?? null : null;
+}
+
 /** Our own titles (vs. third-party provider games). Brand-name match keeps it
  *  data-driven — no per-game hardcoding. */
 export function isOriginal(game: Pick<Game, 'provider'>) {
@@ -29,6 +40,9 @@ function GameArt({ game }: { game: Game }) {
   const meta = categoryMeta(game.category);
   if (game.thumbnail) {
     return <img src={game.thumbnail} alt={game.name} className="absolute inset-0 h-full w-full object-cover" loading="lazy" />;
+  }
+  if (game.key === 'crash') {
+    return <CrashCardArt />;
   }
   if (game.category === 'ROULETTE') {
     return (

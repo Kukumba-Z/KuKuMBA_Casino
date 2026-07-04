@@ -84,9 +84,10 @@
     @apply card flex flex-col gap-1 p-4;
   }
 
-  /* VODKA WIN Crash — the big action button and its outcome states. */
+  /* VODKA WIN Crash — the big action button and its outcome states. Fixed
+     height: the sub-label comes and goes, the block must never resize. */
   .crash-action {
-    @apply flex min-h-[64px] select-none flex-col items-center justify-center gap-0.5 rounded-2xl px-4 py-3 transition disabled:cursor-not-allowed;
+    @apply flex h-[72px] select-none flex-col items-center justify-center gap-0.5 overflow-hidden rounded-2xl px-4 transition disabled:cursor-not-allowed;
   }
   .btn-crash-primary {
     @apply bg-holo text-night shadow-glow hover:brightness-105;

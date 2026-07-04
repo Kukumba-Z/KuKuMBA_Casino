@@ -33,12 +33,16 @@ export function BetRow({
   const coeff = f.coeff != null ? Number(f.coeff) : stake > 0 ? Number(f.payout) / stake : 0;
   const win = Number(f.payout) > 0;
   const meta = categoryMeta(f.category ?? 'ROULETTE');
+  // Real game title (the lobby-card name) — every feed carries it: the live
+  // ticker/leaderboards as `game`, the player's history as `gameName`. The
+  // category label is only the fallback for legacy rows.
+  const title = f.game ?? f.gameName ?? t(meta.labelKey);
   return (
     <div className="grid animate-fadeup grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-2 rounded-xl bg-white/[0.03] px-2.5 py-2 text-xs sm:text-sm">
       <div className="flex min-w-0 items-center gap-2.5">
-        <GameIcon category={f.category} />
+        <GameIcon category={f.category} gameKey={f.gameKey} />
         <div className="min-w-0 leading-tight">
-          <div className="truncate font-medium text-white/80">{t(meta.labelKey)}</div>
+          <div className="truncate font-medium text-white/80">{title}</div>
           {showNick && <div className="truncate text-white/60">{f.username}</div>}
           <div className="mt-0.5 text-[11px] tabular-nums text-white/35">{fmtWhen(f.at)}</div>
         </div>
