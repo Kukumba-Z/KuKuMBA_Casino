@@ -183,21 +183,36 @@ export default function Roulette() {
         >
           <Shield size={18} />
         </button>
+        {/* Quick play (турбо) — same icon button as crash, bottom-left corner. */}
+        <button
+          type="button"
+          onClick={toggleQuick}
+          aria-pressed={quick}
+          disabled={busy}
+          aria-label={t('roulette.quickPlay')}
+          title={t('roulette.quickPlay')}
+          className={`absolute bottom-3 left-3 z-10 grid h-9 w-9 place-items-center rounded-xl border transition disabled:opacity-50 ${
+            quick ? 'border-sun/40 bg-sun/20 text-sun' : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/10'
+          }`}
+        >
+          <Zap size={18} />
+        </button>
 
         <div className="w-full max-w-[260px] sm:max-w-[300px]">
           <RouletteWheel result={result} spinId={spinId} spinMs={quick ? 0 : SPIN_MS} />
         </div>
 
-        {/* recent outcomes — this visit only; cleared when leaving the page */}
-        {recent.length > 0 && (
-          <div className="flex flex-wrap justify-center gap-1.5">
-            {recent.map((n, i) => (
-              <span key={i} className={`grid h-6 w-6 place-items-center rounded-md text-[11px] font-bold ${cellColor(n)}`}>
-                {n}
-              </span>
-            ))}
-          </div>
-        )}
+        {/* recent outcomes — this visit only; cleared when leaving the page. The
+            row is always rendered (min height reserved) so the card never jumps
+            when the first result lands. Side padding keeps the centered chips
+            clear of the corner quick-play button. */}
+        <div className="flex min-h-6 w-full flex-wrap items-center justify-center gap-1.5 px-10">
+          {recent.map((n, i) => (
+            <span key={i} className={`grid h-6 w-6 place-items-center rounded-md text-[11px] font-bold ${cellColor(n)}`}>
+              {n}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* Betting board */}
@@ -238,23 +253,14 @@ export default function Roulette() {
           </div>
         </div>
 
-        {/* controls — above the board so the total/clear/spin stay in reach */}
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* controls — above the board so the total/clear/spin stay in reach. The
+            quick-play toggle now lives on the wheel card, so clear/spin move up
+            and hug the right, filling the freed space. */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <div className="text-sm">
             {t('roulette.totalBet')}: <b className="text-lg tabular-nums">{fmt(total, 2)}</b> {currency}
           </div>
-          <div className="flex gap-2">
-            {/* Quick play: instant spins (no animation). Persisted across all games. */}
-            <button
-              type="button"
-              onClick={toggleQuick}
-              aria-pressed={quick}
-              disabled={busy}
-              title={t('roulette.quickPlay')}
-              className={`inline-flex items-center gap-1.5 rounded-2xl border px-3 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${quick ? 'border-sun/40 bg-sun/15 text-sun' : 'border-white/10 bg-white/5 text-white/60 hover:text-white'}`}
-            >
-              <Zap size={16} /> <span className="hidden sm:inline">{t('roulette.quickPlay')}</span>
-            </button>
+          <div className="ml-auto flex gap-2">
             <button onClick={clear} className="btn-ghost !px-3" disabled={busy || !total}>
               {t('roulette.clear')}
             </button>
