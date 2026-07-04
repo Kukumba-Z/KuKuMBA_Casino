@@ -6,6 +6,7 @@ import App from './App';
 import './i18n';
 import './index.css';
 import { useAuth } from './store/auth';
+import { useChat } from './store/chat';
 import { useUI } from './store/ui';
 
 const queryClient = new QueryClient({
@@ -24,6 +25,7 @@ useAuth.subscribe((s) => {
   if (id !== lastUserId) {
     lastUserId = id;
     queryClient.clear();
+    useChat.getState().close();
     if (id) useUI.getState().claim(id);
   }
 });
