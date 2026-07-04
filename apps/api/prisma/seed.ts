@@ -146,6 +146,23 @@ async function main() {
         'Crash game: the multiplier climbs while the hero holds on — cash out before he keels over. Up to ×1,000,000. Provably-fair (same seed chain as the roulette), 99% RTP — configurable.',
     },
     {
+      key: 'ponyjack',
+      name: 'Ponyjack',
+      type: 'blackjack',
+      category: 'CARDS',
+      provider: 'KuKuMBA Originals',
+      status: 'LIVE',
+      route: '/ponyjack',
+      rtp: 0.995,
+      minBet: 0.01,
+      maxBet: 100000,
+      sortOrder: 2,
+      descriptionRu:
+        'Блэкджек с пони: собери 21, дилер останавливается на всех 17. Понижек (21 с раздачи) платит 3:2, доступны дабл и сплит. Provably-fair (бесконечная колода на том же сид-чейне), RTP 99.5% при оптимальной игре — настраивается.',
+      descriptionEn:
+        'Blackjack with ponies: make 21, the dealer stands on all 17s. A Ponyjack (natural 21) pays 3:2; double and split available. Provably-fair (infinite shoe on the same seed chain), 99.5% RTP with optimal play — configurable.',
+    },
+    {
       key: 'dice',
       name: 'KuKuMBA Dice',
       type: 'dice',
