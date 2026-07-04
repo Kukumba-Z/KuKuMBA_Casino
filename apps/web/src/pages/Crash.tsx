@@ -414,15 +414,6 @@ export default function Crash() {
           >
             <Shield size={18} />
           </button>
-
-          {authed && (
-            <div className="absolute bottom-3 right-3 z-10 rounded-2xl border border-white/10 bg-night/55 px-3.5 py-2 text-right backdrop-blur">
-              <div className="text-[10px] font-bold tracking-widest text-white/50">
-                {t('crash.balance')} · {currency}
-              </div>
-              <div className="font-display text-lg font-extrabold text-sun">{fmt(bal?.amount ?? 0, 2)}</div>
-            </div>
-          )}
         </div>
       </div>
 
