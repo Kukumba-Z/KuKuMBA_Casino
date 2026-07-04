@@ -52,6 +52,9 @@ export default function Crash() {
   const roundRef = useRef<{ id: string; autoAt: number | null; settled: boolean } | null>(null);
   const pollTimer = useRef<number | null>(null);
   const lastPoll = useRef(0);
+  // A manual cash-out in flight is authoritative — ignore socket verdicts until
+  // its own response lands, so an optimistic loss push can't clobber a win.
+  const cashoutInFlight = useRef(false);
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [mult, setMult] = useState(1);
@@ -133,7 +136,12 @@ export default function Crash() {
       void poll();
     }
   };
-  const onRoundEnd = (crashPoint: number) => setRecent((h) => [crashPoint, ...h].slice(0, 10));
+  const onRoundEnd = (crashPoint: number) => {
+    setRecent((h) => [crashPoint, ...h].slice(0, 10));
+    // Reveal the new balance together with the result — in turbo this is the only
+    // balance refresh, so the number never changes before the X lands.
+    qc.invalidateQueries({ queryKey: ['balances'] });
+  };
 
   // Instant verdict: the server pushes crash:settle the moment the round is
   // decided (crash point passed / auto-cashout hit), so the scene resolves on
@@ -144,6 +152,7 @@ export default function Crash() {
     if (!authed) return;
     const s = getSocket();
     const onSettle = (data: any) => {
+      if (cashoutInFlight.current) return; // the manual cash-out response decides
       const r = roundRef.current;
       if (r && !r.settled && data?.roundId === r.id) applySettledRef.current(data);
     };
@@ -215,15 +224,16 @@ export default function Crash() {
       setBetCur(currency);
       setCashedAt(null);
       setNeedAuto(false);
-      qc.invalidateQueries({ queryKey: ['balances'] });
       if (data.status === 'RUNNING') {
+        qc.invalidateQueries({ queryKey: ['balances'] }); // show the stake debit now
         roundRef.current = { id: data.roundId, autoAt: auto, settled: false };
         // Sync the local curve with the server clock (half the RTT ≈ the lag).
         const elapsedMs = Math.max(0, Number(data.serverNow) - Number(data.startedAt)) + rtt / 2;
         engineRef.current?.placeBet(auto, null, elapsedMs);
         startPoll();
       } else {
-        // Turbo: the server already settled — replay the known outcome.
+        // Turbo: reveal the outcome instantly; the balance refresh is held until
+        // the scene resolves (onRoundEnd) so the number never ticks before the X.
         roundRef.current = { id: data.roundId, autoAt: auto, settled: true };
         engineRef.current?.placeBet(auto, Number(data.crashPoint), 0);
         setCashedAt(data.status === 'WON' ? Number(data.multiplier) : null);
@@ -240,18 +250,21 @@ export default function Crash() {
     const r = roundRef.current;
     if (!r || r.settled || busy) return;
     setBusy(true);
+    cashoutInFlight.current = true;
     try {
-      // Cash out at the multiplier the player actually SEES (the scene lags the
-      // server clock a touch — see RENDER_LAG_MS). The server clamps this to its
-      // own elapsed time, so it can only ever settle *earlier/lower*, never more.
+      // Cash out at the multiplier the player actually SEES. The server clamps
+      // this to its own elapsed time, so it can only ever settle *earlier/lower*,
+      // never more — screen == payout.
       const atMultiplier = engineRef.current?.getDisplayMult();
       const { data } = await api.post('/games/crash/cashout', { roundId: r.id, atMultiplier });
       applySettled(data);
     } catch (e) {
       toast.error(apiError(e));
       void poll();
+    } finally {
+      cashoutInFlight.current = false;
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   const onAction = () => {

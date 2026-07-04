@@ -256,7 +256,7 @@ const ru = {
     turboRunning: 'Турбо-раунд…',
     autoFiring: 'Авто-кэшаут…',
     survived: 'Выжил ✓',
-    busted: 'Блюванул ✗',
+    busted: 'Блеванул ✗',
     waiting: 'Раунд идёт…',
     nextBet: 'Следующая ставка…',
     turboNeedsAuto: 'Турбо: включи авто-кэшаут и укажи ×',

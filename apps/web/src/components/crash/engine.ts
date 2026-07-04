@@ -535,16 +535,13 @@ export interface CrashEngineOptions {
       this._lagMs = this._crashKnown ? 0 : RENDER_LAG_MS;
       this.crashPoint = this.mode === 'scripted' ? MAXMULT
         : (serverCrashPoint != null ? serverCrashPoint : MAXMULT);
-      // турбо-прокрутка возможна только с известным исходом (мгновенный ответ сервера)
+      // Турбо: исход известен сразу — показываем финальный икс МГНОВЕННО, без
+      // паузы-интриги и без «…». Раунд тут же резолвится в update() (_fastHold=0,
+      // _hideMult=false остаются из resetRound), баланс больше не опережает икс.
       if (this.fastMode && this._crashKnown) {
-        // турбо: персонаж сразу на финальной стадии; короткая интрига — число скрыто и раскроется вместе с результатом
         this.mult = this.crashPoint;
-        this._fastHold = 0.45;
-        this._hideMult = true;
         this._prevStage = stageIndexFor(this.mult);
         this._drinkT = 0.4;
-        const nowMs = performance.now();
-        this._bubble = { text: PHRASES[(Math.random() * PHRASES.length) | 0], born: nowMs, until: nowMs + 3400 };
       }
       this.phase = 'running'; this.phaseStart = performance.now() - (elapsedMs > 0 ? elapsedMs : 0);
       this.onEvent('roundStart', this.crashPoint);

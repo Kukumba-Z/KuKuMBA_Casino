@@ -40,7 +40,22 @@ export function CrashScene({
     e.setSound(sound);
     e.setFast(!!fast);
     e.start();
-    return () => e.destroy();
+    // Music should start on entry, not only once a bet is placed. Browsers gate
+    // audio behind a user gesture, so try right away (works if the session is
+    // already unlocked) and otherwise arm it on the first interaction anywhere.
+    e.resumeAudio();
+    const unlock = () => {
+      e.resumeAudio();
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+      e.destroy();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

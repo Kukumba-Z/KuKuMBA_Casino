@@ -228,7 +228,14 @@ export class CrashService {
     // Live round: arm the proactive settle-and-push at the moment the clock
     // decides the outcome (crashPoint stays server-side — only used here).
     if (!result.settled) {
-      this.armSettleTimer(result.bet.id, result.round.createdAt, result.crashPoint, autoCashout);
+      this.armSettleTimer(
+        result.bet.id,
+        result.round.id,
+        result.round.userId,
+        result.round.createdAt,
+        result.crashPoint,
+        autoCashout,
+      );
     }
 
     // Per-round bookkeeping: counters, lifetime stats, history prune (fire & forget).
@@ -409,11 +416,16 @@ export class CrashService {
    * idempotent, row-locked path shared with polls/sweeper/cashout, so a timer
    * firing next to any of them is a harmless no-op.
    */
-  private armSettleTimer(betId: string, createdAt: Date, crashPoint: number, autoCashout: number | null) {
-    const settleAtSec =
-      autoCashout && autoCashoutWins(autoCashout, crashPoint)
-        ? secondsToReach(autoCashout)
-        : secondsToReach(crashPoint);
+  private armSettleTimer(
+    betId: string,
+    roundId: string,
+    userId: string,
+    createdAt: Date,
+    crashPoint: number,
+    autoCashout: number | null,
+  ) {
+    const winsAuto = !!(autoCashout && autoCashoutWins(autoCashout, crashPoint));
+    const settleAtSec = winsAuto ? secondsToReach(autoCashout!) : secondsToReach(crashPoint);
     // +40ms guard so the elapsed clock has definitely crossed the point.
     const delay = Math.max(0, settleAtSec * 1000 - (Date.now() - createdAt.getTime()) + 40);
     this.clearSettleTimer(betId);
@@ -421,6 +433,19 @@ export class CrashService {
       betId,
       setTimeout(() => {
         this.settleTimers.delete(betId);
+        // Reveal a LOSS to the scene at once: the crash point is fixed and a loss
+        // moves no money (the stake was already taken), so the number can land on
+        // the true crash without waiting for the settlement's DB work. Wins keep
+        // their own reveal path (auto-cashout poll / post-commit push) so no
+        // payout ever shows before the balance reflects it.
+        if (!winsAuto) {
+          this.realtime.toUser(userId, 'crash:settle', {
+            roundId,
+            status: 'LOST',
+            crashPoint,
+            multiplier: 0,
+          });
+        }
         void this.settleBetById(betId);
       }, delay),
     );
