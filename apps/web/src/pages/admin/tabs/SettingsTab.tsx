@@ -9,10 +9,11 @@ export function SettingsTab() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['adm-set'], queryFn: async () => (await api.get('/admin/settings')).data });
-  // The roulette's live RTP is the game row's column — the engine, payouts and
-  // the in-game info/fairness panel all read it. Edit it here (not the AppSetting,
+  // A game's live RTP is its Game-row column — the engine, payouts and the
+  // in-game info/fairness panel all read it. Edit it here (not the AppSetting,
   // which the per-game column shadows).
   const { data: roul } = useQuery({ queryKey: ['adm-roulette'], queryFn: async () => (await api.get('/games/roulette')).data });
+  const { data: crash } = useQuery({ queryKey: ['adm-crash'], queryFn: async () => (await api.get('/games/crash')).data });
   const [key, setKey] = useState('game.rtp');
   const [value, setValue] = useState('0.973');
   const save = async (k = key, raw = value) => {
@@ -26,13 +27,13 @@ export function SettingsTab() {
       toast.error(apiError(e));
     }
   };
-  const saveRtp = async (raw: string) => {
+  const saveGameRtp = async (gameKey: 'roulette' | 'crash', label: string, raw: string) => {
     try {
-      const { data: g } = await api.patch('/admin/games/roulette', { rtp: Number(raw) });
-      qc.invalidateQueries({ queryKey: ['adm-roulette'] });
-      qc.invalidateQueries({ queryKey: ['roulette-info'] });
+      const { data: g } = await api.patch(`/admin/games/${gameKey}`, { rtp: Number(raw) });
+      qc.invalidateQueries({ queryKey: [`adm-${gameKey}`] });
+      qc.invalidateQueries({ queryKey: [`${gameKey}-info`] });
       qc.invalidateQueries({ queryKey: ['games'] });
-      toast.success(`${t('admin.settings.rouletteRtp')} → ${(g.rtp * 100).toFixed(2)}%`);
+      toast.success(`${label} → ${(g.rtp * 100).toFixed(2)}%`);
     } catch (e) {
       toast.error(apiError(e));
     }
@@ -51,7 +52,21 @@ export function SettingsTab() {
             min="0.5"
             max="1"
             defaultValue={roul?.rtp ?? 0.973}
-            onBlur={(e) => saveRtp(e.target.value)}
+            onBlur={(e) => saveGameRtp('roulette', t('admin.settings.rouletteRtp'), e.target.value)}
+          />
+          <p className="mt-1 text-xs text-white/40">{t('admin.settings.rtpHint')}</p>
+        </div>
+        <div>
+          <label className="label">{t('admin.settings.crashRtp')}</label>
+          <input
+            key={crash?.rtp}
+            className="input w-40"
+            type="number"
+            step="0.001"
+            min="0.5"
+            max="1"
+            defaultValue={crash?.rtp ?? 0.99}
+            onBlur={(e) => saveGameRtp('crash', t('admin.settings.crashRtp'), e.target.value)}
           />
           <p className="mt-1 text-xs text-white/40">{t('admin.settings.rtpHint')}</p>
         </div>

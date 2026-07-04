@@ -51,7 +51,13 @@ export class UsersService {
     const take = Math.max(1, Math.min(opts.take ?? 50, 50));
     const rounds = await this.prisma.gameRound.findMany({
       // Real-money rounds only — demo play is test chips, kept out of history.
-      where: { userId, mode: 'REAL', ...(opts.game ? { game: { key: opts.game } } : {}) },
+      // Unsettled rounds (a crash bet still in the air) show up once they settle.
+      where: {
+        userId,
+        mode: 'REAL',
+        bets: { none: { status: 'PENDING' } },
+        ...(opts.game ? { game: { key: opts.game } } : {}),
+      },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: take + 1, // peek one ahead to know if there's a next page
       ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),

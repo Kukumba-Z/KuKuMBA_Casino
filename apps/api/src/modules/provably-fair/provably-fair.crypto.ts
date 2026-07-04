@@ -45,3 +45,37 @@ export function rouletteResult(
 ): number {
   return rouletteOutcome(floatFromSeeds(serverSeed, clientSeed, nonce));
 }
+
+/** Crash multipliers are capped: reaching the cap is the "jackpot" finale. */
+export const CRASH_MAX_MULT = 1_000_000;
+
+/**
+ * Fair float -> crash point. Same uniform float source as roulette, different
+ * mapping:  P(crash ≥ m) = (1 − edge) / m,  so the expected return of cashing
+ * out at ANY target m is m · (1 − edge) / m = 1 − edge — a flat house edge,
+ * exactly like roulette's `multiplierFor = RTP / probability`.
+ *
+ *  - u < edge  -> instant crash at 1.00 (probability = house edge)
+ *  - otherwise -> floor((1 − edge) / (1 − u), 2 dp), capped at CRASH_MAX_MULT
+ */
+export function crashFromFloat(
+  float: number,
+  houseEdge = 0.01,
+  cap = CRASH_MAX_MULT,
+): number {
+  const edge = houseEdge >= 0 && houseEdge < 1 ? houseEdge : 0.01;
+  if (!(float >= 0 && float < 1)) float = 0;
+  if (float < edge) return 1.0;
+  const raw = (1 - edge) / (1 - float);
+  return Math.min(cap, Math.floor(raw * 100) / 100);
+}
+
+/** Full helper: seed chain -> crash point (mirrors rouletteResult). */
+export function crashResult(
+  serverSeed: string,
+  clientSeed: string,
+  nonce: number,
+  houseEdge = 0.01,
+): number {
+  return crashFromFloat(floatFromSeeds(serverSeed, clientSeed, nonce), houseEdge);
+}

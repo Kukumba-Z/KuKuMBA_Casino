@@ -546,7 +546,7 @@ function Footer() {
           <Logo />
           <p className="mt-3 max-w-xs text-sm text-white/50">{t('brand.tagline')}. Играйте ответственно.</p>
         </div>
-        <FooterCol title={t('nav.lobby')} links={[['/', t('nav.lobby')], ['/games', t('nav.games')], ['/roulette', t('nav.roulette')], ['/bonuses', t('nav.bonuses')]]} />
+        <FooterCol title={t('nav.lobby')} links={[['/', t('nav.lobby')], ['/games', t('nav.games')], ['/roulette', t('nav.roulette')], ['/crash', t('nav.crash')], ['/bonuses', t('nav.bonuses')]]} />
         <FooterCol title={t('nav.profile')} links={[['/wallet', t('nav.wallet')], ['/profile', t('nav.profile')], ['/notifications', t('nav.notifications')], ['/support', t('nav.support')]]} />
         <FooterCol
           title={t('footer.info')}

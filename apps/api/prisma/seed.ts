@@ -127,18 +127,23 @@ async function main() {
       descriptionRu: 'Live game-show с бонус-раундами. RTP 95.08%. Скоро у нас.',
       descriptionEn: 'Live game-show with bonus rounds. RTP 95.08%. Coming soon.',
     },
-    // ── Coming soon — KuKuMBA mini-games ─────────────────────────────────
+    // ── KuKuMBA mini-games ────────────────────────────────────────────────
     {
       key: 'crash',
-      name: 'KuKuMBA Crash',
+      name: 'VODKA WIN Crash',
       type: 'crash',
       category: 'MINIGAME',
       provider: 'KuKuMBA Originals',
-      status: 'COMING_SOON',
+      status: 'LIVE',
+      route: '/crash',
       rtp: 0.99,
-      sortOrder: 30,
-      descriptionRu: 'Забери выигрыш до краша ракеты. Provably-fair, RTP 99%. Скоро у нас.',
-      descriptionEn: 'Cash out before the rocket crashes. Provably-fair, RTP 99%. Coming soon.',
+      minBet: 0.01,
+      maxBet: 100000,
+      sortOrder: 1,
+      descriptionRu:
+        'Crash-игра: множитель растёт, пока герой держится — забери выигрыш до того, как его развезёт. До ×1 000 000. Provably-fair (тот же сид-чейн, что у рулетки), RTP 99% — настраивается.',
+      descriptionEn:
+        'Crash game: the multiplier climbs while the hero holds on — cash out before he keels over. Up to ×1,000,000. Provably-fair (same seed chain as the roulette), 99% RTP — configurable.',
     },
     {
       key: 'dice',
@@ -342,8 +347,8 @@ async function main() {
   const pages: Array<{ key: string; ru: { t: string; b: string }; en: { t: string; b: string } }> = [
     {
       key: 'about',
-      ru: { t: 'О KuKuMBA', b: 'KuKuMBA — няшное, но серьёзное казино: честная provably-fair рулетка (RTP 97.3%), а скоро — слоты и live-игры от ведущих провайдеров. Мы верим в прозрачность, заботу об игроках и магию единорогов.' },
-      en: { t: 'About KuKuMBA', b: 'KuKuMBA is a cute-yet-serious casino: a fair provably-fair roulette (97.3% RTP), with slots and live games from leading providers coming soon. We believe in transparency, player care, and unicorn magic.' },
+      ru: { t: 'О KuKuMBA', b: 'KuKuMBA — няшное, но серьёзное казино: честная provably-fair рулетка (RTP 97.3%) и crash-игра VODKA WIN (RTP 99%), а скоро — слоты и live-игры от ведущих провайдеров. Мы верим в прозрачность, заботу об игроках и магию единорогов.' },
+      en: { t: 'About KuKuMBA', b: 'KuKuMBA is a cute-yet-serious casino: a fair provably-fair roulette (97.3% RTP) and the VODKA WIN crash game (99% RTP), with slots and live games from leading providers coming soon. We believe in transparency, player care, and unicorn magic.' },
     },
     {
       key: 'responsible-gaming',

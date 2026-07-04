@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import {
+  crashResult,
   floatFromSeeds,
   genClientSeed,
   genServerSeed,
@@ -120,6 +121,10 @@ export class ProvablyFairService {
       serverSeedHash: hashServerSeed(serverSeed),
       float: floatFromSeeds(serverSeed, clientSeed, nonce),
       outcome: rouletteResult(serverSeed, clientSeed, nonce),
+      // Crash point at the default 1% edge. For a round played at another RTP,
+      // recompute from `float`: crash = min(1e6, floor(rtp / (1 - float), 2dp)),
+      // instant 1.00 when float < 1 - rtp.
+      crash: crashResult(serverSeed, clientSeed, nonce),
     };
   }
 }

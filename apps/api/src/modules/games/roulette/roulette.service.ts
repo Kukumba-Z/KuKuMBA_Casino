@@ -319,7 +319,8 @@ export class RouletteService implements OnModuleInit {
   private async recentFromDb(limit = 15) {
     const rounds = await this.prisma.gameRound.findMany({
       // Public live feed shows real-money rounds only (demo play stays private).
-      where: { mode: 'REAL' },
+      // Unsettled rounds (a crash bet still in the air) are excluded too.
+      where: { mode: 'REAL', bets: { none: { status: 'PENDING' } } },
       orderBy: { createdAt: 'desc' },
       take: Math.min(limit, 15),
       include: {
