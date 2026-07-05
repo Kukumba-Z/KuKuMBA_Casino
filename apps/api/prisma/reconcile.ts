@@ -19,6 +19,19 @@ async function main() {
   });
   if (minBet.count) console.log(`reconcile: roulette minBet 0.1 → 0.01 (${minBet.count} row)`);
 
+  // Game descriptions used to advertise that RTP is admin-tunable
+  // ("— настраивается" / "— configurable"); that's an operator detail, not
+  // player-facing copy, so strip it from the shield/info dialog text. Scoped by
+  // substring (admin-edited descriptions without it are untouched) and
+  // idempotent — a second run finds nothing left to replace.
+  const desc = await prisma.$executeRawUnsafe(
+    `UPDATE "Game"
+        SET "descriptionRu" = REPLACE("descriptionRu", ' — настраивается', ''),
+            "descriptionEn" = REPLACE("descriptionEn", ' — configurable', '')
+      WHERE "descriptionRu" LIKE '% — настраивается%' OR "descriptionEn" LIKE '% — configurable%'`,
+  );
+  if (desc) console.log(`reconcile: stripped "RTP configurable" note from ${desc} game description(s)`);
+
   // Bonuses are now REAL money only. The original seed shipped welcome/nodep as
   // DEMO grants; convert those exact rows to their new USDT values. Rows an admin
   // already moved off DEMO are left untouched.

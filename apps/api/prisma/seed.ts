@@ -141,9 +141,9 @@ async function main() {
       maxBet: 100000,
       sortOrder: 1,
       descriptionRu:
-        'Crash-игра: множитель растёт, пока герой держится — забери выигрыш до того, как его развезёт. До ×1 000 000. Provably-fair (тот же сид-чейн, что у рулетки), RTP 99% — настраивается.',
+        'Crash-игра: множитель растёт, пока герой держится — забери выигрыш до того, как его развезёт. До ×1 000 000. Provably-fair (тот же сид-чейн, что у рулетки), RTP 99%.',
       descriptionEn:
-        'Crash game: the multiplier climbs while the hero holds on — cash out before he keels over. Up to ×1,000,000. Provably-fair (same seed chain as the roulette), 99% RTP — configurable.',
+        'Crash game: the multiplier climbs while the hero holds on — cash out before he keels over. Up to ×1,000,000. Provably-fair (same seed chain as the roulette), 99% RTP.',
     },
     {
       key: 'ponyjack',
@@ -158,9 +158,9 @@ async function main() {
       maxBet: 100000,
       sortOrder: 2,
       descriptionRu:
-        'Блэкджек с пони: собери 21, дилер останавливается на всех 17. Понижек (21 с раздачи) платит 3:2, доступны дабл и сплит. Provably-fair (бесконечная колода на том же сид-чейне), RTP 99.5% при оптимальной игре — настраивается.',
+        'Блэкджек с пони: собери 21, дилер останавливается на всех 17. Понижек (21 с раздачи) платит 3:2, доступны дабл и сплит. Provably-fair (бесконечная колода на том же сид-чейне), RTP 99.5% при оптимальной игре.',
       descriptionEn:
-        'Blackjack with ponies: make 21, the dealer stands on all 17s. A Ponyjack (natural 21) pays 3:2; double and split available. Provably-fair (infinite shoe on the same seed chain), 99.5% RTP with optimal play — configurable.',
+        'Blackjack with ponies: make 21, the dealer stands on all 17s. A Ponyjack (natural 21) pays 3:2; double and split available. Provably-fair (infinite shoe on the same seed chain), 99.5% RTP with optimal play.',
     },
     {
       key: 'dice',
@@ -187,9 +187,9 @@ async function main() {
       maxBet: 100000,
       sortOrder: 3,
       descriptionRu:
-        'Роняй шар и смотри, как он скачет по пинам к множителям. Три уровня риска (низкий/средний/высокий) и от 8 до 16 рядов: чем ближе к краю — тем жирнее икс (до ×1000), в центре — скромнее. Полностью случайно и честно (provably-fair, тот же сид-чейн, что у рулетки), RTP 99% — настраивается.',
+        'Роняй шар и смотри, как он скачет по пинам к множителям. Три уровня риска (низкий/средний/высокий) и от 8 до 16 рядов: чем ближе к краю — тем жирнее икс (до ×1000), в центре — скромнее. Полностью случайно и честно (provably-fair, тот же сид-чейн, что у рулетки), RTP 99%.',
       descriptionEn:
-        'Drop the ball and watch it bounce down the pins into a multiplier slot. Three risk levels (low/medium/high) and 8 to 16 rows: the closer to the edge, the fatter the multiplier (up to ×1000); the centre pays modestly. Fully random and fair (provably-fair, same seed chain as the roulette), 99% RTP — configurable.',
+        'Drop the ball and watch it bounce down the pins into a multiplier slot. Three risk levels (low/medium/high) and 8 to 16 rows: the closer to the edge, the fatter the multiplier (up to ×1000); the centre pays modestly. Fully random and fair (provably-fair, same seed chain as the roulette), 99% RTP.',
     },
   ];
   for (const g of games) {
