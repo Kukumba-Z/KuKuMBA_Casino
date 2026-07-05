@@ -1,8 +1,9 @@
-import { Beer, CircleDot, Club, Dices, Gamepad2, Gem, Radio, ShieldCheck, Sparkles, type LucideIcon } from 'lucide-react';
+import { Beer, CircleDot, Club, Dices, Gamepad2, Gem, Radio, ShieldCheck, Sparkles, Triangle, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import type { Game } from '../lib/hooks';
 import { CrashCardArt } from './crash/CrashCardArt';
+import { PlinkoCardArt } from './plinko/PlinkoCardArt';
 import { PonyjackCardArt } from './ponyjack/PonyjackCardArt';
 import { RouletteWheel } from './RouletteWheel';
 
@@ -25,6 +26,7 @@ export function categoryMeta(category: string) {
 const GAME: Record<string, { icon: LucideIcon; grad: string }> = {
   crash: { icon: Beer, grad: 'from-sun/30 to-roul-red/30' },
   ponyjack: { icon: Club, grad: 'from-bubble/30 to-lav/30' },
+  plinko: { icon: Triangle, grad: 'from-sky/30 to-bubble/30' },
 };
 
 export function gameMeta(gameKey?: string) {
@@ -49,6 +51,9 @@ function GameArt({ game }: { game: Game }) {
   }
   if (game.key === 'ponyjack') {
     return <PonyjackCardArt />;
+  }
+  if (game.key === 'plinko') {
+    return <PlinkoCardArt />;
   }
   if (game.category === 'ROULETTE') {
     return (

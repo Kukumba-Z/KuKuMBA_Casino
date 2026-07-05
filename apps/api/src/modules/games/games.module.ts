@@ -5,6 +5,8 @@ import { CrashController } from './crash/crash.controller';
 import { CrashService } from './crash/crash.service';
 import { GamesController } from './games.controller';
 import { GamesService } from './games.service';
+import { PlinkoController } from './plinko/plinko.controller';
+import { PlinkoService } from './plinko/plinko.service';
 import { PonyjackController } from './ponyjack/ponyjack.controller';
 import { PonyjackService } from './ponyjack/ponyjack.service';
 import { RouletteController } from './roulette/roulette.controller';
@@ -12,8 +14,8 @@ import { RouletteService } from './roulette/roulette.service';
 
 @Module({
   imports: [LeaderboardsModule, StatsModule],
-  controllers: [GamesController, RouletteController, CrashController, PonyjackController],
-  providers: [GamesService, RouletteService, CrashService, PonyjackService],
-  exports: [GamesService, RouletteService, CrashService, PonyjackService],
+  controllers: [GamesController, RouletteController, CrashController, PonyjackController, PlinkoController],
+  providers: [GamesService, RouletteService, CrashService, PonyjackService, PlinkoService],
+  exports: [GamesService, RouletteService, CrashService, PonyjackService, PlinkoService],
 })
 export class GamesModule {}

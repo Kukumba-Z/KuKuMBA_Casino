@@ -180,11 +180,16 @@ async function main() {
       type: 'plinko',
       category: 'MINIGAME',
       provider: 'KuKuMBA Originals',
-      status: 'COMING_SOON',
+      status: 'LIVE',
+      route: '/plinko',
       rtp: 0.99,
-      sortOrder: 32,
-      descriptionRu: 'Роняй шар и лови множители. Provably-fair, RTP 99%. Скоро у нас.',
-      descriptionEn: 'Drop the ball and catch multipliers. Provably-fair, RTP 99%. Coming soon.',
+      minBet: 0.01,
+      maxBet: 100000,
+      sortOrder: 3,
+      descriptionRu:
+        'Роняй шар и смотри, как он скачет по пинам к множителям. Три уровня риска (низкий/средний/высокий) и от 8 до 16 рядов: чем ближе к краю — тем жирнее икс (до ×1000), в центре — скромнее. Полностью случайно и честно (provably-fair, тот же сид-чейн, что у рулетки), RTP 99% — настраивается.',
+      descriptionEn:
+        'Drop the ball and watch it bounce down the pins into a multiplier slot. Three risk levels (low/medium/high) and 8 to 16 rows: the closer to the edge, the fatter the multiplier (up to ×1000); the centre pays modestly. Fully random and fair (provably-fair, same seed chain as the roulette), 99% RTP — configurable.',
     },
   ];
   for (const g of games) {
