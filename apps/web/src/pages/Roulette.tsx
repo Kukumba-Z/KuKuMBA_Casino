@@ -7,6 +7,7 @@ import { GameInfoModal } from '../components/GameInfoModal';
 import { GameLayout } from '../components/GameLayout';
 import { RouletteWheel, SPIN_MS } from '../components/RouletteWheel';
 import api, { apiError } from '../lib/api';
+import { debitLocalBalance } from '../lib/balances';
 import { betLimits, clampStake, roundStake } from '../lib/bets';
 import { fmt, useBalances, useCurrencies } from '../lib/hooks';
 import { setSoundEnabled, sfx } from '../lib/sound';
@@ -99,6 +100,9 @@ export default function Roulette() {
     setBusy(true);
     try {
       const { data } = await api.post('/games/roulette/play', { currency, mode, bets: apiBets });
+      // Show the stake debit at once, while the wheel is still spinning; the true
+      // settled balance is revealed when it lands (invalidate below).
+      debitLocalBalance(qc, currency, mode, total);
       // Quick play resolves instantly; otherwise the wheel animates for SPIN_MS.
       const dur = quick ? 0 : SPIN_MS;
       // Start the wheel spinning toward the outcome…

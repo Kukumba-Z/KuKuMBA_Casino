@@ -8,6 +8,7 @@ import { GameLayout } from '../components/GameLayout';
 import { PlinkoScene } from '../components/plinko/PlinkoScene';
 import { fmtMult, PlinkoEngine, type PlinkoDropInfo } from '../components/plinko/engine';
 import api, { apiError } from '../lib/api';
+import { debitLocalBalance } from '../lib/balances';
 import { betLimits, clampStake } from '../lib/bets';
 import { fmt, useBalances, useCurrencies } from '../lib/hooks';
 import { useAuth } from '../store/auth';
@@ -104,6 +105,9 @@ export default function Plinko() {
     setBusy(true);
     try {
       const { data } = await api.post('/games/plinko/play', { stake, currency, mode, risk, rows });
+      // Show the stake debit at once (100 → 90); the true settled balance is
+      // revealed when the ball lands (onLand invalidates ['balances']).
+      debitLocalBalance(qc, currency, mode, stake);
       setFlying((f) => f + 1);
       // Animate the exact server path; balance refresh happens on landing.
       engineRef.current?.drop(data.path, data.slot, data.multiplier, { payout: data.payout });

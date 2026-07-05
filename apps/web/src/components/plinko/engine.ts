@@ -235,16 +235,21 @@ export class PlinkoEngine {
   /** Compute pin grid + slot geometry for the current size/rows. */
   private layout() {
     const rows = this.rows;
-    this.slotH = clamp(this.H * 0.11, 22, 40);
-    this.topPad = clamp(this.H * 0.05, 12, 30);
-    const gridH = this.H - this.slotH - this.topPad - 8;
-    this.rowH = gridH / rows;
-    // spacing: fit the widest (bottom) pin row of rows+2 pins with side margins
+    this.slotH = clamp(this.H * 0.1, 20, 38);
+    const basePad = clamp(this.H * 0.04, 10, 22);
+    const gridH = this.H - this.slotH - basePad * 2;
+    // Horizontal pin spacing fits the widest (bottom) row within side margins.
     const usableW = this.W * 0.94;
-    this.gap = Math.min(usableW / (rows + 1), this.rowH * 1.18);
+    this.gap = usableW / (rows + 1);
+    // The vertical row pitch never exceeds the horizontal spacing, so many-pin
+    // boards (16 pins especially) stay proportional instead of stretching tall;
+    // whatever vertical space is left over is used to centre the board.
+    this.rowH = Math.min(gridH / rows, this.gap * 1.04);
     this.pinR = clamp(this.gap * 0.12, 2, 5);
     this.ballR = clamp(this.gap * 0.3, 5, 12);
     this.cx = this.W / 2;
+    const boardH = rows * this.rowH + this.slotH;
+    this.topPad = clamp((this.H - boardH) * 0.5, basePad, this.H);
     this.slotTop = this.topPad + rows * this.rowH + 2;
 
     // Pins: row i has i+3 pins, centred (top row = 3 pins, like the reference).
@@ -297,7 +302,8 @@ export class PlinkoEngine {
 
     // Build the exact contact polyline (Galton coordinates).
     const pts: { x: number; y: number }[] = [];
-    pts.push({ x: this.cx, y: this.topPad - this.rowH * 0.85 }); // entry, above row 0
+    // entry, just above row 0 (kept on-canvas even when the board is centred)
+    pts.push({ x: this.cx, y: this.topPad - Math.min(this.rowH * 0.85, this.topPad - 2) });
     rights = 0;
     for (let i = 0; i < rows; i++) {
       const x = this.cx + (2 * rights - i) * (this.gap / 2);
@@ -309,8 +315,8 @@ export class PlinkoEngine {
       if (path[i]) rights++;
     }
     pts.push({ x: this.slotX(landSlot), y: this.slotTop + this.slotH * 0.5 }); // land
-    // Slower, more thrilling fall — the ball beats side-to-side down the pins.
-    const segMs = 130;
+    // Slow, thrilling fall — the ball beats hard side-to-side down the pins.
+    const segMs = 200;
     this.balls.push({
       pts,
       seg: 0, // current segment index
@@ -396,18 +402,21 @@ export class PlinkoEngine {
       const a = b.pts[b.seg];
       const c = b.pts[b.seg + 1];
       const tt = clamp(b.t, 0, 1);
-      // easeOutBack on X — the ball overshoots each pin a touch then settles,
-      // so it visibly ricochets side-to-side (endpoints stay server-exact).
-      const s = 0.9;
-      const back = 1 + (s + 1) * Math.pow(tt - 1, 3) + s * Math.pow(tt - 1, 2);
-      b.x = lerp(a.x, c.x, back);
-      // livelier hop between contacts — it springs up like a real bounce
-      const hop = this.rowH * 0.28;
+      const ease = tt * tt * (3 - 2 * tt); // smoothstep along the contact line
+      // Lateral sway: the ball bulges out in its travel direction mid-hop —
+      // nearly a full pin over — so it visibly whips side-to-side down the board
+      // (a run of same-direction bounces reads as "racing toward the edge", a
+      // late reversal as the last-second cut back). Endpoints stay server-exact.
+      const dir = Math.sign(c.x - a.x);
+      const sway = dir * this.gap * 0.6 * Math.sin(Math.PI * tt);
+      b.x = clamp(lerp(a.x, c.x, ease) + sway, this.ballR, this.W - this.ballR);
+      // tall springy bounce arc between contacts
+      const hop = this.rowH * 0.5;
       b.y = lerp(a.y, c.y, tt) - Math.sin(Math.PI * tt) * hop;
-      // neon trail
+      // neon trail — a touch longer so the slow arc glows
       b.trail.push({ x: b.x, y: b.y, life: 1 });
-      if (b.trail.length > 14) b.trail.shift();
-      for (const tr of b.trail) tr.life -= dt / 240;
+      if (b.trail.length > 20) b.trail.shift();
+      for (const tr of b.trail) tr.life -= dt / 300;
     }
     this.balls = this.balls.filter((b) => !(b.done && b.trail.every((t) => t.life <= 0)));
 

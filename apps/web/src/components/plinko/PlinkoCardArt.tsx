@@ -1,10 +1,11 @@
 /** KuKuMBA Plinko — bespoke lobby-card art (like the crash drunk / roulette wheel
- *  thumbs). A static snapshot of the board: a glowing pastel ball mid-drop over a
- *  peg triangle, landing toward a hot edge slot. Palette mirrors the engine. */
+ *  thumbs). A static snapshot of the neon board: a glowing cyan ball whipping
+ *  side-to-side down the peg triangle toward a hot edge slot. Palette + ball
+ *  mirror the canvas engine (glossy neon sphere, heat-map slots). */
 export function PlinkoCardArt() {
   const pins: [number, number][] = [];
   const rows = 6;
-  const top = 26;
+  const top = 24;
   const cx = 100;
   const gap = 15;
   const rh = 15;
@@ -14,7 +15,8 @@ export function PlinkoCardArt() {
       pins.push([cx + (j - (count - 1) / 2) * gap, top + i * rh]);
     }
   }
-  const slots = ['#E5484D', '#FF8FD0', '#FFB25C', '#7EE7C7', '#7CC4FF', '#7EE7C7', '#FFB25C', '#FF8FD0', '#E5484D'];
+  // heat map: cool periwinkle centre → mint → orange → molten-red edges
+  const slots = ['#E5484D', '#FF9F5C', '#7EE7C7', '#6C7BE0', '#7EE7C7', '#FF9F5C', '#E5484D'];
   const slotY = top + rows * rh + 6;
   const slotW = gap * 0.86;
 
@@ -26,11 +28,23 @@ export function PlinkoCardArt() {
           <stop offset="0.55" stopColor="#120e26" />
           <stop offset="1" stopColor="#0b0817" />
         </linearGradient>
-        <radialGradient id="plk-ball" cx="0.38" cy="0.35" r="0.75">
-          <stop offset="0" stopColor="#FFF4CE" />
-          <stop offset="0.5" stopColor="#FFD86E" />
-          <stop offset="1" stopColor="#F0A93C" />
+        <radialGradient id="plk-ball" cx="0.36" cy="0.32" r="0.8">
+          <stop offset="0" stopColor="#FFFFFF" />
+          <stop offset="0.32" stopColor="#C6F6FF" />
+          <stop offset="0.72" stopColor="#45E3F5" />
+          <stop offset="1" stopColor="#1E9FC4" />
         </radialGradient>
+        <linearGradient id="plk-sheen" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="rgba(255,255,255,0.28)" />
+          <stop offset="1" stopColor="rgba(255,255,255,0)" />
+        </linearGradient>
+        <filter id="plk-glow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="3.2" result="b" />
+          <feMerge>
+            <feMergeNode in="b" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
         <radialGradient id="plk-vig" cx="0.5" cy="0.42" r="0.75">
           <stop offset="0.6" stopColor="rgba(0,0,0,0)" />
           <stop offset="1" stopColor="rgba(0,0,0,0.4)" />
@@ -47,26 +61,34 @@ export function PlinkoCardArt() {
         <circle key={i} cx={x} cy={y} r="2" fill="rgba(214,208,242,0.85)" />
       ))}
 
-      {/* slots */}
-      {slots.map((c, s) => (
-        <g key={s}>
-          <rect x={cx + (s - 4) * gap - slotW / 2} y={slotY} width={slotW} height="16" rx="3" fill={c} opacity="0.92" />
-        </g>
-      ))}
-      {/* highlighted hot edge slot */}
-      <rect x={cx + (0 - 4) * gap - slotW / 2 - 1} y={slotY - 2} width={slotW + 2} height="20" rx="4" fill="none" stroke="#FFE7A0" strokeWidth="1.6" opacity="0.9" />
+      {/* slots — glossy heat-map cells with a top sheen */}
+      {slots.map((c, s) => {
+        const x = cx + (s - 3) * gap - slotW / 2;
+        return (
+          <g key={s}>
+            <rect x={x} y={slotY} width={slotW} height="16" rx="3.5" fill={c} opacity="0.95" />
+            <rect x={x + slotW * 0.12} y={slotY + 1.4} width={slotW * 0.76} height="3.2" rx="1.6" fill="rgba(255,255,255,0.28)" />
+          </g>
+        );
+      })}
+      {/* highlighted hot edge slot the ball is racing toward */}
+      <rect x={cx + 3 * gap - slotW / 2 - 1.5} y={slotY - 2} width={slotW + 3} height="20" rx="4" fill="none" stroke="#FF9FB0" strokeWidth="1.6" opacity="0.9" />
 
-      {/* trail + ball mid-drop */}
-      <circle cx="128" cy="60" r="4.5" fill="rgba(255,216,110,0.18)" />
-      <circle cx="132" cy="72" r="6" fill="rgba(255,216,110,0.28)" />
-      <g>
-        <circle cx="135" cy="86" r="8.5" fill="url(#plk-ball)" stroke="rgba(80,50,10,0.4)" strokeWidth="1.2" />
-        {/* cute face */}
-        <circle cx="132" cy="84.5" r="1.3" fill="#191430" />
-        <circle cx="138" cy="84.5" r="1.3" fill="#191430" />
-        <path d="M132 89c1.5 1.6 4.5 1.6 6 0" fill="none" stroke="#191430" strokeWidth="1" strokeLinecap="round" />
-        <circle cx="129.5" cy="87" r="1.4" fill="rgba(229,72,77,0.3)" />
-        <circle cx="140.5" cy="87" r="1.4" fill="rgba(229,72,77,0.3)" />
+      {/* neon zig-zag trail — the ball whipping side-to-side down the pins */}
+      <path
+        d="M100 20 L112 40 L96 58 L120 78 L138 96"
+        fill="none"
+        stroke="rgba(90,232,255,0.35)"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        filter="url(#plk-glow)"
+      />
+
+      {/* glossy neon ball mid-drop, leaning toward the edge */}
+      <g filter="url(#plk-glow)">
+        <circle cx="138" cy="96" r="8.5" fill="url(#plk-ball)" />
+        <ellipse cx="134.4" cy="92.4" rx="2.4" ry="1.7" fill="rgba(255,255,255,0.92)" transform="rotate(-34 134.4 92.4)" />
       </g>
 
       <rect width="200" height="150" fill="url(#plk-vig)" />
