@@ -638,6 +638,11 @@ const ru = {
     content: { keyPh: 'ключ (напр. terms)', titlePh: 'заголовок', bodyPh: 'текст (markdown)', locale: 'Язык', title: 'Заголовок' },
     settings: {
       rouletteRtp: 'RTP рулетки', crashRtp: 'RTP Crash', rtpHint: 'Доля 0–1 или % (напр. 97.3). Применяется к игре сразу.',
+      gameRtpTitle: 'RTP игр (наши оригиналы)',
+      gameRtpHint: 'У каждой игры свой RTP (колонка Game.rtp) — движок, выплаты и панель честности читают именно его. Меняется здесь и применяется сразу. Это единственный регулятор RTP: глобальная настройка game.rtp — лишь запасной дефолт для игр без своего значения.',
+      edge: 'преимущество',
+      advancedTitle: 'Прочие настройки (для продвинутых)',
+      advancedHint: 'Произвольная настройка (AppSetting); значения парсятся как JSON, если возможно. RTP игр задаётся выше — не через ключ game.rtp.',
       promoLimit: 'Промокодов в месяц / игрок', promoLimitHint: 'Лимит активаций промокодов на игрока за 30 дней (анти-абуз).',
       jsonHint: 'Ниже можно менять любую настройку; значения парсятся как JSON, если возможно.',
     },
@@ -1153,6 +1158,11 @@ const en: typeof ru = {
     content: { keyPh: 'key (e.g. terms)', titlePh: 'title', bodyPh: 'body (markdown)', locale: 'Locale', title: 'Title' },
     settings: {
       rouletteRtp: 'Roulette RTP', crashRtp: 'Crash RTP', rtpHint: 'Fraction 0–1 or % (e.g. 97.3). Applies to the game immediately.',
+      gameRtpTitle: 'Game RTP (our originals)',
+      gameRtpHint: 'Each game carries its own RTP (the Game.rtp column) — the engine, payouts and the fairness panel all read it. Editing here applies at once. This is the only RTP regulator; the global game.rtp setting is just a fallback default for games without one.',
+      edge: 'edge',
+      advancedTitle: 'Other settings (advanced)',
+      advancedHint: 'Arbitrary AppSetting; values are parsed as JSON when possible. Game RTP is set above — not via the game.rtp key.',
       promoLimit: 'Promo codes / month / player', promoLimitHint: 'Per-player promo redemptions per 30 days (anti-abuse).',
       jsonHint: 'Edit any setting below; values are parsed as JSON when possible.',
     },
