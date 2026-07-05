@@ -124,7 +124,7 @@ export function CrashCardArt() {
         textLength="150"
         lengthAdjust="spacingAndGlyphs"
       >
-        fucking vodka
+        FUCKING VODKA
       </text>
     </svg>
   );
