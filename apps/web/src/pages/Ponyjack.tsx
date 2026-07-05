@@ -9,7 +9,7 @@ import { PlayingCard } from '../components/ponyjack/PlayingCard';
 import api, { apiError } from '../lib/api';
 import { betLimits, clampStake } from '../lib/bets';
 import { fmt, useBalances, useCurrencies } from '../lib/hooks';
-import { sfx } from '../lib/sound';
+import { setSoundEnabled, sfx } from '../lib/sound';
 import { useAuth } from '../store/auth';
 import { useUI } from '../store/ui';
 import { toast } from '../store/toast';
@@ -59,6 +59,9 @@ export default function Ponyjack() {
   const qc = useQueryClient();
   const authed = !!useAuth((s) => s.accessToken);
   const { mode, currency, sound, toggleSound } = useUI();
+
+  // Keep the sound engine in sync with the persisted preference (as in Roulette).
+  useEffect(() => setSoundEnabled(sound), [sound]);
 
   const { data: info } = useQuery({ queryKey: ['ponyjack-info'], queryFn: async () => (await api.get('/games/ponyjack')).data });
   const { data: balances } = useBalances();
