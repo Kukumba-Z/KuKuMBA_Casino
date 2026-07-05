@@ -74,6 +74,15 @@ export const sfx = {
     blip(c, { freq: 220, dur: 0.14, type: 'triangle', gain: 0.16, at: dur });
   },
 
+  /** Snappy card-flick when a card is dealt or flipped. */
+  card() {
+    if (!enabled) return;
+    const c = audio();
+    if (!c) return;
+    blip(c, { freq: 980, dur: 0.028, type: 'triangle', gain: 0.09 });
+    blip(c, { freq: 430, dur: 0.055, type: 'triangle', gain: 0.12, at: 0.02 });
+  },
+
   /** Bright ascending arpeggio on a win. */
   win() {
     if (!enabled) return;

@@ -1,13 +1,15 @@
-import { Beer, CircleDot, Dices, Gamepad2, Gem, Radio, ShieldCheck, Sparkles, type LucideIcon } from 'lucide-react';
+import { Beer, CircleDot, Club, Dices, Gamepad2, Gem, Radio, ShieldCheck, Sparkles, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import type { Game } from '../lib/hooks';
 import { CrashCardArt } from './crash/CrashCardArt';
+import { PonyjackCardArt } from './ponyjack/PonyjackCardArt';
 import { RouletteWheel } from './RouletteWheel';
 
 /** Per-category visual identity (icon + gradient accent for the thumbnail). */
 const CATEGORY: Record<string, { icon: LucideIcon; grad: string; labelKey: string }> = {
   ROULETTE: { icon: CircleDot, grad: 'from-roul-red/30 to-lav/30', labelKey: 'games.catRoulette' },
+  CARDS: { icon: Club, grad: 'from-bubble/30 to-lav/30', labelKey: 'games.catCards' },
   SLOTS: { icon: Gem, grad: 'from-sun/30 to-bubble/30', labelKey: 'games.catSlots' },
   LIVE: { icon: Radio, grad: 'from-mint/30 to-sky/30', labelKey: 'games.catLive' },
   MINIGAME: { icon: Dices, grad: 'from-sky/30 to-lav/30', labelKey: 'games.catMinigame' },
@@ -22,6 +24,7 @@ export function categoryMeta(category: string) {
  *  generic category (crash is a drinking game, not "dice"). Keyed by Game.key. */
 const GAME: Record<string, { icon: LucideIcon; grad: string }> = {
   crash: { icon: Beer, grad: 'from-sun/30 to-roul-red/30' },
+  ponyjack: { icon: Club, grad: 'from-bubble/30 to-lav/30' },
 };
 
 export function gameMeta(gameKey?: string) {
@@ -43,6 +46,9 @@ function GameArt({ game }: { game: Game }) {
   }
   if (game.key === 'crash') {
     return <CrashCardArt />;
+  }
+  if (game.key === 'ponyjack') {
+    return <PonyjackCardArt />;
   }
   if (game.category === 'ROULETTE') {
     return (

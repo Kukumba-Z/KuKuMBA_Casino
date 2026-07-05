@@ -108,4 +108,17 @@
   .btn-crash-mute {
     @apply border border-white/10 bg-white/5 text-white/50;
   }
+
+  /* Ponyjack — the big deal button. Fixed height (like .crash-action): the
+     sub-label comes and goes, the block must never resize. */
+  .pj-deal {
+    @apply flex h-[72px] w-full select-none flex-col items-center justify-center gap-0.5 overflow-hidden rounded-2xl px-4 transition disabled:cursor-not-allowed;
+  }
+  .pj-deal-primary {
+    @apply bg-holo text-night shadow-glow hover:brightness-105;
+    background-size: 200% 200%;
+  }
+  .pj-deal-mute {
+    @apply border border-white/10 bg-white/5 text-white/50;
+  }
 }

@@ -9,7 +9,7 @@ import { Field } from '../shared/Field';
 import { Table } from '../shared/Table';
 import { useAct } from '../shared/useAct';
 
-const GAME_CATEGORIES = ['ROULETTE', 'SLOTS', 'LIVE', 'MINIGAME'];
+const GAME_CATEGORIES = ['ROULETTE', 'CARDS', 'SLOTS', 'LIVE', 'MINIGAME'];
 const EMPTY_GAME = {
   key: '', name: '', type: 'slots', category: 'SLOTS', provider: '', status: 'COMING_SOON',
   route: '', rtp: '0.96', sortOrder: '10', enabled: true, descriptionRu: '', descriptionEn: '',
