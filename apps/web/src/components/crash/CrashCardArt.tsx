@@ -49,13 +49,6 @@ export function CrashCardArt() {
       <path d="M92 10h16l-4 6h-8z" fill="#2a2440" />
       <path d="M96 16h8l26 54H70z" fill="url(#crash-cone)" />
 
-      {/* multiplier curve climbing away */}
-      <path d="M14 136C60 132 96 116 128 88S176 38 186 22" fill="none" stroke="#7EE7C7" strokeWidth="6" opacity="0.16" strokeLinecap="round" />
-      <path d="M14 136C60 132 96 116 128 88S176 38 186 22" fill="none" stroke="#7EE7C7" strokeWidth="2.4" strokeLinecap="round" />
-      <text x="150" y="26" fontFamily="Unbounded, system-ui, sans-serif" fontWeight="900" fontSize="15" fill="#7EE7C7" stroke="#191430" strokeWidth="3" paintOrder="stroke">
-        2.31×
-      </text>
-
       {/* floor */}
       <path d="M0 120h200" stroke="rgba(255,255,255,0.09)" strokeWidth="2" />
       <ellipse cx="100" cy="122" rx="34" ry="5" fill="rgba(0,0,0,0.32)" />
@@ -115,6 +108,24 @@ export function CrashCardArt() {
       <circle cx="63" cy="84" r="1.6" fill="rgba(124,196,255,0.45)" />
 
       <rect width="200" height="150" fill="url(#crash-vig)" />
+
+      {/* caption under the character */}
+      <text
+        x="100"
+        y="137"
+        textAnchor="middle"
+        fontFamily="Unbounded, system-ui, sans-serif"
+        fontWeight="900"
+        fontSize="13"
+        fill="#7EE7C7"
+        stroke="#0b0a1c"
+        strokeWidth="3.5"
+        paintOrder="stroke"
+        textLength="150"
+        lengthAdjust="spacingAndGlyphs"
+      >
+        fucking vodka
+      </text>
     </svg>
   );
 }
