@@ -15,12 +15,14 @@ import { floatFromSeeds } from '../../provably-fair/provably-fair.crypto';
  * nothing about the drop is rigged, the coin is fair, only the payout table
  * carries the edge.
  *
- * RTP is exactly configurable the same way roulette is ("only the payout table
- * carries the edge"). Each (risk, rows) has a canonical multiplier SHAPE whose
- * own binomial-weighted expected value is `baseRtp`; the live table is that
- * shape scaled by `rtp / baseRtp`, so the expected return of a drop is exactly
- * the admin-tuned RTP for every risk and every row count, and an RTP retune
- * flows straight into the payouts while the coin stays fair.
+ * RTP is configurable the same way roulette is ("only the payout table carries
+ * the edge"). Each (risk, rows) has a canonical multiplier SHAPE whose own
+ * binomial-weighted expected value is `baseRtp`; the live table is that shape
+ * scaled by `rtp / baseRtp` toward the admin-tuned RTP, then rounded to clean,
+ * display-exact multipliers so the payout is always exactly `stake × the ×` the
+ * player sees (no sub-cent dust). The realized RTP therefore sits within a hair
+ * of the configured value, an RTP retune still flows into the payouts, and the
+ * coin stays fair — see `multipliers()`.
  */
 
 export const PLINKO_RISKS = ['LOW', 'MEDIUM', 'HIGH'] as const;
@@ -117,16 +119,24 @@ export function baseRtp(risk: PlinkoRisk, rows: number): number {
 }
 
 /**
- * The LIVE payout table: the canonical shape scaled so the drop's expected
- * return equals the target RTP exactly. Returns one multiplier per slot
- * (length `rows + 1`), rounded to 4 dp to kill float dust (payouts are floored
- * again to the currency's precision at settle time).
+ * The LIVE payout table: the canonical shape scaled toward the target RTP, then
+ * rounded to CLEAN, display-exact multipliers — whole numbers at ×100+ and two
+ * decimals below. This is deliberate: the payout is always exactly
+ * `stake × the multiplier the player sees`, with no sub-cent dust appearing
+ * "from nowhere" (a ×1 slot returns exactly the stake, a ×0.4 exactly 0.4×).
+ * The scale is applied before rounding, so an RTP retune still flows into the
+ * payouts and the realized return stays within a hair of the configured value;
+ * two-decimal granularity is a negligible edge next to a clean, honest payout.
+ * Returns one multiplier per slot (length `rows + 1`).
  */
 export function multipliers(risk: PlinkoRisk, rows: number, rtp: number): number[] {
   const table = baseTable(risk, rows);
   const target = rtp > 0 && rtp <= 1 ? rtp : 0.99;
   const scale = target / baseRtp(risk, rows);
-  return table.map((m) => Number((m * scale).toFixed(4)));
+  return table.map((m) => {
+    const v = m * scale;
+    return v >= 100 ? Math.round(v) : Math.round(v * 100) / 100;
+  });
 }
 
 /**

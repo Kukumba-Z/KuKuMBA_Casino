@@ -86,26 +86,49 @@ describe('provably-fair path', () => {
   });
 });
 
-describe('RTP is exactly configurable (only the payout table carries the edge)', () => {
-  it('the expected drop return equals the configured RTP for every config', () => {
+describe('RTP is configurable (only the payout table carries the edge)', () => {
+  it('the expected drop return tracks the configured RTP for every config', () => {
     for (const risk of PLINKO_RISKS) {
       for (const rows of ROWS) {
         for (const rtp of [0.9, 0.97, 0.99, 1]) {
           const table = multipliers(risk, rows, rtp);
           let ev = 0;
           for (let k = 0; k <= rows; k++) ev += slotProbability(rows, k) * table[k];
-          expect(ev).toBeCloseTo(rtp, 3);
+          // Multipliers are rounded to clean, display-exact values (2 dp / whole
+          // ≥100), so the realized RTP sits within a hair of the target — a
+          // negligible edge next to always paying exactly stake × the shown ×.
+          expect(ev).toBeCloseTo(rtp, 2);
         }
       }
     }
   });
 
+  it('multipliers are clean so the payout is exactly stake × the shown ×', () => {
+    for (const risk of PLINKO_RISKS) {
+      for (const rows of ROWS) {
+        for (const m of multipliers(risk, rows, 0.99)) {
+          // Every multiplier equals its own display rounding — no hidden 3rd/4th
+          // decimal that would leak "kopecks from nowhere" into a payout.
+          const clean = m >= 100 ? Math.round(m) : Math.round(m * 100) / 100;
+          expect(m).toBe(clean);
+        }
+      }
+    }
+    // A ×1-shaped slot returns exactly the stake at the default RTP (no dust).
+    const low8 = multipliers('LOW', 8, 0.99);
+    expect(low8[3]).toBe(1);
+    expect(low8[5]).toBe(1);
+  });
+
   it('an admin RTP retune scales payouts proportionally', () => {
     const a = multipliers('MEDIUM', 12, 0.99);
     const b = multipliers('MEDIUM', 12, 0.9);
-    // Both tables are independently rounded to 4 dp, so compare the ratio at a
-    // sane tolerance rather than bit-for-bit.
-    for (let k = 0; k < a.length; k++) expect(b[k]).toBeCloseTo(a[k] * (0.9 / 0.99), 2);
+    // Both tables are independently rounded to clean values, so compare the ratio
+    // loosely — the point is that a lower RTP shrinks the payouts, not bit-parity.
+    for (let k = 0; k < a.length; k++) expect(b[k]).toBeLessThanOrEqual(a[k] + 1e-9);
+    const evA = a.reduce((s, m, k) => s + slotProbability(12, k) * m, 0);
+    const evB = b.reduce((s, m, k) => s + slotProbability(12, k) * m, 0);
+    expect(evB).toBeLessThan(evA);
   });
 
   it('garbage RTP falls back instead of exploding', () => {

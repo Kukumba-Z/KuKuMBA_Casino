@@ -61,11 +61,13 @@ function slotColor(m: number): string {
   return C.red; // molten red — the monster edges
 }
 
-/** Format a multiplier for the slot label (1 dp under 100, integer above). */
+/** Format a multiplier for the slot/label. The server sends CLEAN multipliers
+ *  (whole numbers ≥100, ≤2 decimals below), and the payout is exactly
+ *  `stake × this value`, so we show it faithfully (trailing zeros stripped) —
+ *  what you see is what you're paid, no mystery sub-cent dust. */
 export function fmtMult(m: number): string {
   if (m >= 100) return String(Math.round(m));
-  const s = (Math.round(m * 10) / 10).toString();
-  return s;
+  return String(Math.round(m * 100) / 100);
 }
 
 // ── tiny WebAudio kit: peg plinks (pitch rises with depth) + win/lose stings ──
