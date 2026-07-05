@@ -1,11 +1,16 @@
-import { Beer, CircleDot, Club, Dices, Gamepad2, Gem, Radio, ShieldCheck, Sparkles, Triangle, type LucideIcon } from 'lucide-react';
+import { Beer, CircleDot, Club, Dices, Gamepad2, Gem, Radio, ShieldCheck, Sparkles, type LucideIcon } from 'lucide-react';
+import type { ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import type { Game } from '../lib/hooks';
 import { CrashCardArt } from './crash/CrashCardArt';
 import { PlinkoCardArt } from './plinko/PlinkoCardArt';
+import { PlinkoGlyph } from './plinko/PlinkoGlyph';
 import { PonyjackCardArt } from './ponyjack/PonyjackCardArt';
 import { RouletteWheel } from './RouletteWheel';
+
+/** Icon usable by the game tiles/tickers — a lucide icon or a bespoke glyph. */
+type GameIconComponent = ComponentType<{ size?: number | string; className?: string }>;
 
 /** Per-category visual identity (icon + gradient accent for the thumbnail). */
 const CATEGORY: Record<string, { icon: LucideIcon; grad: string; labelKey: string }> = {
@@ -23,10 +28,10 @@ export function categoryMeta(category: string) {
 
 /** Per-game visual identity for originals whose look shouldn't collapse into the
  *  generic category (crash is a drinking game, not "dice"). Keyed by Game.key. */
-const GAME: Record<string, { icon: LucideIcon; grad: string }> = {
+const GAME: Record<string, { icon: GameIconComponent; grad: string }> = {
   crash: { icon: Beer, grad: 'from-sun/30 to-roul-red/30' },
   ponyjack: { icon: Club, grad: 'from-bubble/30 to-lav/30' },
-  plinko: { icon: Triangle, grad: 'from-sky/30 to-bubble/30' },
+  plinko: { icon: PlinkoGlyph, grad: 'from-sky/30 to-bubble/30' },
 };
 
 export function gameMeta(gameKey?: string) {

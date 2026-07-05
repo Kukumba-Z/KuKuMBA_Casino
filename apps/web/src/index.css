@@ -39,6 +39,23 @@
   h3 {
     @apply font-display;
   }
+
+  /* Toast countdown bar — shrinks left-to-right over the toast's lifetime.
+     Uses a transform (scaleX) so it's GPU-cheap; duration is set inline. */
+  @keyframes toast-timer {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
+  }
+  .toast-timer {
+    animation-name: toast-timer;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+    opacity: 0.85;
+  }
 }
 
 @layer components {

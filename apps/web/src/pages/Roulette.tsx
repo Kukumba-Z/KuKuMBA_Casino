@@ -69,12 +69,19 @@ export default function Roulette() {
   const stakeNum = Number(stakeStr);
   const outOfRange = stakeStr.trim() !== '' && (stakeNum > limits.max || stakeNum < limits.min);
 
+  // Most you may put on the table: the smaller of the table limit and your actual
+  // balance — you can't wager more than you can cover. (Unknown balance, e.g. a
+  // signed-out or still-loading wallet, falls back to the table limit only.)
+  const avail = bal ? Number(bal.amount) : Infinity;
+  const tableCap = Math.min(limits.max, avail);
+
   const add = (key: string) => {
-    // Whole-table limit: the sum of all bets on the table may not exceed limits.max.
-    // This is the anti-martingale guard — repeated clicks stop once the table is full.
-    const room = roundStake(limits.max - total, limits.decimals);
+    const room = roundStake(tableCap - total, limits.decimals);
     if (room <= 0) {
-      toast.info(`${t('roulette.limits')}: ${fmt(limits.max, 2)} ${currency}`);
+      // Balance is the binding constraint → insufficient funds; otherwise it's the
+      // anti-martingale table limit. Repeated clicks collapse into one toast.
+      if (avail < limits.max) toast.error(t('errors.INSUFFICIENT_FUNDS'));
+      else toast.info(`${t('roulette.limits')}: ${fmt(limits.max, 2)} ${currency}`);
       return;
     }
     const place = roundStake(Math.min(stake, room), limits.decimals);
@@ -97,6 +104,12 @@ export default function Roulette() {
     }
     const apiBets = toApi();
     if (!apiBets.length) return;
+    // Never spin a table you can't cover — the add() cap prevents this, but guard
+    // in case the balance loaded after chips were placed. One toast, not a river.
+    if (bal && total > Number(bal.amount) + 1e-9) {
+      toast.error(t('errors.INSUFFICIENT_FUNDS'));
+      return;
+    }
     setBusy(true);
     try {
       const { data } = await api.post('/games/roulette/play', { currency, mode, bets: apiBets });
@@ -257,19 +270,25 @@ export default function Roulette() {
           </div>
         </div>
 
-        {/* controls — the quick-play toggle now lives on the wheel card, so the
-            total, clear and spin all share one line: the total takes the freed
-            space on the left, clear/spin hug the right. Single row, no wrap. */}
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1 truncate text-sm">
+        {/* controls — on phones the total sits on its own line (so a long label
+            like "Сумма ставок" is never squeezed to "…"), with Clear/Spin sharing
+            the row below; from sm up it collapses back to a single row. */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="min-w-0 text-sm sm:flex-1">
             {t('roulette.totalBet')}: <b className="text-lg tabular-nums">{fmt(total, 2)}</b> {currency}
           </div>
-          <button onClick={clear} className="btn-ghost shrink-0 !px-3" disabled={busy || !total}>
-            {t('roulette.clear')}
-          </button>
-          <button onClick={spin} className="btn-primary inline-flex min-w-28 shrink-0 items-center justify-center gap-2" disabled={busy || !total}>
-            <Target size={18} /> {t('common.spin')}
-          </button>
+          <div className="flex gap-2">
+            <button onClick={clear} className="btn-ghost flex-1 !px-3 sm:flex-none" disabled={busy || !total}>
+              {t('roulette.clear')}
+            </button>
+            <button
+              onClick={spin}
+              className="btn-primary inline-flex min-w-28 flex-1 items-center justify-center gap-2 sm:flex-none"
+              disabled={busy || !total}
+            >
+              <Target size={18} /> {t('common.spin')}
+            </button>
+          </div>
         </div>
 
         {/* bets — uniform vertical gaps (match the number-grid gap). Order:
