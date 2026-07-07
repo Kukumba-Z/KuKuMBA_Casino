@@ -22,6 +22,7 @@ import Roulette from './pages/Roulette';
 import StaticPage from './pages/StaticPage';
 import Support from './pages/Support';
 import Top from './pages/Top';
+import Upgrader from './pages/Upgrader';
 import Wallet from './pages/Wallet';
 
 function RequireAuth({ children, admin }: { children: JSX.Element; admin?: boolean }) {
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="/crash" element={<Crash />} />
           <Route path="/ponyjack" element={<Ponyjack />} />
           <Route path="/plinko" element={<Plinko />} />
+          <Route path="/upgrader" element={<Upgrader />} />
           <Route path="/top" element={<Top />} />
           <Route path="/raffles" element={<Raffles />} />
           <Route path="/raffles/:id" element={<RaffleDetail />} />
