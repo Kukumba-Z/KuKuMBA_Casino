@@ -8,6 +8,8 @@ import { PlinkoCardArt } from './plinko/PlinkoCardArt';
 import { PlinkoGlyph } from './plinko/PlinkoGlyph';
 import { PonyjackCardArt } from './ponyjack/PonyjackCardArt';
 import { RouletteWheel } from './RouletteWheel';
+import { UpgraderCardArt } from './upgrader/UpgraderCardArt';
+import { UpgraderGlyph } from './upgrader/UpgraderGlyph';
 
 /** Icon usable by the game tiles/tickers — a lucide icon or a bespoke glyph. */
 type GameIconComponent = ComponentType<{ size?: number | string; className?: string }>;
@@ -32,6 +34,7 @@ const GAME: Record<string, { icon: GameIconComponent; grad: string }> = {
   crash: { icon: Beer, grad: 'from-sun/30 to-roul-red/30' },
   ponyjack: { icon: Club, grad: 'from-bubble/30 to-lav/30' },
   plinko: { icon: PlinkoGlyph, grad: 'from-sky/30 to-bubble/30' },
+  upgrader: { icon: UpgraderGlyph, grad: 'from-sun/30 to-roul-red/30' },
 };
 
 export function gameMeta(gameKey?: string) {
@@ -59,6 +62,9 @@ function GameArt({ game }: { game: Game }) {
   }
   if (game.key === 'plinko') {
     return <PlinkoCardArt />;
+  }
+  if (game.key === 'upgrader') {
+    return <UpgraderCardArt />;
   }
   if (game.category === 'ROULETTE') {
     return (

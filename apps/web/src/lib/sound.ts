@@ -12,6 +12,11 @@ export function setSoundEnabled(v: boolean) {
   enabled = v;
 }
 
+/** Unlock/resume the shared AudioContext on a user gesture (browsers gate audio). */
+export function resumeAudio() {
+  audio();
+}
+
 function audio(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -72,6 +77,26 @@ export const sfx = {
     }
     // final settle thunk — fuller so the landing reads clearly
     blip(c, { freq: 220, dur: 0.14, type: 'triangle', gain: 0.16, at: dur });
+  },
+
+  /** Spinning-needle whoosh (Upgrader): a rising frequency sweep plus dense ticks
+   *  that thin out toward the finish (ease-out), capped by a final settle "tuk". */
+  arrowSpin(durationMs: number) {
+    if (!enabled) return;
+    const c = audio();
+    if (!c) return;
+    const dur = durationMs / 1000;
+    // rising whoosh under the ticks
+    blip(c, { freq: 180, dur, type: 'sawtooth', gain: 0.05, slideTo: 520 });
+    // ticks: dense at the start, sparser toward the end (ease-out), like a
+    // decelerating needle clacking past the pins
+    const N = Math.max(18, Math.round(dur * 40));
+    for (let k = 1; k <= N; k++) {
+      const x = k / N;
+      const at = dur * (1 - Math.pow(1 - x, 3));
+      blip(c, { freq: k % 2 ? 620 : 500, dur: 0.018, type: 'triangle', gain: 0.08, at });
+    }
+    blip(c, { freq: 240, dur: 0.12, type: 'triangle', gain: 0.15, at: dur }); // final "tuk"
   },
 
   /** Snappy card-flick when a card is dealt or flipped. */
