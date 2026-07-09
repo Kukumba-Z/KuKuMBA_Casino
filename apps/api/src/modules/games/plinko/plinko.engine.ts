@@ -120,14 +120,15 @@ export function baseRtp(risk: PlinkoRisk, rows: number): number {
 
 /**
  * The LIVE payout table: the canonical shape scaled toward the target RTP, then
- * rounded to CLEAN, display-exact multipliers — whole numbers at ×100+ and two
- * decimals below. This is deliberate: the payout is always exactly
- * `stake × the multiplier the player sees`, with no sub-cent dust appearing
- * "from nowhere" (a ×1 slot returns exactly the stake, a ×0.4 exactly 0.4×).
- * The scale is applied before rounding, so an RTP retune still flows into the
- * payouts and the realized return stays within a hair of the configured value;
- * two-decimal granularity is a negligible edge next to a clean, honest payout.
- * Returns one multiplier per slot (length `rows + 1`).
+ * rounded to CLEAN, display-exact multipliers — whole numbers at ×100+ and one
+ * decimal (tenths, standard rounding: 5.67 → 5.7) below. This is deliberate:
+ * the payout is always exactly `stake × the multiplier the player sees`, with
+ * no sub-cent dust appearing "from nowhere" (a ×1 slot returns exactly the
+ * stake, a ×0.4 exactly 0.4×), and the slot labels stay short enough to fit the
+ * board at every RTP. The scale is applied before rounding, so an RTP retune
+ * still flows into the payouts and the realized return stays close to the
+ * configured value; tenth-granularity drift is a small price for clean, honest,
+ * readable payouts. Returns one multiplier per slot (length `rows + 1`).
  */
 export function multipliers(risk: PlinkoRisk, rows: number, rtp: number): number[] {
   const table = baseTable(risk, rows);
@@ -135,7 +136,7 @@ export function multipliers(risk: PlinkoRisk, rows: number, rtp: number): number
   const scale = target / baseRtp(risk, rows);
   return table.map((m) => {
     const v = m * scale;
-    return v >= 100 ? Math.round(v) : Math.round(v * 100) / 100;
+    return v >= 100 ? Math.round(v) : Math.round(v * 10) / 10;
   });
 }
 

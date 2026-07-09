@@ -8,7 +8,7 @@ import { GameLayout } from '../components/GameLayout';
 import { PlinkoScene } from '../components/plinko/PlinkoScene';
 import { fmtMult, PlinkoEngine, type PlinkoDropInfo } from '../components/plinko/engine';
 import api, { apiError } from '../lib/api';
-import { debitLocalBalance } from '../lib/balances';
+import { creditLocalBalance, debitLocalBalance } from '../lib/balances';
 import { betLimits, clampStake } from '../lib/bets';
 import { fmt, useBalances, useCurrencies } from '../lib/hooks';
 import { useAuth } from '../store/auth';
@@ -53,8 +53,10 @@ export default function Plinko() {
   const bal = balances?.find((b) => b.mode === mode && b.currency === currency);
 
   const engineRef = useRef<PlinkoEngine | null>(null);
-  // Balls still dropping — kept in state so changing risk/rows is gated reactively
-  // (a mid-flight re-layout would strand a ball on stale geometry).
+  // Balls still dropping — the ref is the counter (side-effect-safe), the state
+  // mirror gates risk/rows changes reactively (a mid-flight re-layout would
+  // strand a ball on stale geometry).
+  const flyingRef = useRef(0);
   const [flying, setFlying] = useState(0);
 
   const [stakeStr, setStakeStr] = useState('10');
@@ -83,12 +85,23 @@ export default function Plinko() {
   }, [rows, risk, info?.multipliers]);
 
   const onLand = (d: PlinkoDropInfo) => {
-    setFlying((f) => Math.max(0, f - 1));
+    // Credit exactly THIS ball's payout the moment it lands. The server settles
+    // every drop up front, so a refetch here would reveal the winnings of every
+    // ball still in the air at once — killing the suspense. Each landing adds
+    // its own win locally; the cache resyncs with the server truth only after
+    // the LAST ball is down (at which point the numbers already agree).
+    const m = d.meta ?? {};
+    if (m.currency && Number(m.payout) > 0) {
+      creditLocalBalance(qc, m.currency, m.mode, Number(m.payout));
+    }
     setRecent((h) => [d.mult, ...h].slice(0, 12));
-    // Reveal the settled balance exactly when the ball lands (not before).
-    qc.invalidateQueries({ queryKey: ['balances'] });
-    qc.invalidateQueries({ queryKey: ['my-bonuses'] });
-    qc.invalidateQueries({ queryKey: ['pf-seed'] });
+    flyingRef.current = Math.max(0, flyingRef.current - 1);
+    setFlying(flyingRef.current);
+    if (flyingRef.current === 0) {
+      qc.invalidateQueries({ queryKey: ['balances'] });
+      qc.invalidateQueries({ queryKey: ['my-bonuses'] });
+      qc.invalidateQueries({ queryKey: ['pf-seed'] });
+    }
   };
 
   const drop = async () => {
@@ -105,13 +118,17 @@ export default function Plinko() {
     setBusy(true);
     try {
       const { data } = await api.post('/games/plinko/play', { stake, currency, mode, risk, rows });
-      // Show the stake debit at once (100 → 90); the true settled balance is
-      // revealed when the ball lands (onLand invalidates ['balances']).
+      // Show the stake debit at once (100 → 90); this ball's own win is credited
+      // when IT lands (onLand), so simultaneous balls pay one by one.
       debitLocalBalance(qc, currency, mode, stake);
-      setFlying((f) => f + 1);
-      // Animate the exact server path; balance refresh happens on landing.
-      engineRef.current?.drop(data.path, data.slot, data.multiplier, { payout: data.payout });
-      // In quick mode the drop is near-instant; the debit still shows on land.
+      flyingRef.current += 1;
+      setFlying(flyingRef.current);
+      // Land in the exact server slot; the visual path is the engine's theatre.
+      engineRef.current?.drop(data.path, data.slot, data.multiplier, {
+        payout: data.payout,
+        currency,
+        mode,
+      });
     } catch (e) {
       toast.error(apiError(e));
     }
@@ -220,7 +237,7 @@ export default function Plinko() {
       {/* Scene */}
       <div className="card relative overflow-hidden">
         <div className="relative">
-          <PlinkoScene engineRef={engineRef} onLand={onLand} sound={sound} fast={quick} texts={{ idle: t('plinko.sceneIdle') }} />
+          <PlinkoScene engineRef={engineRef} onLand={onLand} sound={sound} fast={quick} />
 
           <button
             type="button"

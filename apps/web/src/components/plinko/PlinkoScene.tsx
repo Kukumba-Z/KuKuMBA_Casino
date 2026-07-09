@@ -8,13 +8,11 @@ export function PlinkoScene({
   onLand,
   sound,
   fast,
-  texts,
 }: {
   engineRef?: MutableRefObject<PlinkoEngine | null>;
   onLand?: (info: PlinkoDropInfo) => void;
   sound: boolean;
   fast?: boolean;
-  texts?: { idle?: string };
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const eng = useRef<PlinkoEngine | null>(null);
@@ -25,7 +23,6 @@ export function PlinkoScene({
     if (!canvasRef.current) return;
     const e = new PlinkoEngine(canvasRef.current, {
       onLand: (info: PlinkoDropInfo) => cbs.current.onLand?.(info),
-      texts,
     });
     eng.current = e;
     if (engineRef) engineRef.current = e;
@@ -54,9 +51,6 @@ export function PlinkoScene({
   useEffect(() => {
     eng.current?.setFast(!!fast);
   }, [fast]);
-  useEffect(() => {
-    if (texts) eng.current?.setTexts(texts);
-  }, [texts]);
 
   return (
     <div className="relative h-[min(56vh,560px)] min-h-[340px] w-full">

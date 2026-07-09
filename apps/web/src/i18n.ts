@@ -311,7 +311,6 @@ const ru = {
     needLogin: 'Войдите, чтобы делать ставки',
     recent: 'ПОСЛЕДНИЕ ШАРЫ',
     recentEmpty: 'результаты появятся здесь…',
-    sceneIdle: 'Урони шар, чтобы начать',
   },
   upgrader: {
     title: 'KuKuMBA Upgrader',
@@ -869,7 +868,6 @@ const en: typeof ru = {
     needLogin: 'Sign in to place bets',
     recent: 'RECENT DROPS',
     recentEmpty: 'results will appear here…',
-    sceneIdle: 'Drop the ball to start',
   },
   upgrader: {
     title: 'KuKuMBA Upgrader',

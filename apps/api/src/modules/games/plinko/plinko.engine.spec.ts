@@ -94,10 +94,10 @@ describe('RTP is configurable (only the payout table carries the edge)', () => {
           const table = multipliers(risk, rows, rtp);
           let ev = 0;
           for (let k = 0; k <= rows; k++) ev += slotProbability(rows, k) * table[k];
-          // Multipliers are rounded to clean, display-exact values (2 dp / whole
-          // ≥100), so the realized RTP sits within a hair of the target — a
-          // negligible edge next to always paying exactly stake × the shown ×.
-          expect(ev).toBeCloseTo(rtp, 2);
+          // Multipliers are rounded to clean, display-exact values (tenths /
+          // whole ≥100), so the realized RTP tracks the target within a few
+          // hundredths — the price of paying exactly stake × the shown ×.
+          expect(Math.abs(ev - rtp)).toBeLessThan(0.04);
         }
       }
     }
@@ -106,11 +106,14 @@ describe('RTP is configurable (only the payout table carries the edge)', () => {
   it('multipliers are clean so the payout is exactly stake × the shown ×', () => {
     for (const risk of PLINKO_RISKS) {
       for (const rows of ROWS) {
-        for (const m of multipliers(risk, rows, 0.99)) {
-          // Every multiplier equals its own display rounding — no hidden 3rd/4th
-          // decimal that would leak "kopecks from nowhere" into a payout.
-          const clean = m >= 100 ? Math.round(m) : Math.round(m * 100) / 100;
-          expect(m).toBe(clean);
+        for (const rtp of [0.9, 0.97, 0.99]) {
+          for (const m of multipliers(risk, rows, rtp)) {
+            // Every multiplier equals its own display rounding (tenths / whole
+            // ≥100) — no hidden decimals leaking "kopecks from nowhere" into a
+            // payout, and no label ever disagreeing with the paid value.
+            const clean = m >= 100 ? Math.round(m) : Math.round(m * 10) / 10;
+            expect(m).toBe(clean);
+          }
         }
       }
     }
@@ -151,8 +154,10 @@ describe('RTP is configurable (only the payout table carries the edge)', () => {
       staked += 1;
       returned += table[slot];
     }
-    expect(returned / staked).toBeGreaterThan(rtp - 0.04);
-    expect(returned / staked).toBeLessThan(rtp + 0.04);
+    // ±0.06: binomial sampling noise on the fat-edge table plus the deliberate
+    // tenth-rounding drift of the clean multipliers.
+    expect(returned / staked).toBeGreaterThan(rtp - 0.06);
+    expect(returned / staked).toBeLessThan(rtp + 0.06);
   });
 });
 

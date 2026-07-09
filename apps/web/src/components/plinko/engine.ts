@@ -1,13 +1,14 @@
 // KuKuMBA Plinko — canvas visualizer (framework-agnostic, canvas + WebAudio).
 // The engine is a pure PRESENTER: every ruble of truth comes from the plinko
 // API (apps/api/src/modules/games/plinko). The server rolls the provably-fair
-// left/right path and the landing slot; drop(path, slot, mult) just animates
-// the exact ball the server already resolved, so what you watch is what settled.
+// landing slot; drop(path, slot, mult) animates a ball that ALWAYS rests in
+// exactly that slot, so what you watch is what settled.
 //
-// The board geometry is an exact Galton board: at pin-row i the ball hits the
-// pin at column (rights-so-far + 1) head-on, then deflects per path[i]; after
-// `rows` deflections it rests in slot = total rights — dead-centre of the slot
-// the server computed. Edges are rare (binomial), which is why they pay big.
+// The route down the pins, however, is deliberately theatrical: tracing the
+// true Galton contacts made the destination readable halfway down, so the
+// visible ball follows a random decoy story (see drop()) and only commits to
+// the real slot in the last rows — pure presentation, zero effect on payouts.
+// Edges are rare (binomial), which is why they pay big.
 // @ts-nocheck
 
 export interface PlinkoSlot {
@@ -25,7 +26,6 @@ export interface PlinkoDropInfo {
 export interface PlinkoEngineOptions {
   onLand?: (info: PlinkoDropInfo) => void;
   onEvent?: (name: string, data?: any) => void;
-  texts?: { idle?: string };
 }
 
 const C = {
@@ -62,12 +62,12 @@ function slotColor(m: number): string {
 }
 
 /** Format a multiplier for the slot/label. The server sends CLEAN multipliers
- *  (whole numbers ≥100, ≤2 decimals below), and the payout is exactly
- *  `stake × this value`, so we show it faithfully (trailing zeros stripped) —
- *  what you see is what you're paid, no mystery sub-cent dust. */
+ *  (whole numbers ≥100, tenths below — standard rounding, 5.67 → 5.7), and the
+ *  payout is exactly `stake × this value`, so we show it faithfully — what you
+ *  see is what you're paid, and the label stays short enough for its slot. */
 export function fmtMult(m: number): string {
   if (m >= 100) return String(Math.round(m));
-  return String(Math.round(m * 100) / 100);
+  return String(Math.round(m * 10) / 10);
 }
 
 // ── tiny WebAudio kit: peg plinks (pitch rises with depth) + win/lose stings ──
@@ -142,7 +142,6 @@ export class PlinkoEngine {
   onLand: (info: PlinkoDropInfo) => void;
   onEvent: (name: string, data?: any) => void;
   sound: PlinkoSound;
-  texts: { idle: string };
 
   W = 0;
   H = 0;
@@ -178,7 +177,6 @@ export class PlinkoEngine {
     this.onLand = opts.onLand || (() => {});
     this.onEvent = opts.onEvent || (() => {});
     this.sound = new PlinkoSound();
-    this.texts = { idle: 'Урони шар, чтобы начать', ...(opts.texts || {}) };
     this._ro = new ResizeObserver(() => this.resize());
     this._ro.observe(canvas.parentElement || canvas);
     this.resize();
@@ -210,9 +208,6 @@ export class PlinkoEngine {
   }
   setFast(v: boolean) {
     this.fast = !!v;
-  }
-  setTexts(t: any) {
-    this.texts = { ...this.texts, ...(t || {}) };
   }
 
   /** Rebuild the board when the player changes risk/rows (payout table + geometry). */
@@ -274,16 +269,16 @@ export class PlinkoEngine {
   }
 
   /**
-   * Animate the server-resolved drop. `path[i]` = true means the ball went RIGHT
-   * off pin-row i; the landing slot is the count of rights (== `slot`).
+   * Animate the server-resolved drop. The landing slot is the server's verdict
+   * and is honoured exactly; the visible route down the pins is intentionally
+   * theatrical (see below) — `path` is accepted for API compatibility but the
+   * display no longer traces it literally.
    */
   drop(path: boolean[], slot: number, mult: number, meta?: any) {
     this.resumeAudio();
     this.sound.bet(); // sound only on the bet + on landing — nothing in between
     const rows = this.rows;
-    let rights = 0;
-    for (let i = 0; i < rows; i++) if (path[i]) rights++;
-    const landSlot = clamp(rights, 0, rows);
+    const landSlot = clamp(Math.round(slot), 0, rows);
     const win = mult >= 1;
     // Big-win effects (confetti + shake) are reserved for the monster edges only.
     const huge = mult > 100;
@@ -302,21 +297,59 @@ export class PlinkoEngine {
       return;
     }
 
-    // Build the exact contact polyline (Galton coordinates).
+    // ── the DISPLAY path: maximally chaotic, landing server-exact ────────────
+    // The board is a half-gap lattice: at pin-row i a contact sits at
+    // x = cx + k·(gap/2) with k ≡ i (mod 2) and |k| ≤ i. Walking the TRUE Galton
+    // contacts telegraphs the slot from halfway down (a run of same-direction
+    // hops is readable), so the ball follows a random DECOY story instead: it
+    // rides toward a fake target — the opposite edge, the centre, an overshoot
+    // of its own side — and only over the last rows whips across to the real
+    // slot. Sometimes the "fake" is near the truth and the ride just looks
+    // drunk; either way no row before the last few says where it ends. Money
+    // truth is untouched — the final point is exactly the server's slot, and
+    // hops can span several pins (violent ricochets), so nothing is readable.
+    const landK = 2 * landSlot - rows; // lattice coordinate of the true slot
+    const side = landK >= 0 ? 1 : -1;
+    const roll = Math.random();
+    const decoyK =
+      roll < 0.4
+        ? -side * rand(0.3, 0.95) * rows // race toward the OTHER side
+        : roll < 0.7
+          ? rand(-2.5, 2.5) // hover the centre… then dive
+          : side * rand(0.4, 1) * rows; // overshoot its own edge
+    const switchRow = Math.max(2, Math.floor(rows * rand(0.45, 0.8)));
+    // snap to the row's contact lattice (parity of i), stay inside the triangle
+    const snapK = (v: number, i: number) => {
+      let k = Math.round(v);
+      if ((((k + i) % 2) + 2) % 2 !== 0) k += Math.random() < 0.5 ? 1 : -1;
+      return clamp(k, -i, i);
+    };
+    // final contact must neighbour the landing slot so the last hop is real
+    const lastK = snapK(landK + (Math.random() < 0.5 ? -1 : 1), rows - 1);
     const pts: { x: number; y: number }[] = [];
     // entry, just above row 0 (kept on-canvas even when the board is centred)
     pts.push({ x: this.cx, y: this.topPad - Math.min(this.rowH * 0.85, this.topPad - 2) });
-    rights = 0;
     for (let i = 0; i < rows; i++) {
-      const x = this.cx + (2 * rights - i) * (this.gap / 2);
-      pts.push({ x, y: this.topPad + i * this.rowH });
-      // which pin (column) this row's contact lands on — for the flash
-      const col = rights + 1;
-      pts[pts.length - 1].col = col;
-      pts[pts.length - 1].rowIdx = i;
-      if (path[i]) rights++;
+      let guide: number;
+      if (i >= rows - 1) {
+        guide = lastK;
+      } else if (i < switchRow) {
+        guide = decoyK * Math.pow(i / switchRow, 0.8); // ease out to the decoy
+      } else {
+        const p = (i - switchRow) / Math.max(1, rows - 1 - switchRow);
+        guide = lerp(decoyK, lastK, p * p * (3 - 2 * p)); // whip to the truth
+      }
+      // per-row wobble keeps even the decoy leg jittery; it dies out near the
+      // bottom so the final approach reads as one committed swerve
+      const wobble = i >= rows - 1 ? 0 : rand(-1.7, 1.7) * (1 - (0.55 * i) / rows);
+      const k = snapK(guide + wobble, i);
+      const x = this.cx + k * (this.gap / 2);
+      const pt: any = { x, y: this.topPad + i * this.rowH, rowIdx: i };
+      // flash the pin actually under this contact
+      pt.col = clamp((k + i) / 2 + 1, 0, i + 2);
+      pts.push(pt);
     }
-    pts.push({ x: this.slotX(landSlot), y: this.slotTop + this.slotH * 0.5 }); // land
+    pts.push({ x: this.slotX(landSlot), y: this.slotTop + this.slotH * 0.5 }); // land — server slot, exactly
     // Slow, thrilling fall — the ball beats hard side-to-side down the pins.
     const segMs = 200;
     this.balls.push({
@@ -487,14 +520,6 @@ export class PlinkoEngine {
     this.drawParticles(ctx);
     this.drawBalls(ctx);
     this.drawConfetti(ctx);
-
-    // idle hint when nothing is dropping
-    if (this.balls.length === 0) {
-      ctx.fillStyle = 'rgba(255,255,255,0.30)';
-      ctx.font = `600 ${clamp(this.W * 0.03, 12, 15)}px Onest, system-ui, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText(this.texts.idle, this.cx, this.topPad + this.rowH * 0.05);
-    }
     ctx.restore();
   }
 
@@ -532,8 +557,7 @@ export class PlinkoEngine {
     const r = Math.min(9, w * 0.26);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const fs = clamp(w * 0.42, 8, 15);
-    ctx.font = `800 ${fs}px Unbounded, system-ui, sans-serif`;
+    const baseFs = clamp(w * 0.4, 7, 13);
     for (let s = 0; s < n; s++) {
       const x = this.slotX(s) - w / 2;
       const color = slotColor(this.slots[s]?.mult ?? 1);
@@ -561,9 +585,17 @@ export class PlinkoEngine {
         ctx.fill();
         ctx.restore();
       }
-      // label — dark for readable contrast on the bright slot
+      // label — dark for readable contrast, font shrunk until it FITS the slot
+      // (long values like "12.9" on a 16-row board must never bleed outside).
+      const label = fmtMult(this.slots[s]?.mult ?? 1);
+      let fs = baseFs;
+      ctx.font = `800 ${fs}px Unbounded, system-ui, sans-serif`;
+      while (fs > 5.5 && ctx.measureText(label).width > w * 0.86) {
+        fs -= 0.5;
+        ctx.font = `800 ${fs}px Unbounded, system-ui, sans-serif`;
+      }
       ctx.fillStyle = this.shade(color, -0.78);
-      ctx.fillText(fmtMult(this.slots[s]?.mult ?? 1), this.slotX(s), top + h / 2 + 1);
+      ctx.fillText(label, this.slotX(s), top + h / 2 + 1);
     }
   }
 
