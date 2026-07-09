@@ -109,6 +109,27 @@ export const sfx = {
     blip(c, { freq: 430, dur: 0.055, type: 'triangle', gain: 0.12, at: 0.02 });
   },
 
+  /** Glassy "pop" on a safe mines reveal; the pitch climbs with every opened
+   *  tile (step = open number), Stake-style tension escalation, softly capped
+   *  so a deep run stays a chime, not a squeal. */
+  reveal(step: number) {
+    if (!enabled) return;
+    const c = audio();
+    if (!c) return;
+    const f = 440 * Math.pow(2, Math.min(Math.max(step, 0), 16) / 12);
+    blip(c, { freq: f, dur: 0.07, type: 'triangle', gain: 0.14 });
+    blip(c, { freq: f * 1.5, dur: 0.09, type: 'sine', gain: 0.1, at: 0.03 });
+  },
+
+  /** Low explosion on hitting a mine: a saw burst sliding down over a dull thump. */
+  boom() {
+    if (!enabled) return;
+    const c = audio();
+    if (!c) return;
+    blip(c, { freq: 120, dur: 0.38, type: 'sawtooth', gain: 0.2, slideTo: 40 });
+    blip(c, { freq: 60, dur: 0.26, type: 'sine', gain: 0.18, slideTo: 35, at: 0.02 });
+  },
+
   /** Bright ascending arpeggio on a win. */
   win() {
     if (!enabled) return;

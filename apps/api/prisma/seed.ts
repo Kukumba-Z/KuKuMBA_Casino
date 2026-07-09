@@ -214,6 +214,29 @@ async function main() {
         'take stake × multiplier, miss and the stake burns. Quick-play supported. ' +
         'Fully fair (provably-fair, same seed chain as the roulette).',
     },
+    {
+      key: 'mines',
+      name: 'KuKuMBA Mines',
+      type: 'mines',
+      category: 'MINIGAME',
+      provider: 'KuKuMBA Originals',
+      status: 'LIVE',
+      route: '/mines',
+      rtp: 0.99,
+      minBet: 0.01,
+      maxBet: 100000,
+      sortOrder: 5,
+      descriptionRu:
+        'Мины: поле 5×5, от 2 до 24 мин на выбор. Открывай клетки — каждый найденный кристалл ' +
+        'поднимает множитель, забрать выигрыш можно в любой момент, а мина сжигает ставку. ' +
+        'Открыл все безопасные клетки — автозабор по максимальному множителю (до ×5 200 000). ' +
+        'Provably-fair (тот же сид-чейн, что у рулетки), RTP 99%.',
+      descriptionEn:
+        'Mines: a 5×5 board with 2 to 24 mines of your choice. Open tiles — every crystal found ' +
+        'raises the multiplier, cash out any time, hit a mine and the stake burns. ' +
+        'Clear every safe tile for an auto-cashout at the top multiplier (up to ×5,200,000). ' +
+        'Provably-fair (same seed chain as the roulette), 99% RTP.',
+    },
   ];
   for (const g of games) {
     const { key, ...rest } = g;

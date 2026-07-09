@@ -12,6 +12,7 @@ import Bonuses from './pages/Bonuses';
 import Crash from './pages/Crash';
 import Games from './pages/Games';
 import Lobby from './pages/Lobby';
+import Mines from './pages/Mines';
 import Notifications from './pages/Notifications';
 import Plinko from './pages/Plinko';
 import Ponyjack from './pages/Ponyjack';
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="/ponyjack" element={<Ponyjack />} />
           <Route path="/plinko" element={<Plinko />} />
           <Route path="/upgrader" element={<Upgrader />} />
+          <Route path="/mines" element={<Mines />} />
           <Route path="/top" element={<Top />} />
           <Route path="/raffles" element={<Raffles />} />
           <Route path="/raffles/:id" element={<RaffleDetail />} />

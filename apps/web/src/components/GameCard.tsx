@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import type { Game } from '../lib/hooks';
 import { CrashCardArt } from './crash/CrashCardArt';
+import { MinesCardArt } from './mines/MinesCardArt';
+import { MinesGlyph } from './mines/MinesGlyph';
 import { PlinkoCardArt } from './plinko/PlinkoCardArt';
 import { PlinkoGlyph } from './plinko/PlinkoGlyph';
 import { PonyjackCardArt } from './ponyjack/PonyjackCardArt';
@@ -35,6 +37,7 @@ const GAME: Record<string, { icon: GameIconComponent; grad: string }> = {
   ponyjack: { icon: Club, grad: 'from-bubble/30 to-lav/30' },
   plinko: { icon: PlinkoGlyph, grad: 'from-sky/30 to-bubble/30' },
   upgrader: { icon: UpgraderGlyph, grad: 'from-sun/30 to-roul-red/30' },
+  mines: { icon: MinesGlyph, grad: 'from-mint/30 to-roul-red/30' },
 };
 
 export function gameMeta(gameKey?: string) {
@@ -65,6 +68,9 @@ function GameArt({ game }: { game: Game }) {
   }
   if (game.key === 'upgrader') {
     return <UpgraderCardArt />;
+  }
+  if (game.key === 'mines') {
+    return <MinesCardArt />;
   }
   if (game.category === 'ROULETTE') {
     return (
