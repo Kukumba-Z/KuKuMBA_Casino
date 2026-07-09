@@ -41,7 +41,7 @@ export function MinesCardArt() {
         </linearGradient>
         <linearGradient id="minc-gem2" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#B79CED" />
-          <stop offset="1" stopColor="#FF8FD0" />
+          <stop offset="1" stopColor="#7CC4FF" />
         </linearGradient>
         <filter id="minc-glow" x="-60%" y="-60%" width="220%" height="220%">
           <feGaussianBlur stdDeviation="2.4" result="b" />
@@ -81,7 +81,8 @@ export function MinesCardArt() {
         }),
       )}
 
-      {/* found crystals — every third one shifts to the lav/bubble facet */}
+      {/* found crystals — every third one shifts to the lav/sky facet (same
+          mint-and-lavender family as the in-game Crystal, no off-palette hues) */}
       {crystals.map(([c, r], i) => {
         const { x, y } = tile(c, r);
         return (
