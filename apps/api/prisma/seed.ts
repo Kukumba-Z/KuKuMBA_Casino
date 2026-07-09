@@ -204,15 +204,15 @@ async function main() {
       maxBet: 100000,
       sortOrder: 4,
       descriptionRu:
-        'Апгрейдер: задай шанс выигрыша от 0.01% до 99% — множитель считается сам (×RTP/шанс). ' +
-        'Стрелка крутится по колесу и замирает в случайной точке: попала в подсвеченный сектор — ' +
+        'Апгрейдер: задай шанс выигрыша от 0.01% до 97% — множитель считается сам (от ×1.02 до ×9900). ' +
+        'Стрелка летит по кругу колеса и замирает в случайной точке: попала в подсвеченную зону — ' +
         'забираешь ставку × множитель, мимо — ставка сгорает. Есть быстрая игра. ' +
-        'Полностью честно (provably-fair, тот же сид-чейн, что у рулетки), RTP настраивается.',
+        'Полностью честно (provably-fair, тот же сид-чейн, что у рулетки).',
       descriptionEn:
-        'Upgrader: pick a win chance from 0.01% to 99% — the multiplier follows (×RTP/chance). ' +
-        'The needle spins around the wheel and stops at a random point: land in the lit sector to ' +
+        'Upgrader: pick a win chance from 0.01% to 97% — the multiplier follows (×1.02 up to ×9900). ' +
+        'The needle flies around the wheel rim and stops at a random point: land in the lit zone to ' +
         'take stake × multiplier, miss and the stake burns. Quick-play supported. ' +
-        'Fully fair (provably-fair, same seed chain as the roulette), configurable RTP.',
+        'Fully fair (provably-fair, same seed chain as the roulette).',
     },
   ];
   for (const g of games) {

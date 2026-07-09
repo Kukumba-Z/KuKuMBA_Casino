@@ -17,11 +17,12 @@ import { StatsService } from '../../stats/stats.service';
 import { VipService } from '../../vip/vip.service';
 import { WalletService } from '../../wallet/wallet.service';
 import {
+  maxChanceFor,
   multiplierFor,
   normalizeChance,
   settle,
-  UPGRADER_MAX_CHANCE,
   UPGRADER_MIN_CHANCE,
+  UPGRADER_MIN_MULTIPLIER,
 } from './upgrader.engine';
 
 export interface UpgraderPlayInput {
@@ -33,9 +34,9 @@ export interface UpgraderPlayInput {
 }
 
 /** Clamp any input to the supported chance range (for `info` display only). */
-function clampChance(c: number): number {
+function clampChance(c: number, maxChance: number): number {
   if (!Number.isFinite(c)) return 0.5;
-  return Math.min(UPGRADER_MAX_CHANCE, Math.max(UPGRADER_MIN_CHANCE, c));
+  return Math.min(maxChance, Math.max(UPGRADER_MIN_CHANCE, c));
 }
 
 /**
@@ -93,7 +94,8 @@ export class UpgraderService implements OnModuleInit {
   async info(chanceInput?: number) {
     const game = await this.game();
     const rtp = game?.rtp ?? (await this.settings.rtp());
-    const chance = clampChance(chanceInput ?? 0.5); // default 50%
+    const maxChance = maxChanceFor(rtp); // ≤ rtp / 1.02 — a spin always pays ≥ ×1.02
+    const chance = clampChance(chanceInput ?? 0.5, maxChance); // default 50%
     return {
       key: 'upgrader',
       name: game?.name ?? 'KuKuMBA Upgrader',
@@ -105,7 +107,8 @@ export class UpgraderService implements OnModuleInit {
       descriptionRu: game?.descriptionRu,
       descriptionEn: game?.descriptionEn,
       minChance: UPGRADER_MIN_CHANCE,
-      maxChance: UPGRADER_MAX_CHANCE,
+      maxChance,
+      minMultiplier: UPGRADER_MIN_MULTIPLIER,
       chance,
       // The multiplier is always derived — the client shows exactly this value.
       multiplier: Number(multiplierFor(chance, rtp).toFixed(4)),
@@ -125,8 +128,11 @@ export class UpgraderService implements OnModuleInit {
     // Demo coins are only for trying our own games — reject demo on provider titles.
     if (mode === 'DEMO' && !isOriginalGame(game.provider)) throw new BadRequestException('DEMO_ONLY_ORIGINALS');
 
-    // Canonical win chance (throws BAD_CHANCE / CHANCE_OUT_OF_RANGE on anything bad).
-    const chance = normalizeChance(dto.chance);
+    const rtp = game.rtp ?? (await this.settings.rtp());
+
+    // Canonical win chance (throws BAD_CHANCE / CHANCE_OUT_OF_RANGE on anything
+    // bad; the maximum is RTP-dependent so a spin always pays ≥ ×1.02).
+    const chance = normalizeChance(dto.chance, rtp);
 
     const stake = D(dto.stake);
     if (stake.lte(0)) throw new BadRequestException('BAD_STAKE');
@@ -134,8 +140,6 @@ export class UpgraderService implements OnModuleInit {
     if (stake.gt(game.maxBet)) throw new BadRequestException('STAKE_ABOVE_MAX');
     const cap = tableMaxStake(cur.usdRate?.toString(), mode === 'DEMO' || currency === 'DEMO');
     if (stake.gt(cap)) throw new BadRequestException('TABLE_LIMIT_EXCEEDED');
-
-    const rtp = game.rtp ?? (await this.settings.rtp());
 
     const result = await this.prisma.$transaction(async (tx) => {
       // 1) take the stake

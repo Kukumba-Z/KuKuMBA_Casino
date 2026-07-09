@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { floatFromSeeds, genClientSeed, genServerSeed } from '../../provably-fair/provably-fair.crypto';
 import {
+  maxChanceFor,
   multiplierFor,
   normalizeChance,
   settle,
-  UPGRADER_MAX_CHANCE,
   UPGRADER_MIN_CHANCE,
+  UPGRADER_MIN_MULTIPLIER,
 } from './upgrader.engine';
 
 const RTP = 0.99;
@@ -19,9 +20,18 @@ describe('upgrader payout math', () => {
   });
 
   it('house edge is flat: chance × multiplier ≈ RTP on ANY chance', () => {
-    for (const chance of [UPGRADER_MIN_CHANCE, 0.05, 0.5, 0.99]) {
+    for (const chance of [UPGRADER_MIN_CHANCE, 0.05, 0.5, maxChanceFor(RTP)]) {
       expect(chance * multiplierFor(chance, RTP)).toBeCloseTo(RTP, 9);
     }
+  });
+
+  it('the minimum multiplier is ×1.02: maxChanceFor caps the chance at rtp/1.02', () => {
+    expect(maxChanceFor(0.99)).toBeCloseTo(0.99 / 1.02, 10); // ≈ 0.9706
+    expect(multiplierFor(maxChanceFor(0.99), 0.99)).toBeCloseTo(UPGRADER_MIN_MULTIPLIER, 10);
+    expect(multiplierFor(maxChanceFor(0.9), 0.9)).toBeCloseTo(UPGRADER_MIN_MULTIPLIER, 10);
+    // garbage RTP falls back to 0.99 in the cap too
+    expect(maxChanceFor(0)).toBeCloseTo(0.99 / 1.02, 10);
+    expect(maxChanceFor(5)).toBeCloseTo(0.99 / 1.02, 10);
   });
 
   it('an admin RTP retune scales the multiplier proportionally', () => {
@@ -83,18 +93,20 @@ describe('settle', () => {
 
 describe('normalizeChance', () => {
   it('accepts values inside the range', () => {
-    expect(normalizeChance(UPGRADER_MIN_CHANCE)).toBe(UPGRADER_MIN_CHANCE);
-    expect(normalizeChance(0.5)).toBe(0.5);
-    expect(normalizeChance(UPGRADER_MAX_CHANCE)).toBe(UPGRADER_MAX_CHANCE);
+    expect(normalizeChance(UPGRADER_MIN_CHANCE, RTP)).toBe(UPGRADER_MIN_CHANCE);
+    expect(normalizeChance(0.5, RTP)).toBe(0.5);
+    expect(normalizeChance(maxChanceFor(RTP), RTP)).toBe(maxChanceFor(RTP));
   });
 
   it('rejects out-of-range and non-finite values', () => {
-    expect(() => normalizeChance(0)).toThrow();
-    expect(() => normalizeChance(1)).toThrow();
-    expect(() => normalizeChance(-1)).toThrow();
-    expect(() => normalizeChance(NaN)).toThrow();
-    expect(() => normalizeChance('abc')).toThrow();
-    expect(() => normalizeChance(UPGRADER_MIN_CHANCE / 2)).toThrow();
-    expect(() => normalizeChance(UPGRADER_MAX_CHANCE + 0.001)).toThrow();
+    expect(() => normalizeChance(0, RTP)).toThrow();
+    expect(() => normalizeChance(1, RTP)).toThrow();
+    expect(() => normalizeChance(-1, RTP)).toThrow();
+    expect(() => normalizeChance(NaN, RTP)).toThrow();
+    expect(() => normalizeChance('abc', RTP)).toThrow();
+    expect(() => normalizeChance(UPGRADER_MIN_CHANCE / 2, RTP)).toThrow();
+    // 99% is above the ×1.02-multiplier cap (rtp/1.02 ≈ 97.06% at RTP 0.99)
+    expect(() => normalizeChance(0.99, RTP)).toThrow();
+    expect(() => normalizeChance(maxChanceFor(RTP) + 0.001, RTP)).toThrow();
   });
 });
