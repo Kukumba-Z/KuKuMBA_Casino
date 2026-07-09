@@ -4,34 +4,42 @@ import { resumeAudio, setSoundEnabled, sfx } from '../../lib/sound';
 /**
  * KuKuMBA Upgrader wheel — a pure PRESENTER, exactly like the roulette wheel and
  * the plinko engine: every ruble of truth comes from the upgrader API. `spinTo`
- * animates the EXACT server-resolved stop angle, so what you watch is what
- * settled. The lit win-sector is drawn as the arc [0, chance) from the SAME zero
- * reference (12 o'clock) the needle angle is measured from — so "needle inside
- * the arc" is identically the server's `win` (float < chance). Do not move the
- * arc and the needle into different reference frames.
+ * animates the server-resolved outcome, so what you watch is what settled.
+ *
+ * The lit win-zone is drawn SYMMETRIC about 12 o'clock: it grows clockwise AND
+ * counter-clockwise from the top as the chance rises, meeting at the bottom at
+ * 100%. To keep "arrow inside the lit zone ⇔ server win" identically true, the
+ * server float is remapped onto the dial measure-preservingly: win floats
+ * [0, chance) spread uniformly across the lit zone, lose floats [chance, 1)
+ * across the dark rest — the landing spot stays uniform on the dial and the
+ * picture can never disagree with the settlement.
+ *
+ * The needle is not a centre hand: it ORBITS the rim (a dart riding the wheel's
+ * outer ring, like a moon around a planet) and stops over the zone or past it.
  */
 export interface UpgraderWheelHandle {
-  /** Spin the needle to the server angle (angleBp ∈ 0..9999) and reveal win/lose. */
-  spinTo(angleBp: number, win: boolean, multiplier: number): void;
+  /** Spin the dart to the server outcome (angleBp ∈ 0..9999) for the bet's chance. */
+  spinTo(angleBp: number, win: boolean, chance: number): void;
   resumeAudio(): void;
   setSound(on: boolean): void;
   setFast(fast: boolean): void;
 }
 
 interface UpgraderWheelProps {
-  /** Current selected win chance as a fraction (0..1) — sizes the lit arc. */
+  /** Current selected win chance as a fraction (0..1) — sizes the lit zone. */
   chance: number;
   /** Current derived multiplier — the big centre readout. */
   multiplier: number;
-  /** Fired when the needle lands (page reveals the settled balance here). */
+  /** Largest playable chance at the live RTP — normalises the heat colour scale. */
+  maxChance?: number;
+  /** Fired when the dart lands (page reveals the settled balance here). */
   onLand?: () => void;
-  idleText?: string;
   winText?: string;
   loseText?: string;
   size?: number;
 }
 
-/** deg 0 = 12 o'clock, increasing clockwise (matches the CSS needle rotation). */
+/** deg 0 = 12 o'clock, increasing clockwise (matches the CSS rotation). */
 function polar(cx: number, cy: number, r: number, deg: number): [number, number] {
   const a = ((deg - 90) * Math.PI) / 180;
   return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
@@ -47,21 +55,43 @@ function segPath(cx: number, cy: number, rO: number, rI: number, a0: number, a1:
   return `M${x0},${y0} A${rO},${rO} 0 ${large} 1 ${x1},${y1} L${x2},${y2} A${rI},${rI} 0 ${large} 0 ${x3},${y3} Z`;
 }
 
-/** Risk heat: a tiny chance (fat ×) burns red, a big chance (thin ×) cools mint. */
-function arcColor(chance: number): string {
-  if (chance <= 0.05) return '#E5484D'; // roul-red
-  if (chance <= 0.2) return '#FFB25C'; // warm orange
-  if (chance <= 0.5) return '#FFD86E'; // sun
-  return '#7EE7C7'; // mint
+/** Continuous risk heat: red (tiny chance) → orange → gold → mint (big chance). */
+const HEAT: Array<[number, [number, number, number]]> = [
+  [0, [229, 72, 77]], // roul-red
+  [0.35, [255, 178, 92]], // warm orange
+  [0.65, [255, 216, 110]], // sun
+  [1, [126, 231, 199]], // mint
+];
+function heatRgb(t: number): [number, number, number] {
+  const x = Math.min(1, Math.max(0, t));
+  for (let i = 1; i < HEAT.length; i++) {
+    const [t0, c0] = HEAT[i - 1];
+    const [t1, c1] = HEAT[i];
+    if (x <= t1) {
+      const k = (x - t0) / (t1 - t0);
+      return [0, 1, 2].map((j) => Math.round(c0[j] + (c1[j] - c0[j]) * k)) as [number, number, number];
+    }
+  }
+  return HEAT[HEAT.length - 1][1];
 }
+const rgbStr = (c: [number, number, number]) => `rgb(${c[0]},${c[1]},${c[2]})`;
+const lightenRgb = (c: [number, number, number], amt: number) =>
+  rgbStr([0, 1, 2].map((j) => Math.round(c[j] + (255 - c[j]) * amt)) as [number, number, number]);
 
-function lighten(hex: string, amt: number): string {
-  const h = hex.replace('#', '');
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  const f = (v: number) => Math.round(v + (255 - v) * amt);
-  return `rgb(${f(r)},${f(g)},${f(b)})`;
+/**
+ * Measure-preserving float → dial angle (deg from 12 o'clock, clockwise).
+ * Win floats fill the symmetric lit zone [-c·180°, +c·180°]; lose floats fill
+ * the rest. The `win` flag picks the branch so bp quantisation at the boundary
+ * can never put the dart on the wrong side of the line.
+ */
+function visualTheta(float: number, win: boolean, chance: number): number {
+  const c = Math.min(Math.max(chance, 0.0001), 0.99);
+  if (win) {
+    const u = Math.min(Math.max(float / c, 0.002), 0.998); // 0..1 across the win zone
+    return (u - 0.5) * c * 360; // -c·180° .. +c·180°
+  }
+  const v = Math.min(Math.max((float - c) / (1 - c), 0.002), 0.998);
+  return c * 180 + v * (1 - c) * 360; // c·180° .. 360° - c·180°
 }
 
 /** Clean multiplier text — whole ≥100, two decimals below. */
@@ -71,8 +101,14 @@ function fmtMult(m: number): string {
   return (Math.round(m * 100) / 100).toFixed(2);
 }
 
+// Slow, suspenseful travel: fast launch, then a long creeping tail — the end
+// slope of the curve is zero, so the dart eases to rest instead of snapping.
+const SPIN_MS = 5600;
+const SPIN_EASE = 'cubic-bezier(0.12, 0.75, 0.18, 1)';
+const FAST_MS = 260;
+
 export const UpgraderWheel = forwardRef<UpgraderWheelHandle, UpgraderWheelProps>(function UpgraderWheel(
-  { chance, multiplier, onLand, idleText, winText, loseText, size = 320 },
+  { chance, multiplier, maxChance = 0.99 / 1.02, onLand, winText, loseText, size = 320 },
   ref,
 ) {
   const cx = size / 2;
@@ -82,13 +118,12 @@ export const UpgraderWheel = forwardRef<UpgraderWheelHandle, UpgraderWheelProps>
   const rTickInner = size / 2 - 18;
   const rArcOuter = size / 2 - 10;
   const rArcInner = size / 2 - 26;
-  const rNeedle = size / 2 - 30;
-  const rHub = size * 0.3;
+  const rHub = size * 0.28;
 
   const [rot, setRot] = useState(0);
-  const [dur, setDur] = useState(3200);
+  const [dur, setDur] = useState(SPIN_MS);
   const [landed, setLanded] = useState(true);
-  // Result of the last completed spin — recolours the centre (null = neutral/idle).
+  // Result of the last completed spin — recolours the centre (null = neutral).
   const [result, setResult] = useState<{ win: boolean } | null>(null);
 
   const rotRef = useRef(0);
@@ -113,16 +148,17 @@ export const UpgraderWheel = forwardRef<UpgraderWheelHandle, UpgraderWheelProps>
   };
 
   useImperativeHandle(ref, () => ({
-    spinTo(angleBp: number, win: boolean) {
+    spinTo(angleBp: number, win: boolean, betChance: number) {
       if (landTimer.current) window.clearTimeout(landTimer.current);
       const fast = fastRef.current;
-      // Final needle angle = the server stop point; add whole turns "for drama".
-      const theta = (angleBp / 10000) * 360;
+      // Reconstruct the fair float and remap it onto the symmetric dial.
+      const float = Math.min(Math.max(angleBp / 10000, 0), 0.9999);
+      const theta = visualTheta(float, win, betChance);
       const current = rotRef.current;
-      const TURNS = fast ? 2 : 6;
+      const TURNS = fast ? 2 : 5;
       const next = current + 360 * TURNS + (((theta - (current % 360)) % 360) + 360) % 360;
       rotRef.current = next;
-      const ms = fast ? 260 : 3200;
+      const ms = fast ? FAST_MS : SPIN_MS;
       pendingWinRef.current = win;
       landedRef.current = false;
       setDur(ms);
@@ -131,7 +167,7 @@ export const UpgraderWheel = forwardRef<UpgraderWheelHandle, UpgraderWheelProps>
       setRot(next);
       sfx.arrowSpin(ms); // spinning-needle whoosh over the whole travel
       // Reveal on transitionend; this timer is the reduced-motion / no-fire fallback.
-      landTimer.current = window.setTimeout(land, ms + 120);
+      landTimer.current = window.setTimeout(land, ms + 150);
     },
     resumeAudio() {
       resumeAudio();
@@ -150,10 +186,12 @@ export const UpgraderWheel = forwardRef<UpgraderWheelHandle, UpgraderWheelProps>
     setResult(null);
   }, [chance]);
 
-  // Idle/live arc reflects the current selection; a spin never changes chance mid-air.
-  const arcDeg = Math.min(359.999, Math.max(0, chance * 360));
-  const col = arcColor(chance);
-  const light = lighten(col, 0.35);
+  // The lit zone grows BOTH ways from 12 o'clock: ±(chance·180°).
+  const halfDeg = Math.min(179.999, Math.max(0.02, chance * 180));
+  // Heat colour normalised over the playable range: max chance = pure mint.
+  const rgb = heatRgb(chance / Math.max(chance, maxChance));
+  const col = rgbStr(rgb);
+  const light = lightenRgb(rgb, 0.35);
 
   // Minor tick every 6°, a longer major tick every 30°.
   const ticks = Array.from({ length: 60 }, (_, i) => i * 6);
@@ -165,15 +203,19 @@ export const UpgraderWheel = forwardRef<UpgraderWheelHandle, UpgraderWheelProps>
   const pctVal = chance * 100;
   const pct = pctVal < 10 ? pctVal.toFixed(2) : pctVal.toFixed(1);
 
+  // Orbiting dart: a sleek pointer riding the rim ring, tip aimed at the centre.
+  const dartTipR = rArcInner - 5;
+  const dartBaseR = rRim - 1;
+
   return (
     <div className="relative mx-auto aspect-square w-full" style={{ maxWidth: size }}>
-      {/* Clip the rotating needle SVG so its square box can't overflow the page
+      {/* Clip the rotating layer so its square box can't overflow the page
           sideways while it spins (same guard as the roulette wheel). */}
       <div className="absolute inset-0 overflow-hidden rounded-full">
-        {/* Static wheel: rim, tick scale, lit win-arc. */}
+        {/* Static wheel: rim, tick scale, lit win-zone. */}
         <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`}>
           <defs>
-            <linearGradient id="upg-arc" x1="0" y1="0" x2="1" y2="1">
+            <linearGradient id="upg-arc" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0" stopColor={light} />
               <stop offset="1" stopColor={col} />
             </linearGradient>
@@ -186,7 +228,7 @@ export const UpgraderWheel = forwardRef<UpgraderWheelHandle, UpgraderWheelProps>
             </filter>
           </defs>
 
-          {/* base disc + rim + arc track */}
+          {/* base disc + rim + zone track */}
           <circle cx={cx} cy={cy} r={rRim} fill="#0B0817" stroke="rgba(255,255,255,0.12)" strokeWidth="2" />
           <circle
             cx={cx}
@@ -215,22 +257,33 @@ export const UpgraderWheel = forwardRef<UpgraderWheelHandle, UpgraderWheelProps>
             );
           })}
 
-          {/* lit win-sector: the arc [0, chance) from 12 o'clock, clockwise */}
-          <path d={segPath(cx, cy, rArcOuter, rArcInner, 0, arcDeg)} fill="url(#upg-arc)" filter="url(#upg-glow)" opacity="0.95" />
-          {/* bright start marker at the zero reference so a tiny arc is still visible */}
-          <line x1={cx} y1={cy - rArcInner} x2={cx} y2={cy - rArcOuter} stroke={light} strokeWidth="2" />
+          {/* lit win-zone: symmetric about 12 o'clock, growing both ways from the top */}
+          <path
+            d={segPath(cx, cy, rArcOuter, rArcInner, -halfDeg, halfDeg)}
+            fill="url(#upg-arc)"
+            filter="url(#upg-glow)"
+            opacity="0.95"
+          />
+          {/* zero reference marker at the very top */}
+          <line x1={cx} y1={cy - rArcInner} x2={cx} y2={cy - rArcOuter} stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" />
 
-          {/* scale labels: 0/100% at top, 50% at bottom */}
-          <text x={cx} y={cy - rHub - 6} fill="rgba(255,255,255,0.55)" fontSize="10" fontWeight="700" textAnchor="middle">
-            0 / 100%
+          {/* scale labels: 0% at top, 50% at the sides, 100% at the bottom */}
+          <text x={cx} y={cy - rHub - 8} fill="rgba(255,255,255,0.55)" fontSize="10" fontWeight="700" textAnchor="middle">
+            0%
           </text>
-          <text x={cx} y={cy + rHub + 13} fill="rgba(255,255,255,0.45)" fontSize="10" fontWeight="700" textAnchor="middle">
+          <text x={cx} y={cy + rHub + 15} fill="rgba(255,255,255,0.45)" fontSize="10" fontWeight="700" textAnchor="middle">
+            100%
+          </text>
+          <text x={cx - rHub - 8} y={cy + 3} fill="rgba(255,255,255,0.35)" fontSize="9" fontWeight="700" textAnchor="end">
+            50%
+          </text>
+          <text x={cx + rHub + 8} y={cy + 3} fill="rgba(255,255,255,0.35)" fontSize="9" fontWeight="700" textAnchor="start">
             50%
           </text>
         </svg>
 
-        {/* Rotating needle overlay — spins around the shared centre with a CSS
-            transition; points to 12 o'clock at rot=0, i.e. the arc's zero point. */}
+        {/* Orbiting dart — rides the rim around the wheel (a moon on its orbit)
+            with a CSS transition; sits at 12 o'clock at rot=0, the zone's centre. */}
         <svg
           width="100%"
           height="100%"
@@ -242,34 +295,41 @@ export const UpgraderWheel = forwardRef<UpgraderWheelHandle, UpgraderWheelProps>
           style={{
             transform: `rotate(${rot}deg)`,
             transformOrigin: 'center',
-            transition: `transform ${dur}ms cubic-bezier(0.16, 1, 0.3, 1)`,
+            transition: `transform ${dur}ms ${SPIN_EASE}`,
           }}
         >
+          {/* a clean dart, no balls: bright body + dark keyline so it pops on
+              both the dark rim and the lit zone */}
           <g filter="url(#upg-glow)">
-            {/* counterweight tail */}
-            <path d={`M${cx - 5},${cy} L${cx + 5},${cy} L${cx},${cy + rHub * 0.5} Z`} fill="rgba(255,255,255,0.35)" />
-            {/* the pointer */}
-            <path d={`M${cx},${cy - rNeedle} L${cx + 5.5},${cy} L${cx - 5.5},${cy} Z`} fill="#FFFFFF" />
-            <circle cx={cx} cy={cy - rNeedle} r="4.5" fill="#FFFFFF" />
+            <path
+              d={`M${cx},${cy - dartTipR} L${cx - 6.5},${cy - dartBaseR} L${cx + 6.5},${cy - dartBaseR} Z`}
+              fill="#FFFFFF"
+              stroke="rgba(11,8,23,0.55)"
+              strokeWidth="1"
+            />
           </g>
-          <circle cx={cx} cy={cy} r="7" fill="#EDE7FF" stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
         </svg>
       </div>
 
-      {/* Centre readout — multiplier + chance; recolours on the result. */}
+      {/* Centre readout — multiplier + chance; recolours on the result. The
+          result label lives in a fixed-height slot so the numbers never jump. */}
       <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
         <div
           className={`grid place-items-center rounded-full text-center ring-2 transition-colors duration-300 ${hubRing} ${hubBg}`}
           style={{ width: rHub * 2, height: rHub * 2 }}
         >
           <div>
-            {result != null && landed ? (
-              <div className={`text-[11px] font-bold uppercase tracking-widest ${result.win ? 'text-mint' : 'text-roul-red'}`}>
-                {result.win ? winText : loseText}
-              </div>
-            ) : (
-              <div className="text-[10px] font-semibold uppercase tracking-widest text-white/40">{idleText}</div>
-            )}
+            <div
+              className={`h-4 text-[11px] font-bold uppercase tracking-widest transition-opacity duration-200 ${
+                result != null && landed
+                  ? result.win
+                    ? 'text-mint opacity-100'
+                    : 'text-roul-red opacity-100'
+                  : 'opacity-0'
+              }`}
+            >
+              {result != null ? (result.win ? winText : loseText) : ' '}
+            </div>
             <div
               className={`font-display text-2xl font-black tabular-nums ${
                 result != null && landed ? (result.win ? 'text-mint' : 'text-roul-red') : 'holo-text'

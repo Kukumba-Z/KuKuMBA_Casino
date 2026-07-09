@@ -21,15 +21,28 @@ import { BadRequestException } from '@nestjs/common';
  * never rewrites a spin already resolved.
  */
 
-// Chance bounds as a FRACTION (0.01% … 99%).
+// Chance bounds as a FRACTION (0.01% … 99% syntactic cap; the effective maximum
+// is tighter — see maxChanceFor).
 export const UPGRADER_MIN_CHANCE = 0.0001; // 0.01%
 export const UPGRADER_MAX_CHANCE = 0.99; // 99%
 
-/** Validate/clamp the win chance; throws BAD_CHANCE / CHANCE_OUT_OF_RANGE on junk. */
-export function normalizeChance(chance: unknown): number {
+/** The smallest multiplier a bet may carry — a spin must always pay ≥ ×1.02. */
+export const UPGRADER_MIN_MULTIPLIER = 1.02;
+
+/**
+ * The largest chance playable at a given RTP: multiplier = rtp / chance must
+ * stay ≥ UPGRADER_MIN_MULTIPLIER, so chance ≤ rtp / 1.02 (~97.06% at RTP 0.99).
+ */
+export function maxChanceFor(rtp: number): number {
+  const target = rtp > 0 && rtp <= 1 ? rtp : 0.99;
+  return Math.min(UPGRADER_MAX_CHANCE, target / UPGRADER_MIN_MULTIPLIER);
+}
+
+/** Validate the win chance; throws BAD_CHANCE / CHANCE_OUT_OF_RANGE on junk. */
+export function normalizeChance(chance: unknown, rtp = 0.99): number {
   const c = Number(chance);
   if (!Number.isFinite(c)) throw new BadRequestException('BAD_CHANCE');
-  if (c < UPGRADER_MIN_CHANCE || c > UPGRADER_MAX_CHANCE)
+  if (c < UPGRADER_MIN_CHANCE || c > maxChanceFor(rtp))
     throw new BadRequestException('CHANCE_OUT_OF_RANGE');
   return c;
 }

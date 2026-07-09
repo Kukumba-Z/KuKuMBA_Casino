@@ -86,11 +86,12 @@ export const sfx = {
     const c = audio();
     if (!c) return;
     const dur = durationMs / 1000;
-    // rising whoosh under the ticks
-    blip(c, { freq: 180, dur, type: 'sawtooth', gain: 0.05, slideTo: 520 });
+    // rising whoosh under the ticks (kept soft — the slow spin makes it long)
+    blip(c, { freq: 180, dur, type: 'sawtooth', gain: 0.04, slideTo: 480 });
     // ticks: dense at the start, sparser toward the end (ease-out), like a
-    // decelerating needle clacking past the pins
-    const N = Math.max(18, Math.round(dur * 40));
+    // decelerating needle clacking past the pins; capped so a long suspense
+    // spin stays a tick-tick-tick, not a buzz
+    const N = Math.max(18, Math.min(72, Math.round(dur * 24)));
     for (let k = 1; k <= N; k++) {
       const x = k / N;
       const at = dur * (1 - Math.pow(1 - x, 3));

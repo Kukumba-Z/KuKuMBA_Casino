@@ -16,7 +16,7 @@ import { useUI } from '../store/ui';
 import { toast } from '../store/toast';
 
 const DEFAULT_MIN_CHANCE = 0.0001; // 0.01%
-const DEFAULT_MAX_CHANCE = 0.99; // 99%
+const DEFAULT_MAX_CHANCE = 0.99 / 1.02; // ≈97.06% — the ×1.02 minimum-multiplier cap
 
 /** Recent-result chip colour by multiplier — mirrors the wheel's risk heat map. */
 const chipColor = (m: number) =>
@@ -45,9 +45,13 @@ export default function Upgrader() {
   const [chancePctStr, setChancePctStr] = useState('50');
   const [multStr, setMultStr] = useState('1.98');
 
+  // Static key on purpose: keying by `chance` refetches on EVERY keystroke and
+  // briefly drops `info` to undefined, which used to clobber the multiplier
+  // field mid-typing. The admin RTP panel invalidates by the ['upgrader-info']
+  // prefix, so the live RTP refresh still works.
   const { data: info } = useQuery({
-    queryKey: ['upgrader-info', chance],
-    queryFn: async () => (await api.get(`/games/upgrader?chance=${chance}`)).data,
+    queryKey: ['upgrader-info'],
+    queryFn: async () => (await api.get('/games/upgrader')).data,
   });
   const { data: balances } = useBalances();
   const { data: currencies } = useCurrencies();
@@ -85,9 +89,17 @@ export default function Upgrader() {
   // Keep the sound engine and the wheel's quick-play in sync with the prefs.
   useEffect(() => setSoundEnabled(sound), [sound]);
   useEffect(() => wheelRef.current?.setFast(quick), [quick]);
-  // When the admin retunes RTP, the derived multiplier field follows live.
+  // When the admin retunes RTP, re-clamp the chance (its cap is RTP-dependent)
+  // and refresh both linked fields. Guarded by a ref so it fires ONLY on a real
+  // RTP change — never on refetches — and can't clobber a field mid-typing.
+  const rtpRef = useRef(rtp);
   useEffect(() => {
-    setMultStr(cleanMult(rtp / chance));
+    if (rtpRef.current === rtp) return;
+    rtpRef.current = rtp;
+    const c = clampChance(chance);
+    setChance(c);
+    setChancePctStr((c * 100).toFixed(2));
+    setMultStr(cleanMult(rtp / c));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rtp]);
 
@@ -124,7 +136,7 @@ export default function Upgrader() {
   const onLand = () => {
     setSpinning(false);
     const r = pendingRef.current;
-    if (r) setRecent((h) => [r, ...h].slice(0, 12));
+    if (r) setRecent((h) => [r, ...h].slice(0, 10)); // 10 chips = a 2×5 grid
     // Reveal the settled balance exactly when the needle lands (not before).
     qc.invalidateQueries({ queryKey: ['balances'] });
     qc.invalidateQueries({ queryKey: ['my-bonuses'] });
@@ -150,8 +162,8 @@ export default function Upgrader() {
       debitLocalBalance(qc, currency, mode, stake);
       pendingRef.current = { mult: data.multiplier, win: data.win };
       setSpinning(true);
-      // Animate the EXACT server angle; the balance refresh happens on landing.
-      wheelRef.current?.spinTo(data.angleBp, data.win, data.multiplier);
+      // Animate the EXACT server outcome; the balance refresh happens on landing.
+      wheelRef.current?.spinTo(data.angleBp, data.win, data.chance);
     } catch (e) {
       toast.error(apiError(e));
     }
@@ -257,22 +269,25 @@ export default function Upgrader() {
             )}
           </div>
 
-          {/* recent results — this visit only */}
+          {/* recent results — this visit only; last 10 as a 2×5 grid */}
           <div className="card p-3.5">
             <div className="mb-2 text-[11px] font-bold tracking-wider text-white/45">{t('upgrader.recent')}</div>
-            <div className="flex flex-wrap gap-1.5">
-              {recent.length === 0 && <span className="text-sm text-white/35">{t('upgrader.recentEmpty')}</span>}
-              {recent.map((r, i) => (
-                <span
-                  key={i}
-                  className={`rounded-lg border px-2.5 py-1 font-display text-xs font-extrabold ${
-                    r.win ? `border-white/10 bg-white/5 ${chipColor(r.mult)}` : 'border-roul-red/25 bg-roul-red/10 text-roul-red/70'
-                  }`}
-                >
-                  ×{cleanMult(r.mult)}
-                </span>
-              ))}
-            </div>
+            {recent.length === 0 ? (
+              <span className="text-sm text-white/35">{t('upgrader.recentEmpty')}</span>
+            ) : (
+              <div className="grid grid-cols-5 gap-1.5">
+                {recent.map((r, i) => (
+                  <span
+                    key={i}
+                    className={`truncate rounded-lg border px-1 py-1 text-center font-display text-xs font-extrabold ${
+                      r.win ? `border-white/10 bg-white/5 ${chipColor(r.mult)}` : 'border-roul-red/25 bg-roul-red/10 text-roul-red/70'
+                    }`}
+                  >
+                    ×{cleanMult(r.mult)}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </>
       }
@@ -285,8 +300,8 @@ export default function Upgrader() {
               ref={wheelRef}
               chance={chance}
               multiplier={multiplier}
+              maxChance={MAX}
               onLand={onLand}
-              idleText={t('upgrader.sceneIdle')}
               winText={t('upgrader.win')}
               loseText={t('upgrader.lose')}
             />
