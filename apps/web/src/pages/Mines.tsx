@@ -17,7 +17,6 @@ import { toast } from '../store/toast';
 const GRID = 25;
 const MIN_MINES = 2;
 const MAX_MINES = 24;
-const MINES_PRESETS = [2, 3, 5, 10, 24];
 
 /** The server's board view (see MinesService.viewOf) — the page renders it verbatim. */
 interface MinesView {
@@ -89,6 +88,7 @@ export default function Mines() {
   useEffect(() => setSoundEnabled(sound), [sound]);
 
   const [mines, setMines] = useState(3);
+  const [minesStr, setMinesStr] = useState('3');
   // Keyed by the mine count so the ladder refetches per board; the admin RTP
   // panel invalidates by the ['mines-info'] prefix, so retunes refresh it live.
   const { data: info } = useQuery({
@@ -127,7 +127,19 @@ export default function Mines() {
   const stakeNum = Number(stakeStr);
   const outOfRange = stakeStr.trim() !== '' && (stakeNum > limits.max || stakeNum < limits.min);
 
-  const setMinesClamped = (v: number) => setMines(Math.min(MAX_MINES, Math.max(MIN_MINES, Math.round(v))));
+  const setMinesClamped = (v: number) => {
+    const m = Math.min(MAX_MINES, Math.max(MIN_MINES, Math.round(Number(v) || MIN_MINES)));
+    setMines(m);
+    setMinesStr(String(m));
+  };
+  // Free typing (digits only); the canonical `mines` follows only valid values,
+  // and blur snaps the field back to the canon (same pattern as the stake input).
+  const onMinesInput = (v: string) => {
+    const digits = v.replace(/\D/g, '').slice(0, 2);
+    setMinesStr(digits);
+    const n = Number(digits);
+    if (digits !== '' && n >= MIN_MINES && n <= MAX_MINES) setMines(n);
+  };
 
   /** Fold a server view into the page: sounds, deadline, recent, wallet caches. */
   const applyView = (data: MinesView, opts?: { silent?: boolean }) => {
@@ -257,7 +269,7 @@ export default function Mines() {
   const safeLeft = GRID - minesOnBoard - safeCount;
 
   const message = useMemo(() => {
-    if (!view) return { text: t('mines.sceneIdle'), cls: 'text-white/50', sub: '' };
+    if (!view) return { text: '', cls: '', sub: '' };
     if (view.phase === 'PLAYING') {
       const sub = secondsLeft != null && secondsLeft <= 20 ? t('mines.autoIn', { s: secondsLeft }) : '';
       return view.safeCount === 0
@@ -355,26 +367,18 @@ export default function Mines() {
                 <button onClick={() => setMinesClamped(mines - 1)} className="btn-ghost !px-3" disabled={busy || playing || mines <= MIN_MINES} aria-label="−1">
                   <Minus size={16} />
                 </button>
-                <div className="flex-1 rounded-xl border border-white/10 bg-white/[0.04] py-2.5 text-center font-display text-lg font-black tabular-nums">
-                  {mines}
-                </div>
+                <input
+                  value={minesStr}
+                  onChange={(e) => onMinesInput(e.target.value)}
+                  onBlur={() => setMinesClamped(Number(minesStr) || mines)}
+                  inputMode="numeric"
+                  disabled={busy || playing}
+                  aria-label={t('mines.minesLabel')}
+                  className="input flex-1 !py-2.5 text-center font-display text-lg font-black tabular-nums"
+                />
                 <button onClick={() => setMinesClamped(mines + 1)} className="btn-ghost !px-3" disabled={busy || playing || mines >= MAX_MINES} aria-label="+1">
                   <Plus size={16} />
                 </button>
-              </div>
-              <div className="mt-2 grid grid-cols-5 gap-1.5">
-                {MINES_PRESETS.map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setMinesClamped(m)}
-                    disabled={busy || playing}
-                    className={`rounded-lg border px-1 py-1.5 text-xs font-bold tabular-nums transition ${
-                      m === mines ? 'border-lav/50 bg-lav/15 text-lav' : 'border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.07]'
-                    }`}
-                  >
-                    {m}
-                  </button>
-                ))}
               </div>
             </div>
 
@@ -436,17 +440,17 @@ export default function Mines() {
       {/* Scene */}
       <div className="card relative overflow-hidden">
         <div className="relative flex flex-col items-center gap-4 px-4 py-5 sm:px-6 sm:py-6">
-          {/* counters above the board (padded clear of the corner buttons) */}
-          <div className="flex flex-wrap items-center justify-center gap-2 px-10">
+          {/* counters above the board — one line always; labels are desktop-only */}
+          <div className="flex items-center justify-center gap-2 px-10">
             <span className="chip text-[11px] font-bold">
               <Crystal className="h-3.5 w-3.5" />
               <span className="tabular-nums text-mint">{Math.max(0, safeLeft)}</span>
-              <span className="text-white/50">{t('mines.safeLeft')}</span>
+              <span className="hidden text-white/50 sm:inline">{t('mines.safeLeft')}</span>
             </span>
             <span className="chip text-[11px] font-bold">
               <Mine className="h-3.5 w-3.5" />
               <span className="tabular-nums text-roul-red">{minesOnBoard}</span>
-              <span className="text-white/50">{t('mines.minesOnField')}</span>
+              <span className="hidden text-white/50 sm:inline">{t('mines.minesOnField')}</span>
             </span>
           </div>
 
@@ -458,8 +462,8 @@ export default function Mines() {
             </div>
           </div>
 
-          {/* the 5×5 board */}
-          <div className="grid w-full max-w-[420px] grid-cols-5 gap-2">
+          {/* the 5×5 board (kept compact on phones) */}
+          <div className="grid w-full max-w-[300px] grid-cols-5 gap-1.5 sm:max-w-[420px] sm:gap-2">
             {Array.from({ length: GRID }, (_, i) => (
               <button
                 key={i}
