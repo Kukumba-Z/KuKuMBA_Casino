@@ -438,21 +438,22 @@ export class PlinkoEngine {
     }
     this.balls = this.balls.filter((b) => !(b.done && b.trail.every((t) => t.life <= 0)));
 
-    // particles
+    // particles & confetti — velocities were tuned as per-frame steps at 60 fps;
+    // normalise by dt so the physics runs at the same speed on 120/144 Hz screens
+    const fk = dt / (1000 / 60);
     for (const p of this.particles) {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.12;
+      p.x += p.vx * fk;
+      p.y += p.vy * fk;
+      p.vy += 0.12 * fk;
       p.life -= dt / 520;
     }
     this.particles = this.particles.filter((p) => p.life > 0);
 
-    // confetti
     for (const c of this.confetti) {
-      c.x += c.vx;
-      c.y += c.vy;
-      c.vy += 0.05;
-      c.rot += c.vr;
+      c.x += c.vx * fk;
+      c.y += c.vy * fk;
+      c.vy += 0.05 * fk;
+      c.rot += c.vr * fk;
       c.life -= dt / 2600;
     }
     this.confetti = this.confetti.filter((c) => c.life > 0 && c.y < this.H + 30);

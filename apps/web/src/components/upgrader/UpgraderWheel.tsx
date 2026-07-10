@@ -206,12 +206,17 @@ export const UpgraderWheel = forwardRef<UpgraderWheelHandle, UpgraderWheelProps>
   // Orbiting dart: a sleek pointer riding the rim ring, tip aimed at the centre.
   const dartTipR = rArcInner - 5;
   const dartBaseR = rRim - 1;
+  const dartPath = `M${cx},${cy - dartTipR} L${cx - 6.5},${cy - dartBaseR} L${cx + 6.5},${cy - dartBaseR} Z`;
 
   return (
     <div className="relative mx-auto aspect-square w-full" style={{ maxWidth: size }}>
       {/* Clip the rotating layer so its square box can't overflow the page
-          sideways while it spins (same guard as the roulette wheel). */}
-      <div className="absolute inset-0 overflow-hidden rounded-full">
+          sideways while it spins (same guard as the roulette wheel). A plain
+          rectangular clip on purpose — everything painted lives inside the
+          inscribed circle anyway, and an axis-aligned clip is free on the
+          compositor, while a border-radius mask over an animated layer forces
+          main-thread work every frame (visible judder on 120 Hz screens). */}
+      <div className="absolute inset-0 overflow-hidden">
         {/* Static wheel: rim, tick scale, lit win-zone. */}
         <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`}>
           <defs>
@@ -283,7 +288,12 @@ export const UpgraderWheel = forwardRef<UpgraderWheelHandle, UpgraderWheelProps>
         </svg>
 
         {/* Orbiting dart — rides the rim around the wheel (a moon on its orbit)
-            with a CSS transition; sits at 12 o'clock at rot=0, the zone's centre. */}
+            with a CSS transition; sits at 12 o'clock at rot=0, the zone's centre.
+            `will-change: transform` pins the layer to the compositor so the spin
+            interpolates off the main thread at the display's native refresh rate.
+            No SVG filter in here on purpose: a blur inside a transforming layer
+            forces per-frame main-thread re-rasterisation, which is exactly the
+            120 Hz judder — the glow is baked with layered strokes instead. */}
         <svg
           width="100%"
           height="100%"
@@ -296,18 +306,14 @@ export const UpgraderWheel = forwardRef<UpgraderWheelHandle, UpgraderWheelProps>
             transform: `rotate(${rot}deg)`,
             transformOrigin: 'center',
             transition: `transform ${dur}ms ${SPIN_EASE}`,
+            willChange: 'transform',
           }}
         >
-          {/* a clean dart, no balls: bright body + dark keyline so it pops on
-              both the dark rim and the lit zone */}
-          <g filter="url(#upg-glow)">
-            <path
-              d={`M${cx},${cy - dartTipR} L${cx - 6.5},${cy - dartBaseR} L${cx + 6.5},${cy - dartBaseR} Z`}
-              fill="#FFFFFF"
-              stroke="rgba(11,8,23,0.55)"
-              strokeWidth="1"
-            />
-          </g>
+          {/* a clean dart, no balls: soft baked halo + bright body + dark keyline
+              so it pops on both the dark rim and the lit zone */}
+          <path d={dartPath} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="7" strokeLinejoin="round" />
+          <path d={dartPath} fill="none" stroke="rgba(255,216,110,0.4)" strokeWidth="3.5" strokeLinejoin="round" />
+          <path d={dartPath} fill="#FFFFFF" stroke="rgba(11,8,23,0.55)" strokeWidth="1" strokeLinejoin="round" />
         </svg>
       </div>
 
