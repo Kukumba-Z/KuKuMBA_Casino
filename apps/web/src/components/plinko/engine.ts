@@ -4,11 +4,12 @@
 // landing slot; drop(path, slot, mult) animates a ball that ALWAYS rests in
 // exactly that slot, so what you watch is what settled.
 //
-// The route down the pins, however, is deliberately theatrical: tracing the
-// true Galton contacts made the destination readable halfway down, so the
-// visible ball follows a random decoy story (see drop()) and only commits to
-// the real slot in the last rows — pure presentation, zero effect on payouts.
-// Edges are rare (binomial), which is why they pay big.
+// The fall itself is a REAL (but cheap) physics simulation: gravity, elastic
+// collisions against the pin circles with random restitution and random
+// tangential kicks — every drop is genuinely different and unpredictable. An
+// invisible steering wind (gain ramping with depth, tracking a decoy first)
+// guarantees the ball still ends in the server's slot — pure presentation,
+// zero effect on payouts. Edges are rare (binomial), which is why they pay big.
 // @ts-nocheck
 
 export interface PlinkoSlot {
@@ -47,6 +48,20 @@ const C = {
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const rand = (a, b) => a + Math.random() * (b - a);
+
+// ── ball physics constants (px, seconds) ────────────────────────────────────
+const PHYS = {
+  G: 320, // gravity — tuned for a slow, watchable fall
+  MAXVX: 560,
+  MAXVY: 360, // terminal fall speed
+  KICK: 110, // random tangential impulse on every pin hit (the chaos source)
+  DECOY: 7, // gentle wind toward the decoy story (the fake-out drama)
+  STEER: 70, // hard end-game gain toward the true slot (guarantees convergence)
+  NOISE: 320, // random horizontal jitter accel near the top (dies with depth)
+  DRAG_X: 3.2, // horizontal drag at full convergence (kills wild pocket speed)
+  CAPTURE_MS: 140, // base funnel glide; stretched when there's ground to cover
+  MAX_AGE_MS: 8000, // failsafe: force-land anything still bouncing after this
+};
 
 /** Colour a slot by its multiplier — a smooth neon heat map that runs cool in
  *  the centre (small pays) to hot at the edges (big pays): indigo → blue → mint
@@ -269,10 +284,10 @@ export class PlinkoEngine {
   }
 
   /**
-   * Animate the server-resolved drop. The landing slot is the server's verdict
-   * and is honoured exactly; the visible route down the pins is intentionally
-   * theatrical (see below) — `path` is accepted for API compatibility but the
-   * display no longer traces it literally.
+   * Launch a server-resolved drop. The landing slot is the server's verdict and
+   * is honoured exactly; the fall itself is a real physics sim (see stepBall /
+   * collidePins) — `path` is accepted for API compatibility but the display
+   * doesn't trace it.
    */
   drop(path: boolean[], slot: number, mult: number, meta?: any) {
     this.resumeAudio();
@@ -297,72 +312,50 @@ export class PlinkoEngine {
       return;
     }
 
-    // ── the DISPLAY path: maximally chaotic, landing server-exact ────────────
-    // The board is a half-gap lattice: at pin-row i a contact sits at
-    // x = cx + k·(gap/2) with k ≡ i (mod 2) and |k| ≤ i. Walking the TRUE Galton
-    // contacts telegraphs the slot from halfway down (a run of same-direction
-    // hops is readable), so the ball follows a random DECOY story instead: it
-    // rides toward a fake target — the opposite edge, the centre, an overshoot
-    // of its own side — and only over the last rows whips across to the real
-    // slot. Sometimes the "fake" is near the truth and the ride just looks
-    // drunk; either way no row before the last few says where it ends. Money
-    // truth is untouched — the final point is exactly the server's slot, and
-    // hops can span several pins (violent ricochets), so nothing is readable.
-    const landK = 2 * landSlot - rows; // lattice coordinate of the true slot
-    const side = landK >= 0 ? 1 : -1;
+    // ── REAL physics, steered landing ────────────────────────────────────────
+    // The ball is a genuine rigid body: gravity, elastic collisions against the
+    // actual pin circles with a RANDOM restitution and a random tangential kick
+    // on every hit — so no two drops ever look alike and nothing telegraphs the
+    // outcome. The server slot is honoured by an invisible PD "wind" whose gain
+    // ramps with depth (≈0 over the top half — pure chaos there) tracking a
+    // moving target: a random decoy first (other edge / centre / overshoot),
+    // sliding to the true slot only in the lower third. When the ball reaches
+    // the slot line it's funnelled into the exact server pocket. Cost per ball
+    // per frame: one 3×3 pin-neighbourhood check — negligible.
+    const targetX = this.slotX(landSlot);
+    const sideSign = targetX >= this.cx ? 1 : -1;
     const roll = Math.random();
-    const decoyK =
+    const decoySlot =
       roll < 0.4
-        ? -side * rand(0.3, 0.95) * rows // race toward the OTHER side
+        ? Math.round(rows * (sideSign > 0 ? rand(0, 0.3) : rand(0.7, 1))) // other side
         : roll < 0.7
-          ? rand(-2.5, 2.5) // hover the centre… then dive
-          : side * rand(0.4, 1) * rows; // overshoot its own edge
-    const switchRow = Math.max(2, Math.floor(rows * rand(0.45, 0.8)));
-    // snap to the row's contact lattice (parity of i), stay inside the triangle
-    const snapK = (v: number, i: number) => {
-      let k = Math.round(v);
-      if ((((k + i) % 2) + 2) % 2 !== 0) k += Math.random() < 0.5 ? 1 : -1;
-      return clamp(k, -i, i);
-    };
-    // final contact must neighbour the landing slot so the last hop is real
-    const lastK = snapK(landK + (Math.random() < 0.5 ? -1 : 1), rows - 1);
-    const pts: { x: number; y: number }[] = [];
-    // entry, just above row 0 (kept on-canvas even when the board is centred)
-    pts.push({ x: this.cx, y: this.topPad - Math.min(this.rowH * 0.85, this.topPad - 2) });
-    for (let i = 0; i < rows; i++) {
-      let guide: number;
-      if (i >= rows - 1) {
-        guide = lastK;
-      } else if (i < switchRow) {
-        guide = decoyK * Math.pow(i / switchRow, 0.8); // ease out to the decoy
-      } else {
-        const p = (i - switchRow) / Math.max(1, rows - 1 - switchRow);
-        guide = lerp(decoyK, lastK, p * p * (3 - 2 * p)); // whip to the truth
-      }
-      // per-row wobble keeps even the decoy leg jittery; it dies out near the
-      // bottom so the final approach reads as one committed swerve
-      const wobble = i >= rows - 1 ? 0 : rand(-1.7, 1.7) * (1 - (0.55 * i) / rows);
-      const k = snapK(guide + wobble, i);
-      const x = this.cx + k * (this.gap / 2);
-      const pt: any = { x, y: this.topPad + i * this.rowH, rowIdx: i };
-      // flash the pin actually under this contact
-      pt.col = clamp((k + i) / 2 + 1, 0, i + 2);
-      pts.push(pt);
-    }
-    pts.push({ x: this.slotX(landSlot), y: this.slotTop + this.slotH * 0.5 }); // land — server slot, exactly
-    // Slow, thrilling fall — the ball beats hard side-to-side down the pins.
-    const segMs = 200;
+          ? Math.round(rows / 2 + rand(-1.5, 1.5)) // hover the centre… then dive
+          : clamp(Math.round(landSlot + sideSign * rand(1, 3)), 0, rows); // overshoot
+    const span = Math.max(1, rows * this.gap);
+    // Cap how far the decoy may sit from the truth (70% of the board): an
+    // edge-to-edge fake-out physically can't swing back in time and would need
+    // a visible slide at the pocket. Centre targets — the common case — still
+    // get the full-drama decoys.
+    let decoyX = this.slotX(clamp(decoySlot, 0, rows));
+    decoyX = targetX + clamp(decoyX - targetX, -0.7 * span, 0.7 * span);
+    // The farther the truth sits from the decoy, the EARLIER the story flips —
+    // so the ball is at the pocket when it crosses the slot line (no slide).
+    const switchD = clamp(0.58 - 0.35 * (Math.abs(targetX - decoyX) / span), 0.28, 0.58) + rand(-0.04, 0.04);
     this.balls.push({
-      pts,
-      seg: 0, // current segment index
-      t: 0, // 0..1 within segment
-      segMs,
+      x: this.cx + rand(-0.4, 0.4) * this.gap,
+      y: this.topPad - Math.min(this.rowH * 0.9, this.topPad - 2),
+      vx: rand(-50, 50),
+      vy: rand(0, 30),
+      targetX,
+      decoyX,
+      switchD, // depth where the decoy story yields to truth
+      age: 0,
+      capture: false,
+      capT: 0,
       slot: landSlot,
       mult,
       win,
       huge,
-      x: pts[0].x,
-      y: pts[0].y,
       squash: 0,
       trail: [],
       done: false,
@@ -409,48 +402,38 @@ export class PlinkoEngine {
     for (let s = 0; s < this.slotFlash.length; s++) this.slotFlash[s] = Math.max(0, this.slotFlash[s] - dt / 380);
     this.shake = Math.max(0, this.shake - dt / 260);
 
-    // balls
+    // balls — real physics; substep so a slow frame can't tunnel through a pin
     for (const b of this.balls) {
       if (b.done) continue;
       b.squash = Math.max(0, b.squash - dt / 160);
-      b.t += dt / b.segMs;
-      while (b.t >= 1 && b.seg < b.pts.length - 1) {
-        b.t -= 1;
-        b.seg++;
-        const p = b.pts[b.seg];
-        b.x = p.x;
-        b.y = p.y;
-        b.squash = 1;
-        if (b.seg < b.pts.length - 1) {
-          // hit a pin — just a quiet flash (no spark clutter, no peg clicks)
-          if (p.rowIdx != null && this.pins[p.rowIdx] && this.pins[p.rowIdx][p.col]) {
-            this.pins[p.rowIdx][p.col].flash = 1;
-          }
-        } else {
-          this.land(b);
+      b.age += dt;
+      if (!b.capture) {
+        const steps = dt > 24 ? 2 : 1;
+        const dtS = dt / 1000 / steps;
+        for (let s = 0; s < steps && !b.capture; s++) this.stepBall(b, dtS);
+        if (b.y >= this.slotTop - this.ballR * 0.4 || b.age > PHYS.MAX_AGE_MS) {
+          // reached the slot line (or the failsafe) → funnel into the pocket.
+          // Glide time scales with the leftover distance so a rare long slide
+          // reads as a roll, never a teleport.
+          b.capture = true;
+          b.capT = 0;
+          b.cx0 = b.x;
+          b.cy0 = b.y;
+          b.capMs = clamp(PHYS.CAPTURE_MS + Math.abs(b.targetX - b.x) * 1.6, 140, 480);
         }
+      } else {
+        // final funnel: a short glide that ends dead-centre in the SERVER slot
+        b.capT += dt / (b.capMs || PHYS.CAPTURE_MS);
+        const t = Math.min(1, b.capT);
+        const e = 1 - (1 - t) * (1 - t);
+        b.x = lerp(b.cx0, b.targetX, e);
+        b.y = lerp(b.cy0, this.slotTop + this.slotH * 0.45, e);
+        if (t >= 1) this.land(b);
       }
-      if (b.seg >= b.pts.length - 1) {
-        b.done = true;
-        continue;
+      if (!b.done) {
+        b.trail.push({ x: b.x, y: b.y, life: 1 });
+        if (b.trail.length > 18) b.trail.shift();
       }
-      const a = b.pts[b.seg];
-      const c = b.pts[b.seg + 1];
-      const tt = clamp(b.t, 0, 1);
-      const ease = tt * tt * (3 - 2 * tt); // smoothstep along the contact line
-      // Lateral sway: the ball bulges out in its travel direction mid-hop —
-      // nearly a full pin over — so it visibly whips side-to-side down the board
-      // (a run of same-direction bounces reads as "racing toward the edge", a
-      // late reversal as the last-second cut back). Endpoints stay server-exact.
-      const dir = Math.sign(c.x - a.x);
-      const sway = dir * this.gap * 0.6 * Math.sin(Math.PI * tt);
-      b.x = clamp(lerp(a.x, c.x, ease) + sway, this.ballR, this.W - this.ballR);
-      // tall springy bounce arc between contacts
-      const hop = this.rowH * 0.5;
-      b.y = lerp(a.y, c.y, tt) - Math.sin(Math.PI * tt) * hop;
-      // neon trail — a touch longer so the slow arc glows
-      b.trail.push({ x: b.x, y: b.y, life: 1 });
-      if (b.trail.length > 20) b.trail.shift();
       for (const tr of b.trail) tr.life -= dt / 300;
     }
     this.balls = this.balls.filter((b) => !(b.done && b.trail.every((t) => t.life <= 0)));
@@ -473,6 +456,85 @@ export class PlinkoEngine {
       c.life -= dt / 2600;
     }
     this.confetti = this.confetti.filter((c) => c.life > 0 && c.y < this.H + 30);
+  }
+
+  /** One physics substep: gravity + steering wind + drag, integrate, collide. */
+  private stepBall(b, dtS: number) {
+    // depth 0 (entry) → 1 (slot line); everything below is gated by it
+    const d = clamp((b.y - this.topPad) / Math.max(1, this.slotTop - this.topPad), 0, 1);
+    // convergence phase 0→1, starting at this ball's own switch depth
+    const u = clamp((d - b.switchD) / Math.max(0.12, 1 - b.switchD), 0, 1);
+    const uu = u * u * (3 - 2 * u);
+    // two-part steering wind: a gentle pull toward the DECOY carries the
+    // fake-out story (fading as convergence starts), then a hard pull toward
+    // the TRUE slot ramps in — strong enough that the ball is already at the
+    // pocket when it crosses the slot line (no visible last-moment slide);
+    // raw jitter up top keeps even the decoy leg wandering
+    const kDecoy = PHYS.DECOY * d * (1 - uu);
+    // adaptive end-game gain: the more ground still to cover, the harder the
+    // pull — far recoveries tighten instead of arriving late
+    const lag = Math.min(1.6, 1 + Math.abs(b.targetX - b.x) / (this.gap * 6));
+    const kTrue = PHYS.STEER * uu * uu * lag;
+    b.vx +=
+      (kDecoy * (b.decoyX - b.x) + kTrue * (b.targetX - b.x) + rand(-1, 1) * PHYS.NOISE * (1 - d)) *
+      dtS;
+    b.vy += PHYS.G * dtS;
+    b.vx *= Math.max(0, 1 - (0.5 + PHYS.DRAG_X * uu) * dtS);
+    b.vx = clamp(b.vx, -PHYS.MAXVX, PHYS.MAXVX);
+    b.vy = Math.min(b.vy, PHYS.MAXVY);
+    b.x += b.vx * dtS;
+    b.y += b.vy * dtS;
+    this.collidePins(b);
+    // canvas walls
+    if (b.x < this.ballR) {
+      b.x = this.ballR;
+      b.vx = Math.abs(b.vx) * 0.6;
+    } else if (b.x > this.W - this.ballR) {
+      b.x = this.W - this.ballR;
+      b.vx = -Math.abs(b.vx) * 0.6;
+    }
+  }
+
+  /** Circle-vs-pin collisions, checked only against the 3×3 pin neighbourhood
+   *  around the ball (row from y, column from x) — a handful of distance tests
+   *  per frame, so even a screenful of balls costs next to nothing. */
+  private collidePins(b) {
+    const iMid = Math.round((b.y - this.topPad) / this.rowH);
+    const rr = this.ballR + this.pinR;
+    for (let i = iMid - 1; i <= iMid + 1; i++) {
+      if (i < 0 || i >= this.pins.length) continue;
+      const row = this.pins[i];
+      const c0 = Math.round((b.x - row[0].x) / this.gap);
+      for (let c = c0 - 1; c <= c0 + 1; c++) {
+        if (c < 0 || c >= row.length) continue;
+        const p = row[c];
+        const dx = b.x - p.x;
+        const dy = b.y - p.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= rr * rr || d2 === 0) continue;
+        const dist = Math.sqrt(d2);
+        const nx = dx / dist;
+        const ny = dy / dist;
+        // push out of penetration, then bounce if moving into the pin
+        b.x = p.x + nx * rr;
+        b.y = p.y + ny * rr;
+        const vn = b.vx * nx + b.vy * ny;
+        if (vn < 0) {
+          // random restitution + a random tangential kick — every hit is a coin
+          // toss of its own, which is where the genuine unpredictability lives.
+          // Kicks fade near the pocket so they can't undo the final convergence.
+          const e = rand(0.35, 0.7);
+          b.vx -= (1 + e) * vn * nx;
+          b.vy -= (1 + e) * vn * ny;
+          const depth = clamp((b.y - this.topPad) / Math.max(1, this.slotTop - this.topPad), 0, 1);
+          const kick = rand(-PHYS.KICK, PHYS.KICK) * (1 - 0.6 * depth);
+          b.vx += -ny * kick;
+          b.vy += nx * kick * 0.3;
+          p.flash = 1;
+          b.squash = 1;
+        }
+      }
+    }
   }
 
   private land(b) {
