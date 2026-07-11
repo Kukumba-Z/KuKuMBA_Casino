@@ -139,3 +139,74 @@
     @apply border border-white/10 bg-white/5 text-white/50;
   }
 }
+
+/* Sexcoin — the coin toss. The throw wrapper rides this vertical arc while the
+   inner disc spins: up fast, a hang at the apex, gravity down, one small bounce
+   and a settle back to the smaller "resting" scale. First/last frames match the
+   rest transform (translateY(0) scale(.86)), so entering/leaving the animation
+   never jumps. The ground shadow plays the inverse arc — it shrinks and fades
+   while the coin is airborne and snaps wide on impact. */
+@keyframes sexcoin-toss {
+  0% {
+    transform: translateY(0) scale(0.86);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1); /* launch: fast, decelerating */
+  }
+  14% {
+    transform: translateY(-19%) scale(1.03);
+    animation-timing-function: ease-out;
+  }
+  32% {
+    transform: translateY(-28%) scale(1.1);
+    animation-timing-function: ease-in-out; /* hang at the apex */
+  }
+  55% {
+    transform: translateY(-21%) scale(1.07);
+    animation-timing-function: cubic-bezier(0.55, 0, 0.85, 0.4); /* gravity */
+  }
+  76% {
+    transform: translateY(2.5%) scale(1);
+    animation-timing-function: ease-out; /* impact -> bounce up */
+  }
+  85% {
+    transform: translateY(-7%) scale(0.97);
+    animation-timing-function: ease-in;
+  }
+  93% {
+    transform: translateY(0.5%) scale(0.9);
+    animation-timing-function: ease-out;
+  }
+  100% {
+    transform: translateY(0) scale(0.86);
+  }
+}
+@keyframes sexcoin-toss-shadow {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+    animation-timing-function: ease-out;
+  }
+  32% {
+    transform: scale(0.55);
+    opacity: 0.22;
+    animation-timing-function: ease-in-out;
+  }
+  55% {
+    transform: scale(0.62);
+    opacity: 0.28;
+    animation-timing-function: cubic-bezier(0.55, 0, 0.85, 0.4);
+  }
+  76% {
+    transform: scale(1.08);
+    opacity: 0.62;
+    animation-timing-function: ease-out;
+  }
+  85% {
+    transform: scale(0.92);
+    opacity: 0.45;
+    animation-timing-function: ease-in;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+}

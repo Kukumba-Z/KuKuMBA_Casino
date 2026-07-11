@@ -12,8 +12,13 @@ import { PenisFace, VaginaFace } from './CoinFaces';
  * Landing is reported via onTransitionEnd with a timeout fallback (reduced
  * motion, hidden tab), the RouletteWheel pattern.
  *
- * The edge is a pseudo-гурт: a thin slab rotated 90° around Y whose repeating
- * linear-gradient reads as reeding whenever the coin passes edge-on.
+ * The throw itself is sold by a wrapper that rides the `sexcoin-toss`
+ * keyframe arc (index.css) in sync with the spin: the coin leaps up, hangs,
+ * falls back with a little bounce — and rests SMALLER than it flies (scale
+ * .86 vs up to 1.1), while a ground shadow underneath plays the inverse arc.
+ * There is deliberately NO separate edge plane: a quad locked at 90° to the
+ * faces rasterises as a stray dashed line on mobile GPUs whenever the coin is
+ * face-on. The reeded rings baked into the faces carry the edge illusion.
  */
 export function Coin({
   rotation,
@@ -55,14 +60,14 @@ export function Coin({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spinId]);
 
+  const flying = spinMs > 0;
+
   const glowColor =
     glow === 'win'
       ? 'rgba(126,231,199,0.4)'
       : glow === 'lose'
         ? 'rgba(229,72,77,0.38)'
         : 'rgba(255,216,110,0.22)';
-
-  const thickness = Math.max(8, size * 0.055);
 
   return (
     <div className={`relative ${className ?? ''}`} style={{ width: size, height: size, perspective: size * 5 }}>
@@ -72,36 +77,52 @@ export function Coin({
         style={{ background: `radial-gradient(circle, ${glowColor} 0%, rgba(0,0,0,0) 68%)` }}
         aria-hidden
       />
+      {/* ground shadow — shrinks & fades while the coin is airborne */}
       <div
-        className="relative h-full w-full"
+        aria-hidden
+        className="absolute left-1/2 rounded-[50%]"
         style={{
-          transformStyle: 'preserve-3d',
-          transform: `rotateY(${rotation}deg)`,
-          transition: spinMs > 0 ? `transform ${spinMs}ms cubic-bezier(0.16, 1, 0.3, 1)` : 'none',
+          width: size * 0.66,
+          height: size * 0.12,
+          bottom: -size * 0.05,
+          marginLeft: -size * 0.33,
+          background: 'radial-gradient(ellipse, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 70%)',
+          opacity: 0.55,
+          animation: flying ? `sexcoin-toss-shadow ${spinMs}ms` : 'none',
+          willChange: 'transform, opacity',
+        }}
+      />
+      {/* the throw arc: up, hang, drop, bounce — resting smaller than in flight.
+          The parent resets spinMs to 0 on landing, so `animation: none` always
+          separates two throws and the keyframes restart cleanly every flip;
+          first/last frames equal the base transform below, so there is never a
+          jump entering or leaving the animation. */}
+      <div
+        className="h-full w-full"
+        style={{
+          transform: 'translateY(0) scale(0.86)',
+          animation: flying ? `sexcoin-toss ${spinMs}ms` : 'none',
           willChange: 'transform',
         }}
-        onTransitionEnd={(e) => {
-          if (e.propertyName === 'transform') land();
-        }}
       >
-        {/* pseudo-гурт: a reeded slab visible when the coin passes edge-on */}
         <div
-          aria-hidden
-          className="absolute top-0 h-full rounded-[2px]"
+          className="relative h-full w-full"
           style={{
-            width: thickness,
-            left: `calc(50% - ${thickness / 2}px)`,
-            transform: 'rotateY(90deg)',
-            background:
-              'repeating-linear-gradient(180deg, #c9a044 0 3px, #8a6a1e 3px 6px)',
-            boxShadow: 'inset 0 0 6px rgba(0,0,0,0.5)',
+            transformStyle: 'preserve-3d',
+            transform: `rotateY(${rotation}deg)`,
+            transition: spinMs > 0 ? `transform ${spinMs}ms cubic-bezier(0.16, 1, 0.3, 1)` : 'none',
+            willChange: 'transform',
           }}
-        />
-        <div className="absolute inset-0 [backface-visibility:hidden]">
-          <PenisFace className="h-full w-full drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)]" />
-        </div>
-        <div className="absolute inset-0 [backface-visibility:hidden]" style={{ transform: 'rotateY(180deg)' }}>
-          <VaginaFace className="h-full w-full drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)]" />
+          onTransitionEnd={(e) => {
+            if (e.propertyName === 'transform') land();
+          }}
+        >
+          <div className="absolute inset-0 [backface-visibility:hidden]">
+            <PenisFace className="h-full w-full" />
+          </div>
+          <div className="absolute inset-0 [backface-visibility:hidden]" style={{ transform: 'rotateY(180deg)' }}>
+            <VaginaFace className="h-full w-full" />
+          </div>
         </div>
       </div>
     </div>

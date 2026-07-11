@@ -263,6 +263,7 @@ export default function Sexcoin() {
     const data = pendingViewRef.current;
     pendingViewRef.current = null;
     setFlying(false);
+    setSpinMs(0); // back to `animation: none`, so the next throw restarts the toss arc
     applyView(data);
     if (data.phase === 'PLAYING') synth().correct(data.streak);
     setBusy(false);
