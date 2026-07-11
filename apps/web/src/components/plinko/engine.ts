@@ -4,11 +4,13 @@
 // landing slot; drop(path, slot, mult) animates a ball that ALWAYS rests in
 // exactly that slot, so what you watch is what settled.
 //
-// The route down the pins, however, is deliberately theatrical: tracing the
-// true Galton contacts made the destination readable halfway down, so the
-// visible ball follows a random decoy story (see drop()) and only commits to
-// the real slot in the last rows — pure presentation, zero effect on payouts.
-// Edges are rare (binomial), which is why they pay big.
+// The fall is a ballistic ricochet ride: every segment is a pure-gravity
+// parabola launched off a pin (no lateral forces, ever), but the route follows
+// a random decoy story — racing toward a fake target with multi-pin ricochets
+// before whipping over to the real slot in the last rows (see drop()). The
+// final node IS the server's pocket, so the landing is exact by construction —
+// no steering, no correction, zero effect on payouts. Edges are rare
+// (binomial), which is why they pay big.
 // @ts-nocheck
 
 export interface PlinkoSlot {
@@ -45,8 +47,22 @@ const C = {
 };
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const lerp = (a, b, t) => a + (b - a) * t;
 const rand = (a, b) => a + Math.random() * (b - a);
+
+// ── ball physics constants (px, seconds) ────────────────────────────────────
+// Ballistic Galton: between pin contacts the ball is in PURE free fall — the
+// only force is gravity, so every segment is an honest parabola (no lateral
+// wind, no straight-line drift, ever). Each hop's flight time is random; the
+// launch velocity is solved from kinematics so the ball arrives exactly at the
+// next contact. Long hops pop up off the pin, short ones skim through — the
+// mix is what makes the fall read as real.
+const PHYS = {
+  G: 1300, // gravity, px/s²
+  HOP_T_MIN: 0.22, // per-hop flight time range (scaled down a touch on tall boards)
+  HOP_T_MAX: 0.34,
+  VX_NOISE: 0.06, // small launch-speed noise; the ≤1px arrival error snaps at contact
+  MAX_AGE_MS: 9000, // failsafe: force-land anything still flying after this
+};
 
 /** Colour a slot by its multiplier — a smooth neon heat map that runs cool in
  *  the centre (small pays) to hot at the edges (big pays): indigo → blue → mint
@@ -269,10 +285,8 @@ export class PlinkoEngine {
   }
 
   /**
-   * Animate the server-resolved drop. The landing slot is the server's verdict
-   * and is honoured exactly; the visible route down the pins is intentionally
-   * theatrical (see below) — `path` is accepted for API compatibility but the
-   * display no longer traces it literally.
+   * Launch a server-resolved drop: the ball ballistically traces the server's
+   * provably-fair left/right path (see launchHop) and lands in exactly `slot`.
    */
   drop(path: boolean[], slot: number, mult: number, meta?: any) {
     this.resumeAudio();
@@ -297,77 +311,100 @@ export class PlinkoEngine {
       return;
     }
 
-    // ── the DISPLAY path: maximally chaotic, landing server-exact ────────────
-    // The board is a half-gap lattice: at pin-row i a contact sits at
-    // x = cx + k·(gap/2) with k ≡ i (mod 2) and |k| ≤ i. Walking the TRUE Galton
-    // contacts telegraphs the slot from halfway down (a run of same-direction
-    // hops is readable), so the ball follows a random DECOY story instead: it
-    // rides toward a fake target — the opposite edge, the centre, an overshoot
-    // of its own side — and only over the last rows whips across to the real
-    // slot. Sometimes the "fake" is near the truth and the ride just looks
-    // drunk; either way no row before the last few says where it ends. Money
-    // truth is untouched — the final point is exactly the server's slot, and
-    // hops can span several pins (violent ricochets), so nothing is readable.
+    // ── ballistic ricochet walk ──────────────────────────────────────────────
+    // Every visible segment is a pure-gravity parabola launched off a pin (see
+    // launchHop) — but the ROUTE is a thrill ride, not the literal Galton walk
+    // (which huddles near the centre in monotone half-pin steps). The ball
+    // follows a random decoy story on the pin lattice: it races toward a fake
+    // target — the opposite edge, a centre hover, an overshoot of its own side —
+    // with violent multi-pin ricochets (capped at ~2.5 pins per row so every
+    // arc stays a plausible bounce), then swings over to the REAL slot in the
+    // last rows. Landing is the server's slot exactly — the final node IS the
+    // pocket — so the drama is pure presentation, zero effect on payouts.
     const landK = 2 * landSlot - rows; // lattice coordinate of the true slot
     const side = landK >= 0 ? 1 : -1;
     const roll = Math.random();
-    const decoyK =
-      roll < 0.4
-        ? -side * rand(0.3, 0.95) * rows // race toward the OTHER side
-        : roll < 0.7
+    let decoyK =
+      roll < 0.38
+        ? -side * rand(0.35, 0.95) * rows // race toward the OTHER side
+        : roll < 0.66
           ? rand(-2.5, 2.5) // hover the centre… then dive
-          : side * rand(0.4, 1) * rows; // overshoot its own edge
-    const switchRow = Math.max(2, Math.floor(rows * rand(0.45, 0.8)));
-    // snap to the row's contact lattice (parity of i), stay inside the triangle
-    const snapK = (v: number, i: number) => {
+          : clamp(landK + side * rand(3, 7), -rows, rows); // overshoot its own edge
+    // keep the comeback coverable within the per-row ricochet cap
+    decoyK = landK + clamp(decoyK - landK, -1.4 * rows, 1.4 * rows);
+    const switchRow = Math.max(2, Math.floor(rows * rand(0.45, 0.62)));
+    const MAXSTEP = 5; // half-gaps per row (≈2.5 pins) — violent but plausible
+    // snap to the row's contact lattice (parity of i), capped step, in-triangle
+    const snapK = (v: number, i: number, kPrev: number) => {
       let k = Math.round(v);
       if ((((k + i) % 2) + 2) % 2 !== 0) k += Math.random() < 0.5 ? 1 : -1;
+      k = clamp(k, kPrev - MAXSTEP, kPrev + MAXSTEP);
       return clamp(k, -i, i);
     };
-    // final contact must neighbour the landing slot so the last hop is real
-    const lastK = snapK(landK + (Math.random() < 0.5 ? -1 : 1), rows - 1);
-    const pts: { x: number; y: number }[] = [];
-    // entry, just above row 0 (kept on-canvas even when the board is centred)
-    pts.push({ x: this.cx, y: this.topPad - Math.min(this.rowH * 0.85, this.topPad - 2) });
+    // the final contact aims to neighbour the pocket so the last hop is short
+    const lastK = clamp(landK + (Math.random() < 0.5 ? -1 : 1), -(rows - 1), rows - 1);
+    const cts: { x: number; y: number; row: number | null; col: number }[] = [];
+    let kPrev = 0;
     for (let i = 0; i < rows; i++) {
       let guide: number;
       if (i >= rows - 1) {
         guide = lastK;
       } else if (i < switchRow) {
-        guide = decoyK * Math.pow(i / switchRow, 0.8); // ease out to the decoy
+        guide = decoyK * Math.pow(i / switchRow, 0.85); // ease out to the decoy
       } else {
         const p = (i - switchRow) / Math.max(1, rows - 1 - switchRow);
-        guide = lerp(decoyK, lastK, p * p * (3 - 2 * p)); // whip to the truth
+        guide = decoyK + (lastK - decoyK) * (p * p * (3 - 2 * p)); // whip back
       }
-      // per-row wobble keeps even the decoy leg jittery; it dies out near the
+      // per-row wobble keeps even the decoy leg jittery; it fades near the
       // bottom so the final approach reads as one committed swerve
-      const wobble = i >= rows - 1 ? 0 : rand(-1.7, 1.7) * (1 - (0.55 * i) / rows);
-      const k = snapK(guide + wobble, i);
-      const x = this.cx + k * (this.gap / 2);
-      const pt: any = { x, y: this.topPad + i * this.rowH, rowIdx: i };
-      // flash the pin actually under this contact
-      pt.col = clamp((k + i) / 2 + 1, 0, i + 2);
-      pts.push(pt);
+      const wobble = i >= rows - 1 ? 0 : rand(-1.8, 1.8) * (1 - (0.5 * i) / rows);
+      const k = i === 0 ? 0 : snapK(guide + wobble, i, kPrev);
+      kPrev = k;
+      cts.push({
+        x: this.cx + k * (this.gap / 2),
+        y: this.topPad + i * this.rowH,
+        row: i,
+        col: clamp((k + i) / 2 + 1, 0, i + 2),
+      });
     }
-    pts.push({ x: this.slotX(landSlot), y: this.slotTop + this.slotH * 0.5 }); // land — server slot, exactly
-    // Slow, thrilling fall — the ball beats hard side-to-side down the pins.
-    const segMs = 200;
-    this.balls.push({
-      pts,
-      seg: 0, // current segment index
-      t: 0, // 0..1 within segment
-      segMs,
+    cts.push({ x: this.slotX(landSlot), y: this.slotTop + this.slotH * 0.45, row: null, col: 0 });
+    const b: any = {
+      x: this.cx + rand(-0.35, 0.35) * this.gap,
+      y: this.topPad - Math.min(this.rowH * 0.9, this.topPad - 2),
+      vx: 0,
+      vy: 0,
+      cts,
+      idx: 0, // next node to reach
+      // tall boards get slightly brisker hops; every ball has its own tempo too
+      hopScale: Math.pow(8 / rows, 0.25) * rand(0.88, 1.12),
+      age: 0,
       slot: landSlot,
       mult,
       win,
       huge,
-      x: pts[0].x,
-      y: pts[0].y,
-      squash: 0,
       trail: [],
       done: false,
       meta,
-    });
+    };
+    this.launchHop(b);
+    this.balls.push(b);
+  }
+
+  /**
+   * Launch the next parabolic hop: pick a random flight time T, then solve the
+   * launch velocity from kinematics so the ball arrives EXACTLY at the next
+   * contact under gravity alone — long T pops the ball up off the pin, short T
+   * skims it through. Wide ricochets get proportionally more air time, so a
+   * multi-pin jump reads as a real flying arc, never a flat dart sideways.
+   */
+  private launchHop(b) {
+    const next = b.cts[b.idx];
+    const dy = Math.max(4, next.y - b.y);
+    const dx = Math.abs(next.x - b.x);
+    const air = 1 + 0.45 * Math.min(1.3, dx / (this.gap * 1.3));
+    const T = rand(PHYS.HOP_T_MIN, PHYS.HOP_T_MAX) * b.hopScale * air;
+    b.vy = (dy - (PHYS.G * T * T) / 2) / T;
+    b.vx = ((next.x - b.x) / T) * (1 + rand(-PHYS.VX_NOISE, PHYS.VX_NOISE));
   }
 
   private spark(x, y, color, n = 8, spread = 1) {
@@ -409,67 +446,65 @@ export class PlinkoEngine {
     for (let s = 0; s < this.slotFlash.length; s++) this.slotFlash[s] = Math.max(0, this.slotFlash[s] - dt / 380);
     this.shake = Math.max(0, this.shake - dt / 260);
 
-    // balls
+    // balls — pure free fall between contacts, substepped for accuracy; when a
+    // ball crosses its next contact node it snaps there (≤ a couple px of
+    // integration drift), the pin flashes and the next hop launches
     for (const b of this.balls) {
       if (b.done) continue;
-      b.squash = Math.max(0, b.squash - dt / 160);
-      b.t += dt / b.segMs;
-      while (b.t >= 1 && b.seg < b.pts.length - 1) {
-        b.t -= 1;
-        b.seg++;
-        const p = b.pts[b.seg];
-        b.x = p.x;
-        b.y = p.y;
-        b.squash = 1;
-        if (b.seg < b.pts.length - 1) {
-          // hit a pin — just a quiet flash (no spark clutter, no peg clicks)
-          if (p.rowIdx != null && this.pins[p.rowIdx] && this.pins[p.rowIdx][p.col]) {
-            this.pins[p.rowIdx][p.col].flash = 1;
+      b.age += dt;
+      if (b.age > PHYS.MAX_AGE_MS) {
+        // failsafe (e.g. a heavily-throttled tab): finish in the server slot
+        const fin = b.cts[b.cts.length - 1];
+        b.x = fin.x;
+        b.y = fin.y;
+        this.land(b);
+      }
+      let rem = dt / 1000;
+      while (rem > 0 && !b.done) {
+        const step = Math.min(rem, 0.016);
+        rem -= step;
+        b.vy += PHYS.G * step;
+        b.x += b.vx * step;
+        b.y += b.vy * step;
+        const next = b.cts[b.idx];
+        if (b.vy > 0 && b.y >= next.y) {
+          b.x = next.x;
+          b.y = next.y;
+          if (b.idx < b.cts.length - 1) {
+            if (next.row != null && this.pins[next.row] && this.pins[next.row][next.col]) {
+              this.pins[next.row][next.col].flash = 1;
+            }
+            b.idx++;
+            this.launchHop(b);
+          } else {
+            this.land(b);
           }
-        } else {
-          this.land(b);
         }
       }
-      if (b.seg >= b.pts.length - 1) {
-        b.done = true;
-        continue;
+      if (!b.done) {
+        b.trail.push({ x: b.x, y: b.y, life: 1 });
+        if (b.trail.length > 18) b.trail.shift();
       }
-      const a = b.pts[b.seg];
-      const c = b.pts[b.seg + 1];
-      const tt = clamp(b.t, 0, 1);
-      const ease = tt * tt * (3 - 2 * tt); // smoothstep along the contact line
-      // Lateral sway: the ball bulges out in its travel direction mid-hop —
-      // nearly a full pin over — so it visibly whips side-to-side down the board
-      // (a run of same-direction bounces reads as "racing toward the edge", a
-      // late reversal as the last-second cut back). Endpoints stay server-exact.
-      const dir = Math.sign(c.x - a.x);
-      const sway = dir * this.gap * 0.6 * Math.sin(Math.PI * tt);
-      b.x = clamp(lerp(a.x, c.x, ease) + sway, this.ballR, this.W - this.ballR);
-      // tall springy bounce arc between contacts
-      const hop = this.rowH * 0.5;
-      b.y = lerp(a.y, c.y, tt) - Math.sin(Math.PI * tt) * hop;
-      // neon trail — a touch longer so the slow arc glows
-      b.trail.push({ x: b.x, y: b.y, life: 1 });
-      if (b.trail.length > 20) b.trail.shift();
       for (const tr of b.trail) tr.life -= dt / 300;
     }
     this.balls = this.balls.filter((b) => !(b.done && b.trail.every((t) => t.life <= 0)));
 
-    // particles
+    // particles & confetti — velocities were tuned as per-frame steps at 60 fps;
+    // normalise by dt so the physics runs at the same speed on 120/144 Hz screens
+    const fk = dt / (1000 / 60);
     for (const p of this.particles) {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.12;
+      p.x += p.vx * fk;
+      p.y += p.vy * fk;
+      p.vy += 0.12 * fk;
       p.life -= dt / 520;
     }
     this.particles = this.particles.filter((p) => p.life > 0);
 
-    // confetti
     for (const c of this.confetti) {
-      c.x += c.vx;
-      c.y += c.vy;
-      c.vy += 0.05;
-      c.rot += c.vr;
+      c.x += c.vx * fk;
+      c.y += c.vy * fk;
+      c.vy += 0.05 * fk;
+      c.rot += c.vr * fk;
       c.life -= dt / 2600;
     }
     this.confetti = this.confetti.filter((c) => c.life > 0 && c.y < this.H + 30);
@@ -612,33 +647,31 @@ export class PlinkoEngine {
         ctx.fill();
       }
       ctx.restore();
-      const sq = b.squash;
-      const rx = this.ballR * (1 + sq * 0.22);
-      const ry = this.ballR * (1 - sq * 0.26);
-      // glowing neon sphere
+      // rigid glowing neon sphere — a perfect circle, no squash deformation
+      const r = this.ballR;
       ctx.save();
       ctx.shadowColor = `${C.neonGlow}0.85)`;
       ctx.shadowBlur = 16;
-      const grad = ctx.createRadialGradient(b.x - rx * 0.32, b.y - ry * 0.4, rx * 0.1, b.x, b.y, rx);
+      const grad = ctx.createRadialGradient(b.x - r * 0.32, b.y - r * 0.4, r * 0.1, b.x, b.y, r);
       grad.addColorStop(0, '#FFFFFF');
       grad.addColorStop(0.32, '#C6F6FF');
       grad.addColorStop(0.72, C.neon);
       grad.addColorStop(1, C.neonRim);
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.ellipse(b.x, b.y, rx, ry, 0, 0, Math.PI * 2);
+      ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
       // crisp rim
       ctx.lineWidth = 1.1;
       ctx.strokeStyle = 'rgba(255,255,255,0.4)';
       ctx.beginPath();
-      ctx.ellipse(b.x, b.y, rx, ry, 0, 0, Math.PI * 2);
+      ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
       ctx.stroke();
       // specular highlight — the glossy catch-light
       ctx.fillStyle = 'rgba(255,255,255,0.9)';
       ctx.beginPath();
-      ctx.ellipse(b.x - rx * 0.33, b.y - ry * 0.38, rx * 0.22, ry * 0.16, -0.6, 0, Math.PI * 2);
+      ctx.ellipse(b.x - r * 0.33, b.y - r * 0.38, r * 0.22, r * 0.16, -0.6, 0, Math.PI * 2);
       ctx.fill();
     }
   }

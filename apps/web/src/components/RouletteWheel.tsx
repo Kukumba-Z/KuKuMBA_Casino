@@ -94,8 +94,12 @@ export function RouletteWheel({
     <div className="relative mx-auto aspect-square w-full" style={{ maxWidth: size }}>
       {/* clip the rotating square SVG: its corners sweep outside the box while it
           spins (and rest there when it settles at an angle), which otherwise
-          overflows the page horizontally and shifts the whole layout sideways. */}
-      <div className="absolute inset-0 overflow-hidden rounded-full">
+          overflows the page horizontally and shifts the whole layout sideways.
+          Rectangular clip + will-change on purpose: everything painted lives
+          inside the inscribed circle, an axis-aligned clip is free on the
+          compositor, and a border-radius mask over an animated layer forces
+          main-thread work every frame (judder on 120 Hz screens). */}
+      <div className="absolute inset-0 overflow-hidden">
         <svg
           width="100%"
           height="100%"
@@ -103,7 +107,11 @@ export function RouletteWheel({
           onTransitionEnd={(e) => {
             if ((e as any).propertyName === 'transform') setLanded(true);
           }}
-          style={{ transform: `rotate(${rot}deg)`, transition: `transform ${spinMs}ms cubic-bezier(0.16, 1, 0.3, 1)` }}
+          style={{
+            transform: `rotate(${rot}deg)`,
+            transition: `transform ${spinMs}ms cubic-bezier(0.16, 1, 0.3, 1)`,
+            willChange: 'transform',
+          }}
         >
           <circle cx={cx} cy={cy} r={rO + 3} fill="#0B0817" stroke="rgba(255,255,255,0.12)" strokeWidth="2" />
           {EURO.map((n, i) => {
@@ -136,7 +144,11 @@ export function RouletteWheel({
           Bright with a glow + a soft trailing halo so it's easy to follow. */}
       <div
         className="pointer-events-none absolute inset-0 z-[15]"
-        style={{ transform: `rotate(${ballRot}deg)`, transition: `transform ${spinMs}ms cubic-bezier(0.18, 0.7, 0.12, 1)` }}
+        style={{
+          transform: `rotate(${ballRot}deg)`,
+          transition: `transform ${spinMs}ms cubic-bezier(0.18, 0.7, 0.12, 1)`,
+          willChange: 'transform',
+        }}
       >
         {/* trailing halo (slightly behind the ball along the rim) */}
         <div
