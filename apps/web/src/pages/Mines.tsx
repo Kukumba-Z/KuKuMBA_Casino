@@ -263,8 +263,8 @@ export default function Mines() {
   // The ladder to draw: the live round's snapshot when playing, else the info's.
   const ladder: number[] = (playing ? view?.multipliers : info?.multipliers) ?? [];
   const safeCount = view?.safeCount ?? 0;
-  const nextMult = playing ? view?.nextMultiplier ?? null : ladder[0] ?? null;
-  const nextCashout = playing && nextMult != null ? Number(view!.stake) * nextMult : null;
+  const nextMult = playing ? view?.nextMultiplier ?? null : null;
+  const nextCashout = nextMult != null ? Number(view!.stake) * nextMult : null;
   const minesOnBoard = playing || view?.phase === 'SETTLED' ? view!.minesCount : mines;
   const safeLeft = GRID - minesOnBoard - safeCount;
 
@@ -382,22 +382,6 @@ export default function Mines() {
               </div>
             </div>
 
-            {/* potential win */}
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-              <div className="mb-1 text-[11px] font-bold tracking-wider text-white/45">{t('mines.potential')}</div>
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="font-display text-lg font-black text-mint">
-                  {playing && safeCount >= 1 ? fmtMult(view!.currentMultiplier) : '—'}
-                </span>
-                <span className="text-sm font-bold tabular-nums text-white/70">
-                  {playing && safeCount >= 1 ? `${fmt(view!.cashoutAmount, 2)} ${view!.currency}` : ''}
-                </span>
-              </div>
-              <div className="mt-0.5 text-xs text-white/45">
-                {nextMult != null ? `${t('mines.nextMult')}: ${fmtMult(nextMult)}` : ''}
-              </div>
-            </div>
-
             {/* main action: start the round / cash out */}
             {playing ? (
               <button onClick={cashout} disabled={busy || safeCount < 1} className="crash-action btn-crash-mint">
@@ -439,7 +423,7 @@ export default function Mines() {
     >
       {/* Scene */}
       <div className="card relative overflow-hidden">
-        <div className="relative flex flex-col items-center gap-4 px-4 py-5 sm:px-6 sm:py-6">
+        <div className="relative flex flex-col items-center gap-3 px-4 py-4 sm:gap-4 sm:px-6 sm:py-6">
           {/* counters above the board — one line always; labels are desktop-only */}
           <div className="flex items-center justify-center gap-2 px-10">
             <span className="chip text-[11px] font-bold">
@@ -454,13 +438,16 @@ export default function Mines() {
             </span>
           </div>
 
-          {/* verdict / progress strip (fixed height so nothing jumps) */}
-          <div className="grid h-12 place-items-center text-center">
-            <div>
-              <div className={`font-display text-lg font-black sm:text-xl ${message.cls}`}>{message.text}</div>
-              <div className="h-4 text-xs font-bold tabular-nums text-white/60">{message.sub}</div>
+          {/* verdict / progress strip — mounted only while a round exists, so an
+              idle scene has no dead space between the counters and the board */}
+          {view && (
+            <div className="grid h-12 place-items-center text-center">
+              <div>
+                <div className={`font-display text-lg font-black sm:text-xl ${message.cls}`}>{message.text}</div>
+                <div className="h-4 text-xs font-bold tabular-nums text-white/60">{message.sub}</div>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* the 5×5 board (kept compact on phones) */}
           <div className="grid w-full max-w-[300px] grid-cols-5 gap-1.5 sm:max-w-[420px] sm:gap-2">
