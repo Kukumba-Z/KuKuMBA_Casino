@@ -237,6 +237,29 @@ async function main() {
         'Clear every safe tile for an auto-cashout at the top multiplier (up to ×5,200,000). ' +
         'Provably-fair (same seed chain as the roulette), 99% RTP.',
     },
+    {
+      key: 'sexcoin',
+      name: 'Sexcoin',
+      type: 'coinflip',
+      category: 'MINIGAME',
+      provider: 'KuKuMBA Originals',
+      status: 'LIVE',
+      route: '/sexcoin',
+      rtp: 0.97,
+      minBet: 0.01,
+      maxBet: 100000,
+      sortOrder: 6,
+      descriptionRu:
+        'Sexcoin: пикантный коинфлип 18+. Угадай сторону монеты — пенис или вагина. ' +
+        'Каждый угаданный бросок умножает выигрыш (×1.94 за шаг при RTP 97%), забрать можно ' +
+        'в любой момент, ошибка сжигает ставку. Серия до 20 бросков (свыше ×1 000 000). ' +
+        'Provably-fair (тот же сид-чейн, что у рулетки), RTP настраивается.',
+      descriptionEn:
+        'Sexcoin: a spicy 18+ coinflip. Guess the side — penis or vagina. Every correct flip ' +
+        'multiplies the win (×1.94 per step at 97% RTP), cash out any time, one miss burns the ' +
+        'stake. Streaks up to 20 flips (over ×1,000,000). Provably-fair (same seed chain as ' +
+        'the roulette), configurable RTP.',
+    },
   ];
   for (const g of games) {
     const { key, ...rest } = g;

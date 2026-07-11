@@ -46,6 +46,23 @@ export function rouletteResult(
   return rouletteOutcome(floatFromSeeds(serverSeed, clientSeed, nonce));
 }
 
+/** Sexcoin coin sides: 'penis' plays the "heads" role, 'vagina' — "tails". */
+export type CoinSide = 'penis' | 'vagina';
+
+/**
+ * Coinflip: float < 0.5 → 'penis' (орёл), иначе 'vagina' (решка). Flip #i of a
+ * series draws its float from cursor = flipIndex on the SAME (seed, nonce) —
+ * the sexcoin analogue of mines pulling shuffle swap #i through cursor = i.
+ */
+export function sexcoinFlip(
+  serverSeed: string,
+  clientSeed: string,
+  nonce: number,
+  flipIndex: number,
+): CoinSide {
+  return floatFromSeeds(serverSeed, clientSeed, nonce, flipIndex) < 0.5 ? 'penis' : 'vagina';
+}
+
 /** Crash multipliers are capped: reaching the cap is the "jackpot" finale. */
 export const CRASH_MAX_MULT = 1_000_000;
 

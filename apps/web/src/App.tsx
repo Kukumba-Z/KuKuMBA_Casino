@@ -20,6 +20,7 @@ import Profile from './pages/Profile';
 import RaffleDetail from './pages/RaffleDetail';
 import Raffles from './pages/Raffles';
 import Roulette from './pages/Roulette';
+import Sexcoin from './pages/Sexcoin';
 import StaticPage from './pages/StaticPage';
 import Support from './pages/Support';
 import Top from './pages/Top';
@@ -63,6 +64,7 @@ export default function App() {
           <Route path="/plinko" element={<Plinko />} />
           <Route path="/upgrader" element={<Upgrader />} />
           <Route path="/mines" element={<Mines />} />
+          <Route path="/sexcoin" element={<Sexcoin />} />
           <Route path="/top" element={<Top />} />
           <Route path="/raffles" element={<Raffles />} />
           <Route path="/raffles/:id" element={<RaffleDetail />} />

@@ -10,6 +10,8 @@ import { PlinkoCardArt } from './plinko/PlinkoCardArt';
 import { PlinkoGlyph } from './plinko/PlinkoGlyph';
 import { PonyjackCardArt } from './ponyjack/PonyjackCardArt';
 import { RouletteWheel } from './RouletteWheel';
+import { SexcoinCardArt } from './sexcoin/SexcoinCardArt';
+import { SexcoinGlyph } from './sexcoin/SexcoinGlyph';
 import { UpgraderCardArt } from './upgrader/UpgraderCardArt';
 import { UpgraderGlyph } from './upgrader/UpgraderGlyph';
 
@@ -38,6 +40,7 @@ const GAME: Record<string, { icon: GameIconComponent; grad: string }> = {
   plinko: { icon: PlinkoGlyph, grad: 'from-sky/30 to-bubble/30' },
   upgrader: { icon: UpgraderGlyph, grad: 'from-sun/30 to-roul-red/30' },
   mines: { icon: MinesGlyph, grad: 'from-mint/30 to-roul-red/30' },
+  sexcoin: { icon: SexcoinGlyph, grad: 'from-bubble/30 to-lav/30' },
 };
 
 export function gameMeta(gameKey?: string) {
@@ -71,6 +74,9 @@ function GameArt({ game }: { game: Game }) {
   }
   if (game.key === 'mines') {
     return <MinesCardArt />;
+  }
+  if (game.key === 'sexcoin') {
+    return <SexcoinCardArt />;
   }
   if (game.category === 'ROULETTE') {
     return (

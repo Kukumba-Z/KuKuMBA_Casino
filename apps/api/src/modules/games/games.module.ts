@@ -13,13 +13,15 @@ import { PonyjackController } from './ponyjack/ponyjack.controller';
 import { PonyjackService } from './ponyjack/ponyjack.service';
 import { RouletteController } from './roulette/roulette.controller';
 import { RouletteService } from './roulette/roulette.service';
+import { SexcoinController } from './sexcoin/sexcoin.controller';
+import { SexcoinService } from './sexcoin/sexcoin.service';
 import { UpgraderController } from './upgrader/upgrader.controller';
 import { UpgraderService } from './upgrader/upgrader.service';
 
 @Module({
   imports: [LeaderboardsModule, StatsModule],
-  controllers: [GamesController, RouletteController, CrashController, PonyjackController, PlinkoController, UpgraderController, MinesController],
-  providers: [GamesService, RouletteService, CrashService, PonyjackService, PlinkoService, UpgraderService, MinesService],
-  exports: [GamesService, RouletteService, CrashService, PonyjackService, PlinkoService, UpgraderService, MinesService],
+  controllers: [GamesController, RouletteController, CrashController, PonyjackController, PlinkoController, UpgraderController, MinesController, SexcoinController],
+  providers: [GamesService, RouletteService, CrashService, PonyjackService, PlinkoService, UpgraderService, MinesService, SexcoinService],
+  exports: [GamesService, RouletteService, CrashService, PonyjackService, PlinkoService, UpgraderService, MinesService, SexcoinService],
 })
 export class GamesModule {}
